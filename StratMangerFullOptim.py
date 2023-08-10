@@ -412,7 +412,7 @@ def main():
     alphasDF = pd.DataFrame(alphas_arr)
 
     ############################
-    optimizer = True
+    optimizer = False
     if optimizer:
         optimtestStart = testStart
         optimtestEnd = optimEnd
