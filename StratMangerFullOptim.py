@@ -7,6 +7,11 @@ import time
 import operator
 import math
 import datetime
+import boto
+import s3fs
+
+
+from statsforecast.models import SimpleExponentialSmoothingOptimized
 
 import pymysql.cursors
 
@@ -44,10 +49,10 @@ targetFuture = 0
 #bottomN = 5
 portTail = 0.00 #0.0015##0.00000001 #0.0015#0.001 #0.0015 0.0025
 universeBlocking = False
-riskModelType = Constants.SUB_INDUSTRY_RISK_MODEL #Constants.PCA_RISK_MODEL GLOBAL_RISK_MODEL
+riskModelType = Constants.GLOBAL_RISK_MODEL #Constants.PCA_RISK_MODEL GLOBAL_RISK_MODEL
 riskModelNumFactors = 5
 pcaMA = 0.9
-runName = 'NEW_DAO_1_SUB' #'EQUITIES_YAHOO_SUB_2' #'EQUITIES_YAHOO_SUB_2' CRYPTO_SMALL5 CRYPTO_SMALL4
+runName = 'NEW_DAO_1_PSR' #'EQUITIES_YAHOO_SUB_2' #'EQUITIES_YAHOO_SUB_2' CRYPTO_SMALL5 CRYPTO_SMALL4
 g_alphas_arr = []
 g_raw_alphas_dic = {}
 testStartDate = "2021-01-04"
@@ -55,7 +60,7 @@ optimEndDate = "2022-01-03"
 minPrice = 0.0 #2.0
 maxPrice = 10000000.0 # 10000.0
 useGammaTransactionModel = False
-expFactorDecay = 0.3
+expFactorDecay = 0.1
 volumeMeanRankingWindow = 252
 
 
@@ -70,7 +75,7 @@ print("connecting to DB")
 #                              db='quantschema',
 #                              charset='utf8mb4',
 #                              cursorclass=pymysql.cursors.DictCursor)
-
+#
 connection = pymysql.connect(host='alphasdatabase1.cysvmgsjf7ox.us-east-1.rds.amazonaws.com',#'localhost',
                              user='admin', #mysqluser',
                              password='SALMON44', #'mysqluser',
@@ -78,22 +83,23 @@ connection = pymysql.connect(host='alphasdatabase1.cysvmgsjf7ox.us-east-1.rds.am
                              charset='utf8mb4',
                              cursorclass=pymysql.cursors.DictCursor)
 
-for path, subdirs, files in os.walk(root):
-    for name in files:
-        print(name.split(".")[0])
-        histData[name.split(".")[0]] = pd.read_csv(os.path.join(root, name),
-                                                   index_col='date',
-                                                   parse_dates=True,
-                                                   # skiprows=1,
-                                                   names=['date', 'dum', 'open', 'high', 'low', 'close', 'volume'],
-                                                   usecols=['date', 'dum', 'open', 'high', 'low', 'close', 'volume'],
-                                                   dtype={'dum': np.int64, 'open': np.float64, 'high': np.float64,
-                                                          'low': np.float64, 'close': np.float64, 'volume': np.int64})
-        numEquities = numEquities + 1
-
-histMultiIndex = pd.concat(histData.values(), keys=histData.keys())
-#histMultiIndex = pd.read_csv('s3://brethribar-equitiesdata-1//E1000.csv')
-
+# for path, subdirs, files in os.walk(root):
+#     for name in files:
+#         print(name.split(".")[0])
+#         histData[name.split(".")[0]] = pd.read_csv(os.path.join(root, name),
+#                                                    index_col='date',
+#                                                    parse_dates=True,
+#                                                    # skiprows=1,
+#                                                    names=['date', 'dum', 'open', 'high', 'low', 'close', 'volume'],
+#                                                    usecols=['date', 'dum', 'open', 'high', 'low', 'close', 'volume'],
+#                                                    dtype={'dum': np.int64, 'open': np.float64, 'high': np.float64,
+#                                                           'low': np.float64, 'close': np.float64, 'volume': np.int64})
+#         numEquities = numEquities + 1
+#
+# histMultiIndex = pd.concat(histData.values(), keys=histData.keys())
+#histMultiIndex.to_parquet('EquitiesDataFiles/' + "E1000.parquet")
+#histMultiIndex = pd.read_parquet("s3://brethribar-equitiesdata-1/E1000.parquet")
+histMultiIndex = pd.read_parquet('EquitiesDataFiles/' + "E1000.parquet")
 
 industries = pd.read_csv('C:\Equities\symSubIndustries.csv', index_col=0)
 industries = industries[industries['INDUSTRY'] != '1c3d7001-dc68-4c36-b148-483741091c86'] # BIOTECH REMOVAL
@@ -285,22 +291,8 @@ pset.renameArguments(ARG5="dollars_traded")
 pset.renameArguments(ARG6="adv20")
 pset.renameArguments(ARG7="returns")
 
-creator.create("FitnessMax", base.Fitness, weights=(1.0,))
-creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
-
 toolbox = base.Toolbox()
-toolbox.register("expr", gp.genHalfAndHalf, pset=pset, min_=1, max_=2)
-toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.expr)
-toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 toolbox.register("compile", gp.compile, pset=pset)
-toolbox.register("select", tools.selTournament, tournsize=7)
-toolbox.register("mate", gp.cxOnePoint)
-toolbox.register("expr_mut", gp.genGrow, min_=0, max_=5)  # 2
-toolbox.register("mutate", gp.mutUniform, expr=toolbox.expr_mut, pset=pset)
-
-toolbox.decorate("mate", gp.staticLimit(key=operator.attrgetter("height"), max_value=15))
-toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max_value=15))
-
 
 ########################################################################
 ########################################################################
@@ -311,8 +303,8 @@ def GetAlphasFromDB(numalphas):
             # sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `DSRprob` IN ('TEST') ORDER BY RAND() LIMIT %s" 3484460
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` in ('3490869') ORDER BY RAND() LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('TEST3_U','NEW_DAO_1_PSR_SUB','NEW_DAO_2_SUB','NEW_DAO_1_SUB') LIMIT %s"
-            sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` > 1 AND `scriptversion` IN ('" + runName + "') LIMIT %s"
-            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.95 AND `scriptversion` IN ('" + runName + "') ORDER BY RAND() LIMIT %s"
+            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` > 1 AND `scriptversion` IN ('" + runName + "') LIMIT %s"
+            sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.99 AND `riskModelType` = 'Global' LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 0  AND `turnover` < 0.5 AND `scriptversion` IN ('" + runName + "') ORDER BY RAND() LIMIT %s"
             cursor.execute(sql, (int(numalphas)))
             # sql = "SELECT `alphastring` FROM `quantschema`.`distinctuniquealphas` WHERE `corr` > 0.3 LIMIT %s"
@@ -382,6 +374,15 @@ def calcPortReturnsWithFees( weightArray ):
 
     return -sharpe
 ############################################################################
+############################################################################
+#def get_grad_func(h0, risk_aversion, Q, QT, specVar, alpha_vec, Lambda):
+def get_grad_func(h0, alpha_vec, bsp_costs):
+    def grad_func(h):
+        g = -alpha_vec
+        g += (h - h0) * bsp_costs
+        return np.asarray(g)
+    return grad_func
+############################################################################
 
 def main():
     global testStart, optimEnd
@@ -412,47 +413,6 @@ def main():
     alphasDF = pd.DataFrame(alphas_arr)
 
     ############################
-    optimizer = False
-    if optimizer:
-        optimtestStart = testStart
-        optimtestEnd = optimEnd
-        startPortWeights = [0.0 for i in range(len(g_alphas_arr))]
-        weightBounds = ((0, 1) for i in range(len(g_alphas_arr)))
-        #gBounds = [(0.001, 1.0) for i in range(len(g_alphas_arr))]
-
-        res = minimize(calcPortReturnsWithFees, startPortWeights, bounds=weightBounds, method='Nelder-Mead',options={'maxiter':20})
-        #res = gp_minimize(calcPortReturnsWithFees, gBounds)
-
-        optimizedWeights = res.x
-        alphaweightsTS = pd.DataFrame(pd.np.tile(optimizedWeights, (len(alphasDF.T), 1)))
-        alphaweightsTS.set_index(alphasDF.T.index)
-
-        optimStepSize = 100 #25
-        optimLookback = 252 #252
-        maxiter = 10
-
-        for blockStart in range(optimtestStart, len(alphasDF.T), optimStepSize): #testStart:optimEnd
-            testStart = testStart + optimStepSize
-            optimEnd = testStart + optimLookback
-            #optimEnd = optimEndStep
-            startPortWeights = [0.0 for i in range(len(g_alphas_arr))]
-            weightBounds = ((0, 1) for i in range(len(g_alphas_arr)))
-            res = minimize(calcPortReturnsWithFees, startPortWeights, bounds=weightBounds,
-                                method='Nelder-Mead', options={'maxiter':maxiter})
-            #res = gp_minimize(calcPortReturnsWithFees, gBounds, initial_point_generator='sobol')
-            optimizedWeights = res.x
-            print("new optimizedWeights: " + str(optimizedWeights))
-
-            if optimEnd+1 + optimStepSize <= len(alphasDF.T):
-                fillOptimDF = pd.DataFrame(np.tile(optimizedWeights, (optimStepSize, 1)))
-                alphaweightsTS.iloc[optimEnd+1:optimEnd+1 + optimStepSize] = fillOptimDF
-            else:
-                fillOptimDF = pd.DataFrame(np.tile(optimizedWeights, (len(alphasDF.T)-optimEnd-1, 1)))
-                alphaweightsTS.iloc[optimEnd+1:len(alphasDF.T)] = fillOptimDF
-                break
-        testStart = int(df_close.index.get_loc(testStartDate))
-        optimEnd = int(df_close.index.get_loc(optimEndDate))
-        alphaweightsTS = alphaweightsTS.div(alphaweightsTS.sum(axis=1), axis=0)
     #######################################
     print('TEST!!!')
     alphasDF = alphasDF.transpose().diff().fillna(0)
@@ -461,6 +421,17 @@ def main():
     #alphasDFCovInv = pd.DataFrame(np.linalg.pinv(alphasDFCov.covariance_))
     alphasDFCovInv = pd.DataFrame(np.linalg.pinv(np.eye(len(alphasDFCov.covariance_))))
     #alphasDFCovInv = pd.DataFrame(np.linalg.pinv(np.multiply(alphasDFCov.covariance_, np.eye(len(alphasDFCov.covariance_)))))
+
+    # npArrays = np.empty((len(alphasDF.index), len(alphasDF.columns)), float)
+    # for col in alphasDF:
+    #     seso = SimpleExponentialSmoothingOptimized()
+    #     seso = seso.fit(y=alphasDF[col].to_numpy())
+    #     pred = seso.predict_in_sample()['fitted']
+    #     #pred = np.append(pred, [0])
+    #     npArrays[:,col] = pred
+    #
+    # alphasExpectedReturns =pd.DataFrame(npArrays)
+
     alphasExpectedReturns = GPfunctions.Decay_exp(alphasDF, expFactorDecay).shift(1)
     alphasExpectedReturns[alphasExpectedReturns < 0] = 0
 
@@ -470,11 +441,6 @@ def main():
 
 
     print('alphaweightsTS: ', alphaweightsTS)
-    #alphasDF = pd.DataFrame(alphasDF)
-    #alphaweightsTS = pd.DataFrame(alphaweightsTS)
-
-    #NEW NORMALIZATION!!
-    #alphaweightsTS = RiskModelFunctions.hedgeGlobal(alphaweightsTS)
 
     print(alphaweightsTS)
     alphaweightsTS.to_csv(LOG_DATA_PATH+'AlphaweightsTS.csv')
@@ -519,11 +485,7 @@ def main():
 
     if (portTail > 0):
         #weightedAlpha = GPfunctions.Tail(weightedAlpha, portTail)
-        #weightedAlpha[(weightedAlpha < 0.01) & (weightedAlpha > -0.01)] = 0
-        #weightedAlpha[weightedAlpha < 0.02] = 0 #0.004
-        #weightedAlpha[weightedAlpha > 0.007] = 0
         weightedAlpha = weightedAlpha * 5.0  # 4
-        # weightedAlpha = weightedAlpha.div(weightedAlpha_sum.squeeze(),axis=0)
 
     print("weightedAlpha.shape", weightedAlpha.shape)
 
