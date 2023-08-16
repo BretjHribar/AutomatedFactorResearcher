@@ -35,13 +35,13 @@ root = os.path.join("C:\Equities", universe)
 alphas_arr = []
 histData = {}
 corrTScache = {}
-corrCutoff = 0.7
+corrCutoff = 0.1
 fitnessCutoff = 1.0
 turnoverMax = 1.0 #0.05
-turnoverMin = 0.003
+turnoverMin = 0.001
 addToDB = True
 bookSize = 20000000.0
-maxStockWeight = 0.002 #0.01
+maxStockWeight = 0.01 #0.01
 feesBSP = 0.000  # 0.0010
 hedgeVol = False
 hedgeIndustry = False
@@ -49,7 +49,7 @@ rankHedge = False
 funcLookbackLength = 40 #90
 linearDecay = 0
 topN = 3000
-runName = 'TEST3_U' #EQUITIES_YAHOO_SUB_2
+runName = '1000_LOW_CORR' #EQUITIES_YAHOO_SUB_2
 targetDelay = 1
 # bottomN = 0
 trialCounter = 0
@@ -59,7 +59,7 @@ psrCutoff = 0.99
 riskModelNumFactors = 5
 minPrice = -1.0 #2.0
 maxPrice = 10000000.0 # 10000.0
-riskModelType = Constants.SUB_INDUSTRY_RISK_MODEL
+riskModelType = Constants.GLOBAL_RISK_MODEL
 useGammaTransactionModel = False
 
 trunctateEndDate = '1/1/2021'  # '3/09/2018' #'7/18/2018' #'4/17/2019' #'07/01/2018'
@@ -411,8 +411,7 @@ def evalAlphaGen(individual):
         UpdateExistingAlphas()
         corrTestalphas = pd.DataFrame(alphas_arr)
         print('corrTestalphas', corrTestalphas)
-        corrTest = corrTestalphas.append(DFreturns.sum(axis=1), ignore_index=True).transpose().fillna(
-            0).diff().corr()
+        corrTest = corrTestalphas._append(DFreturns.sum(axis=1), ignore_index=True).transpose().fillna(0).diff().corr()
         print(corrTest)
         maxCorr = corrTest.tail(1).iloc[:, :-1]
         print(maxCorr)

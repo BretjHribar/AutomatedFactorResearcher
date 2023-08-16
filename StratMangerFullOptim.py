@@ -10,6 +10,7 @@ import datetime
 import boto
 import s3fs
 
+from sklearn.metrics import mean_squared_error
 
 from statsforecast.models import SimpleExponentialSmoothingOptimized
 
@@ -29,7 +30,7 @@ from RiskModelFunctions import RiskModelFunctions
 import Constants
 
 ##############################
-root = "C:\Equities\YFINANCE"
+root = "C:\Equities\YFINANCE3"
 timeRateMin = 1440
 
 alphas_arr = []
@@ -49,17 +50,17 @@ targetFuture = 0
 #bottomN = 5
 portTail = 0.00 #0.0015##0.00000001 #0.0015#0.001 #0.0015 0.0025
 universeBlocking = False
-riskModelType = Constants.GLOBAL_RISK_MODEL #Constants.PCA_RISK_MODEL GLOBAL_RISK_MODEL
+riskModelType = Constants.GLOBAL_RISK_MODEL #Constants.PCA_RISK_MODEL #"TEST_FACTOR"
 riskModelNumFactors = 5
 pcaMA = 0.9
-runName = 'NEW_DAO_1_PSR' #'EQUITIES_YAHOO_SUB_2' #'EQUITIES_YAHOO_SUB_2' CRYPTO_SMALL5 CRYPTO_SMALL4
+runName = '1000_LOW_CORR' #'EQUITIES_YAHOO_SUB_2' #'EQUITIES_YAHOO_SUB_2' CRYPTO_SMALL5 CRYPTO_SMALL4
 g_alphas_arr = []
 g_raw_alphas_dic = {}
 testStartDate = "2021-01-04"
 optimEndDate = "2022-01-03"
 minPrice = 0.0 #2.0
 maxPrice = 10000000.0 # 10000.0
-useGammaTransactionModel = False
+useLambdaTransactionModel = False
 expFactorDecay = 0.1
 volumeMeanRankingWindow = 252
 
@@ -99,6 +100,7 @@ connection = pymysql.connect(host='alphasdatabase1.cysvmgsjf7ox.us-east-1.rds.am
 # histMultiIndex = pd.concat(histData.values(), keys=histData.keys())
 #histMultiIndex.to_parquet('EquitiesDataFiles/' + "E1000.parquet")
 #histMultiIndex = pd.read_parquet("s3://brethribar-equitiesdata-1/E1000.parquet")
+
 histMultiIndex = pd.read_parquet('EquitiesDataFiles/' + "E1000.parquet")
 
 industries = pd.read_csv('C:\Equities\symSubIndustries.csv', index_col=0)
@@ -133,8 +135,8 @@ df_volume = df_volume[df_volume.columns.intersection(industries.index.tolist())]
 df_dollars_traded = df_volume * df_close
 df_dollars_traded_mean = df_dollars_traded.rolling(window=volumeMeanRankingWindow).mean() #20
 #fill NaN and zero volume with 10,000 to simulate illiquidity
-df_dollars_traded_mean_trans = df_dollars_traded_mean.fillna(1.0e4)
-df_dollars_traded_mean_trans = df_dollars_traded_mean.replace(0, 1.0e4)
+#df_dollars_traded_mean_trans = df_dollars_traded_mean.fillna(1.0e4)
+df_dollars_traded_mean_trans = df_dollars_traded_mean.fillna(1.0e4).replace(0, 1.0e4)
 df_dollars_traded_mean_rank = df_dollars_traded_mean.rank(axis=1, ascending=False)
 
 # df_hist_vol_10 = df_close.pct_change().rolling(10).std()*(252**0.5)
@@ -218,12 +220,6 @@ def evalForGraphReturns(individual):
         out_normalzed = RiskModelFunctions.hedgeSubIndustries(industries, out)
         endtest = time.time()
         print("RiskModelFunctions.hedgeSubIndustries eval time: ", startTest - endtest)
-        # startTest = time.time()
-        # out_normalzed2 = RiskModelFunctions.hedgeSubIndustries2(industries, out)
-        # endtest = time.time()
-        # print("RiskModelFunctions.hedgeSubIndustries2 eval time: ", startTest - endtest)
-        # print("dataframes are equal?: ", out_normalzed.equals(out_normalzed2))
-        TEST = 1
     elif riskModelType == Constants.PCA_RISK_MODEL:
         out = RiskModelFunctions.pcaConvertAlpha(returns.iloc[:testStart, :], out, riskModelNumFactors)
         out_normalzed = RiskModelFunctions.hedgeGlobal(out)
@@ -231,6 +227,10 @@ def evalForGraphReturns(individual):
         out = RiskModelFunctions.pcaMovingAvg(returns.iloc[:testStart, :], out, riskModelNumFactors, pcaMA)
         out_normalzed = RiskModelFunctions.hedgeGlobal(out)
     ##########################
+    F_cov, B = RiskModelFunctions.getPCAfactorCovMatrix(returns)
+    F_cov.to_parquet(LOG_DATA_PATH + 'F_cov.parquet')
+    B.to_parquet(LOG_DATA_PATH + 'B.parquet')
+    ###########################
 
     out_normalzed[(df_close < minPrice) | (df_close > maxPrice)] = 0.0
     out_normalzed[df_dollars_traded_mean_rank > topN] = 0.0
@@ -303,8 +303,9 @@ def GetAlphasFromDB(numalphas):
             # sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `DSRprob` IN ('TEST') ORDER BY RAND() LIMIT %s" 3484460
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` in ('3490869') ORDER BY RAND() LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('TEST3_U','NEW_DAO_1_PSR_SUB','NEW_DAO_2_SUB','NEW_DAO_1_SUB') LIMIT %s"
-            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` > 1 AND `scriptversion` IN ('" + runName + "') LIMIT %s"
-            sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.99 AND `riskModelType` = 'Global' LIMIT %s"
+            sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` > 1 AND `scriptversion` IN ('" + runName + "') LIMIT %s"
+            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 2.0  AND `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
+            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 0.1 AND `riskModelType` = 'Global' LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 0  AND `turnover` < 0.5 AND `scriptversion` IN ('" + runName + "') ORDER BY RAND() LIMIT %s"
             cursor.execute(sql, (int(numalphas)))
             # sql = "SELECT `alphastring` FROM `quantschema`.`distinctuniquealphas` WHERE `corr` > 0.3 LIMIT %s"
@@ -435,7 +436,9 @@ def main():
     alphasExpectedReturns = GPfunctions.Decay_exp(alphasDF, expFactorDecay).shift(1)
     alphasExpectedReturns[alphasExpectedReturns < 0] = 0
 
-    alphaweightsTS = pd.DataFrame(np.inner(alphasDFCovInv, alphasExpectedReturns)).transpose()
+    alphaweightsTS = alphasExpectedReturns
+
+    #alphaweightsTS = pd.DataFrame(np.inner(alphasDFCovInv, alphasExpectedReturns)).transpose()
     alphaweightsTS = pd.DataFrame(alphaweightsTS)
     alphaweightsTS = alphaweightsTS.div(alphaweightsTS.sum(axis=1), axis=0)
 
@@ -493,13 +496,15 @@ def main():
 
     turnoverAdj = weightedAlpha.diff().abs().sum(axis=1)
 
-    transModelGamma = 1.0 / (10.0 * df_dollars_traded_mean_trans)
-    if useGammaTransactionModel:
-        #turnoverModel2 = transModelGamma * weightedAlpha.diff().abs() * bookSize
+    transModelLambda = 1.0 / (10.0 * df_dollars_traded_mean_trans)
+    transModelLambda.to_parquet('EquitiesDataFiles/' + "Lambda1000.parquet")
+
+    if useLambdaTransactionModel:
+        #turnoverModel2 = transModelLambda * weightedAlpha.diff().abs() * bookSize
         weightedAlphaDiff = weightedAlpha.diff().abs()**2
 
     weightedAlphaDiff = weightedAlpha.diff().abs() ** 2
-    turnoverModel = pd.DataFrame(transModelGamma.values * weightedAlphaDiff.values, columns=weightedAlpha.columns, index=A.index)
+    turnoverModel = pd.DataFrame(transModelLambda.values * weightedAlphaDiff.values, columns=weightedAlpha.columns, index=A.index)
 
     combinedAlpha2 = pd.DataFrame(weightedAlpha.values * ReturnY().values, columns=weightedAlpha.columns, index=A.index)
 
@@ -508,6 +513,7 @@ def main():
 
     weightedAlpha.to_csv(MODEL_DATA_PATH + MODEL_NAME)
     corr = pd.DataFrame(weightedAlpha.values).corrwith(pd.DataFrame(ReturnY().values)).mean()
+    mse = np.nanmean(np.square(np.subtract(np.array(weightedAlpha.values) / bookSize, np.array(ReturnY().values))))
 
     sharpe = (combinedAlpha2.sum(axis=1).mean() / combinedAlpha2.sum(axis=1).std()) * math.sqrt(252.0)
     print("FULL NO FEES SHARPE:", sharpe)
@@ -551,6 +557,7 @@ def main():
     print("finalTurnover: ", finalTurnover)
     #print("finalTurnover: ", finalTurnoverModel)
     print("corr with: ", corr)
+    print("MSE with: ", mse)
     print("mean daily returns: ", returns / 252.0)
     combinedAlpha2.sum(axis=1).to_csv(LOG_DATA_PATH+'combinedAlpha2.csv')
     print("linearDecay: ", linearDecay)

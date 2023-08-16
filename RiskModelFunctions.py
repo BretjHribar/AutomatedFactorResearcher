@@ -3,7 +3,7 @@ import numpy as np
 from sklearn.decomposition import PCA, FastICA
 import numpy.linalg as lin
 from numpy.linalg import matrix_rank
-
+import matplotlib.pyplot as plt
 
 class RiskModelFunctions:
     @staticmethod
@@ -17,18 +17,19 @@ class RiskModelFunctions:
         principalComponents = pca.fit(ret)
 
         eigVectors = pd.DataFrame(principalComponents.components_)
-        adjEigVectors = pd.DataFrame((pca.components_.T * pca.singular_values_).T)
+        #adjEigVectors = pd.DataFrame((pca.components_.T * pca.singular_values_).T)
 
         eigVectors.columns = out.columns
-        adjEigVectors.columns = out.columns
-        adjEigVectors.to_csv('C:\\Crypto\\QuoteEigVectors.csv')
+        # adjEigVectors.columns = out.columns
+        # adjEigVectors.to_csv('C:\\Crypto\\QuoteEigVectors.csv')
 
         # factorMap = np.linalg.lstsq(eigVectors.transpose(), out.transpose(), rcond=None)[0]
         # outPostRisk = np.inner(factorMap.transpose(), eigVectors.transpose())
 
-        tmp = np.linalg.lstsq(adjEigVectors.transpose(), out.transpose(), rcond=None)
+        tmp = np.linalg.lstsq(eigVectors.transpose(), out.transpose(), rcond=None)
         factorMap = tmp[0]
-        outPostRisk = np.inner(factorMap.transpose(), adjEigVectors.transpose())
+        #factorMap.plot()
+        outPostRisk = np.inner(factorMap.transpose(), eigVectors.transpose())
 
         outPostRisk = pd.DataFrame(outPostRisk, index=out.index, columns=out.columns)
         # adjOut = outPostRisk - out
@@ -178,3 +179,16 @@ class RiskModelFunctions:
         # adjOut = outPostRisk - out
         adjOut = out - outPostRisk
         return adjOut
+
+    @staticmethod
+    def getPCAfactorCovMatrix(ret, numberOfFactors=5 ):
+        ret = ret.fillna(0)
+
+        pca = PCA(n_components=numberOfFactors)
+        principalComponents = pca.fit(ret)
+
+        eigVectors = pd.DataFrame(principalComponents.components_)
+        eigVectors.columns = ret.columns
+
+        factorReturns = np.linalg.lstsq(eigVectors.transpose(), ret.transpose(), rcond=None)[0].T
+        return pd.DataFrame(factorReturns).cov(), eigVectors
