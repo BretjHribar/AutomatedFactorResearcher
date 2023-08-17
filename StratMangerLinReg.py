@@ -12,7 +12,7 @@ import s3fs
 
 from sklearn.metrics import mean_squared_error
 
-from statsforecast.models import SimpleExponentialSmoothing, ARIMA
+from statsforecast.models import SimpleExponentialSmoothingOptimized
 
 import pymysql.cursors
 
@@ -78,7 +78,7 @@ print("connecting to DB")
 #                              db='quantschema',
 #                              charset='utf8mb4',
 #                              cursorclass=pymysql.cursors.DictCursor)
-
+#
 connection = pymysql.connect(host='alphasdatabase1.cysvmgsjf7ox.us-east-1.rds.amazonaws.com',#'localhost',
                              user='admin', #mysqluser',
                              password='SALMON44', #'mysqluser',
@@ -307,7 +307,7 @@ def GetAlphasFromDB(numalphas):
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('TEST3_U','NEW_DAO_1_PSR_SUB','NEW_DAO_2_SUB','NEW_DAO_1_SUB') LIMIT %s"
             sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` > 1 AND `scriptversion` IN ('" + runName + "') LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 2.0  AND `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
-            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.99 AND `riskModelType` = 'Global' LIMIT %s"
+            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 0.1 AND `riskModelType` = 'Global' LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 0  AND `turnover` < 0.5 AND `scriptversion` IN ('" + runName + "') ORDER BY RAND() LIMIT %s"
             cursor.execute(sql, (int(numalphas)))
             # sql = "SELECT `alphastring` FROM `quantschema`.`distinctuniquealphas` WHERE `corr` > 0.3 LIMIT %s"
@@ -407,6 +407,7 @@ def main():
         if percentNan < 999999:
             g_raw_alphas_dic[counter] = B
             raw_alphas_dic[counter] = B
+            #ema_raw_alphas_dic[counter] = B
             counter = counter + 1
         alphas_arr.append(A.sum(axis=1).cumsum())
         g_alphas_arr.append(C)
@@ -416,7 +417,7 @@ def main():
     alphasDF = pd.DataFrame(alphas_arr)
 
     ############################
-    #######################################
+    ##################################
     print('TEST!!!')
     alphasDF = alphasDF.transpose().diff().fillna(0)
     #alphasDFCov = LedoitWolf().fit(alphasDF.iloc[:testStart,:].values)
@@ -427,13 +428,13 @@ def main():
 
     # npArrays = np.empty((len(alphasDF.index), len(alphasDF.columns)), float)
     # for col in alphasDF:
-    #     seso = ARIMA() #SimpleExponentialSmoothing(alpha= 0.1)
+    #     seso = SimpleExponentialSmoothingOptimized()
     #     seso = seso.fit(y=alphasDF[col].to_numpy())
     #     pred = seso.predict_in_sample()['fitted']
     #     #pred = np.append(pred, [0])
     #     npArrays[:,col] = pred
-
-    #alphasExpectedReturns =pd.DataFrame(npArrays)
+    #
+    # alphasExpectedReturns =pd.DataFrame(npArrays)
 
     alphasExpectedReturns = GPfunctions.Decay_exp(alphasDF, expFactorDecay).shift(1)
     alphasExpectedReturns[alphasExpectedReturns < 0] = 0
@@ -486,13 +487,49 @@ def main():
     weightedAlpha = RiskModelFunctions.hedgeGlobal(weightedAlpha)
     weightedAlpha.replace(np.nan,0 , inplace=True)
 
-    weightedAlpha = weightedAlpha * bookSize
+    #weightedAlpha = weightedAlpha * bookSize
 
     if (portTail > 0):
         #weightedAlpha = GPfunctions.Tail(weightedAlpha, portTail)
         weightedAlpha = weightedAlpha * 5.0  # 4
 
-    print("weightedAlpha.shape", weightedAlpha.shape)
+    # for counter in range(len(raw_alphas_dic)):
+    #     aWeightsDF = alphaweightsTS[counter]  # .= .reindex(raw_alphas_dic[counter].index)
+    #     aWeightsDF.index = raw_alphas_dic[counter].index
+
+    X = np.column_stack(
+        [GPfunctions.Decay_exp(raw_alphas_dic[key].multiply(alphaweightsTS[key], axis=0).fillna(0.0), expFactorDecay)#.shift(1)
+         for key in raw_alphas_dic])
+
+    lookBack = 252
+    for i in range(testStart, len(weightedAlpha)-lookBack-1):
+        reg = linear_model.LinearRegression(fit_intercept=False,n_jobs=2) #n_jobs=-1
+        print("linreg: ",str(i))
+        # Create a matrix of predictors by stacking all factor outputs side by side
+        #GPfunctions.Decay_exp(alphasDF, expFactorDecay).shift(1)
+        #X = np.column_stack([GPfunctions.Decay_exp(raw_alphas_dic[key].multiply(aWeightsDF, axis=0).fillna(0.0), expFactorDecay).shift(1) for key in raw_alphas_dic])
+        #X = np.column_stack([raw_alphas_dic[key].fillna(0.0).values for key in raw_alphas_dic])
+
+        # Split the data into train and test based on the optimization end date
+        X_train = X[i:i+lookBack]
+        X_test = X[i+lookBack]
+        y_train = ReturnY().iloc[i:i+lookBack].fillna(0.0).values
+
+        reg.fit(X_train, y_train)
+        #T = reg.predict(X_test)
+        weightedAlpha.iloc[i+lookBack+1, :] = reg.predict(X_test.reshape(1, -1))
+
+        # GPT4 please rewrite and correct this code below to do a rolling OLS regression on the factor predictions
+        # reg = linear_model.LinearRegression()
+        # TEST = ReturnY().iloc[i]
+        # reg.fit(weightedAlpha.iloc[testStart:optimEnd, :], ReturnY().iloc[testStart:optimEnd].fillna(0.0))
+        # weightedAlpha.iloc[optimEnd:, :] = reg.predict(weightedAlpha.iloc[optimEnd:, :])
+
+    weightedAlpha.replace(0, np.nan, inplace=True)
+    weightedAlpha = RiskModelFunctions.hedgeGlobal(weightedAlpha)
+    weightedAlpha.replace(np.nan,0 , inplace=True)
+
+    weightedAlpha = weightedAlpha * bookSize
 
     weightedAlpha.to_csv('C:\Equities\WA.csv')
 
@@ -533,7 +570,7 @@ def main():
     # print("returns:", returns)
 
     ((pd.DataFrame(combinedAlpha2).sum(axis=1) - (turnoverAdj * feesBSP)).cumsum()).plot()
-    (((combinedAlpha2-turnoverModel).sum(axis=1)).cumsum()).plot()
+    #(((combinedAlpha2-turnoverModel).sum(axis=1)).cumsum()).plot()
 
     finalTurnover = turnoverAdj.mean() / bookSize
     #finalTurnoverModel = turnoverModel.mean()

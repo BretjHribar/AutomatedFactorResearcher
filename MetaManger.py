@@ -26,8 +26,15 @@ annCorrection = 252
 returnY = pd.read_csv(LOG_DATA_PATH+"returnY.csv",index_col='date', parse_dates=True)
 
 LambdaMatrix = pd.read_parquet('EquitiesDataFiles/' + "Lambda1000.parquet")
+LambdaMatrix[:] = 0
 B = pd.read_parquet('logDataFiles/' + "B.parquet")
 F_cov = pd.read_parquet('logDataFiles/' + "F_cov.parquet")
+BT = B.transpose()
+risk_aversion = 1.0e-20 #1.0e-6
+
+Q = np.matmul(scipy.linalg.sqrtm(F_cov), BT.T)
+QT = Q.transpose()
+
 
 for path, subdirs, files in os.walk(MODEL_DATA_PATH):
     for name in files:
@@ -40,25 +47,29 @@ optimEnd = int(g_alphas_arr[0].index.get_loc(optimEndDate))
 
 ############################################################################
 ############################################################################
-def get_obj_func(h0, alpha_vec, Lambda):
+def get_obj_func(h0, risk_aversion, alpha_vec, Q, Lambda):
     def obj_func(h):
-        f = -np.dot(h, alpha_vec)
+        f = 0.5 * risk_aversion * np.sum(np.matmul(Q, h) ** 2)
+        f -= np.dot(h, alpha_vec)
         #f += np.dot((h - h0) ** 2, Lambda)
         f += np.nansum(((h - h0) ** 2) * Lambda)
         return f
     return obj_func
 ############################################################################
 #def get_grad_func(h0, risk_aversion, Q, QT, specVar, alpha_vec, Lambda):
-def get_grad_func(h0, alpha_vec, Lambda):
+def get_grad_func(h0, risk_aversion, Q, QT, alpha_vec, Lambda):
     def grad_func(h):
-        g = -alpha_vec
+        g = risk_aversion * np.matmul(QT, np.matmul(Q, h))
+        g -= alpha_vec
         g += 2 * (h - h0) * Lambda
         return np.asarray(g)
     return grad_func
 ############################################################################
-def get_h_star(alpha_vec, h0, Lambda):
-    obj_func = get_obj_func(h0, alpha_vec, Lambda)
-    grad_func = get_grad_func(h0, alpha_vec, Lambda)
+def get_h_star(alpha_vec, h0, Q, QT, Lambda):
+    # obj_func = get_obj_func(h0, alpha_vec, Lambda)
+    # grad_func = get_grad_func(h0, alpha_vec, Lambda)
+    obj_func = get_obj_func(h0, risk_aversion, alpha_vec, Q, Lambda)
+    grad_func = get_grad_func(h0, risk_aversion, Q, QT, alpha_vec, Lambda)
 
     optimizer_result = scipy.optimize.fmin_l_bfgs_b(obj_func, h0, fprime=grad_func)
     return optimizer_result[0]
@@ -101,9 +112,18 @@ def main():
 
 ###################OPTIM NEW####################################
     tradeOptimDF = pd.DataFrame().reindex_like(weightedAlpha)
-    oldTrades = get_h_star(weightedAlpha.iloc[testStart].to_numpy(), weightedAlpha.iloc[testStart].to_numpy(), LambdaMatrix.iloc[testStart].to_numpy())
+    oldTrades = get_h_star(weightedAlpha.iloc[testStart].to_numpy(),
+                           weightedAlpha.iloc[testStart].to_numpy(),
+                           Q,
+                           QT,
+                           LambdaMatrix.iloc[testStart].to_numpy())
     for index, row in weightedAlpha[testStart:].iterrows():
-        newTrades = get_h_star(weightedAlpha.loc[index].to_numpy(), oldTrades, LambdaMatrix.loc[index].to_numpy())
+        print("index:", index)
+        newTrades = get_h_star(weightedAlpha.loc[index].to_numpy(),
+                               oldTrades,
+                               Q,
+                               QT,
+                               LambdaMatrix.loc[index].to_numpy())
         tradeOptimDF.loc[index] = newTrades
         oldTrades = newTrades
 
@@ -112,7 +132,7 @@ def main():
 
     combinedAlpha3 = pd.DataFrame(tradeOptimDF.values * returnY.values, columns=weightedAlpha.columns,
                                   index=returnY.index)
-    #((pd.DataFrame(combinedAlpha3).sum(axis=1) - (turnoverAdj * feesBSP)).cumsum()).plot()
+    ((pd.DataFrame(combinedAlpha3).sum(axis=1) - (turnoverAdj * feesBSP)).cumsum()).plot()
     # pd.DataFrame(combinedAlpha3.loc["2021-01-04":"2021-08-11"]).sum(axis=1).cumsum().plot()
     # plt.show()
 

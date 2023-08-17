@@ -268,3 +268,71 @@ class GPfunctions:
         pset.renameArguments(ARG6="adv20")
         pset.renameArguments(ARG7="returns")
         return pset
+
+    #### ADD GP FUNCTIONS TO TOOLBOX #####
+    @staticmethod
+    def addGPfunctionsToToolboxFromDictionary(pset, func_dic):
+        pset.addEphemeralConstant("rand1", lambda: random.uniform(-10, 10), float)
+        pset.addEphemeralConstant("rand2", lambda: random.uniform(-1, 1), float)
+        pset.addEphemeralConstant("rand3", lambda: random.uniform(0, 1), float)
+
+        ####NEW######
+        pset.addPrimitive(GPfunctions.ts_zscore, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
+        pset.addPrimitive(GPfunctions.log_diff, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+        pset.addPrimitive(GPfunctions.s_log_1p, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+        pset.addPrimitive(GPfunctions.df_max, [pd.core.frame.DataFrame, pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+        pset.addPrimitive(GPfunctions.df_min, [pd.core.frame.DataFrame, pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+        #############
+        pset.addPrimitive(GPfunctions.npfadd, [pd.core.frame.DataFrame, float], pd.core.frame.DataFrame)
+        pset.addPrimitive(GPfunctions.npfsub, [pd.core.frame.DataFrame, float], pd.core.frame.DataFrame)
+        pset.addPrimitive(GPfunctions.npfmul, [pd.core.frame.DataFrame, float], pd.core.frame.DataFrame)
+        pset.addPrimitive(GPfunctions.npfdiv, [pd.core.frame.DataFrame, float], pd.core.frame.DataFrame)
+
+        pset.addPrimitive(np.add, [pd.core.frame.DataFrame, pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+        pset.addPrimitive(np.subtract, [pd.core.frame.DataFrame, pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+        pset.addPrimitive(np.multiply, [pd.core.frame.DataFrame, pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+        pset.addPrimitive(np.divide, [pd.core.frame.DataFrame, pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+        pset.addPrimitive(np.negative, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+        pset.addPrimitive(np.log, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+        pset.addPrimitive(np.log10, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+        pset.addPrimitive(np.sqrt, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+        pset.addPrimitive(np.square, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+
+        pset.addPrimitive(GPfunctions.true_divide, [pd.core.frame.DataFrame, pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+
+        pset.addPrimitive(GPfunctions.SignedPower, [pd.core.frame.DataFrame, float], pd.core.frame.DataFrame)
+        pset.addPrimitive(GPfunctions.Sign, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+
+        pset.addPrimitive(GPfunctions.extend, [int], int)
+        pset.addPrimitive(GPfunctions.extend, [float], float)
+        pset.addPrimitive(GPfunctions.sma, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
+        pset.addPrimitive(GPfunctions.delta, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
+        pset.addPrimitive(GPfunctions.stddev, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
+
+        pset.addPrimitive(GPfunctions.ts_min, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
+        pset.addPrimitive(GPfunctions.ts_max, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
+        pset.addPrimitive(GPfunctions.ts_sum, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
+        pset.addPrimitive(GPfunctions.delay, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
+        pset.addPrimitive(GPfunctions.ts_skewness, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
+        pset.addPrimitive(GPfunctions.ts_kurtosis, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
+
+        pset.addPrimitive(GPfunctions.ArgMax, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
+        pset.addPrimitive(GPfunctions.ArgMin, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
+        pset.addPrimitive(GPfunctions.Product, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
+        pset.addPrimitive(GPfunctions.ts_rank, [pd.core.frame.DataFrame,int], pd.core.frame.DataFrame)
+        #pset.addPrimitive(scale, [pd.core.frame.DataFrame,int], pd.core.frame.DataFrame)
+
+        pset.addPrimitive(GPfunctions.rank, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+        pset.addPrimitive(GPfunctions.Abs, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+
+        pset.addPrimitive(GPfunctions.Decay_lin, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
+        pset.addPrimitive(GPfunctions.Decay_exp, [pd.core.frame.DataFrame, float], pd.core.frame.DataFrame)
+
+        pset.addPrimitive(GPfunctions.Inverse, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+
+        pset.addPrimitive(GPfunctions.correlation, [pd.core.frame.DataFrame, pd.core.frame.DataFrame, int],
+                          pd.core.frame.DataFrame)
+        pset.addPrimitive(GPfunctions.covariance, [pd.core.frame.DataFrame, pd.core.frame.DataFrame, int],
+                          pd.core.frame.DataFrame)
+
+        return pset

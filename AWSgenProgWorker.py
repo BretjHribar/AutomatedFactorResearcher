@@ -35,7 +35,7 @@ root = os.path.join("C:\Equities", universe)
 alphas_arr = []
 histData = {}
 corrTScache = {}
-corrCutoff = 0.1
+corrCutoff = 0.7
 fitnessCutoff = 1.0
 turnoverMax = 1.0 #0.05
 turnoverMin = 0.001
@@ -49,7 +49,7 @@ rankHedge = False
 funcLookbackLength = 40 #90
 linearDecay = 0
 topN = 3000
-runName = '1000_LOW_CORR' #EQUITIES_YAHOO_SUB_2
+runName = '1000_A' #EQUITIES_YAHOO_SUB_2
 targetDelay = 1
 # bottomN = 0
 trialCounter = 0
@@ -59,7 +59,7 @@ psrCutoff = 0.99
 riskModelNumFactors = 5
 minPrice = -1.0 #2.0
 maxPrice = 10000000.0 # 10000.0
-riskModelType = Constants.GLOBAL_RISK_MODEL
+riskModelType = Constants.SUB_INDUSTRY_RISK_MODEL
 useGammaTransactionModel = False
 
 trunctateEndDate = '1/1/2021'  # '3/09/2018' #'7/18/2018' #'4/17/2019' #'07/01/2018'
@@ -119,7 +119,6 @@ df_open_full = df_open_full.truncate(after=trunctateEndDate)
 df_close_full = df_close_full.truncate(after=trunctateEndDate)
 df_volume_full = df_volume_full.truncate(after=trunctateEndDate)
 
-
 df_close = df_close.truncate(before=trunctateBeginDate)
 df_open = df_open.truncate(before=trunctateBeginDate)
 df_high = df_high.truncate(before=trunctateBeginDate)
@@ -135,6 +134,11 @@ df_dollars_traded_mean = df_dollars_traded.rolling(window=20).mean()
 df_dollars_traded_mean_trans = df_dollars_traded_mean.fillna(1.0e4)
 df_dollars_traded_mean_trans = df_dollars_traded_mean.replace(0, 1.0e4)
 df_dollars_traded_mean_rank = df_dollars_traded_mean.rank(axis=1, ascending=False)
+
+df_hist_vol_10 = df_close.pct_change().rolling(10).std()*(252**0.5)
+df_hist_vol_20 = df_close.pct_change().rolling(20).std()*(252**0.5)
+df_hist_vol_30 = df_close.pct_change().rolling(30).std()*(252**0.5)
+df_hist_vol_90 = df_close.pct_change().rolling(90).std()*(252**0.5)
 
 if (universeBlocking):
     for i in range(len(df_dollars_traded_mean_rank.index)-20, 20, -20):
@@ -209,6 +213,10 @@ def evalForGraphReturns(individual):
     volume = df_volume
     dollars_traded = df_dollars_traded
     adv20 = df_dollars_traded_mean
+    hist_vol_10 = df_hist_vol_10
+    hist_vol_20 = df_hist_vol_20
+    hist_vol_30 = df_hist_vol_30
+    hist_vol_90 = df_hist_vol_90
 
     # nextOpen = open.shift(-1)
     returns = close - close.shift(1)
@@ -222,7 +230,7 @@ def evalForGraphReturns(individual):
 
     # apply the GP tree to the DataFrames
     #out = func(dum, open, high, low, close, volume, dollars_traded, adv20, returns)
-    out = func(open, high, low, close, volume, dollars_traded, adv20, returns)
+    out = func(open, high, low, close, volume, dollars_traded, adv20, returns, hist_vol_10, hist_vol_20, hist_vol_30, hist_vol_90)
 
     if hedgeVol:
         # stdCorrective = returns.rolling(20).std()
@@ -287,6 +295,10 @@ def evalAlphaGen(individual):
     volume = df_volume
     dollars_traded = df_dollars_traded
     adv20 = df_dollars_traded_mean
+    hist_vol_10 = df_hist_vol_10
+    hist_vol_20 = df_hist_vol_20
+    hist_vol_30 = df_hist_vol_30
+    hist_vol_90 = df_hist_vol_90
 
     # nextOpen = open.shift(-1)
     returns = close - close.shift(1)
@@ -298,7 +310,7 @@ def evalAlphaGen(individual):
         target = (df_close_full.shift(-1) - df_close_full) / df_close_full
 
     # apply the GP tree to the DataFrames
-    out = func(open, high, low, close, volume, dollars_traded, adv20, returns)
+    out = func(open, high, low, close, volume, dollars_traded, adv20, returns, hist_vol_10, hist_vol_20, hist_vol_30, hist_vol_90)
 
     if hedgeVol:
         # stdCorrective = returns.rolling(20).std()
@@ -370,7 +382,7 @@ def evalAlphaGen(individual):
             individual = "Decay_exp(" + originalInd + "," + str(exponentialDecayLookback) + ")"
             func = toolbox.compile(expr=individual)
             print("NEW INDIVIDUAL :", individual)
-            out = func(open, high, low, close, volume, dollars_traded, adv20, returns)
+            out = func(open, high, low, close, volume, dollars_traded, adv20, returns,hist_vol_10, hist_vol_20, hist_vol_30, hist_vol_90)
             out = out.replace([np.inf, -np.inf], np.nan)
             ### RISK MODEL SECTION ###
             if riskModelType == Constants.GLOBAL_RISK_MODEL:
@@ -448,14 +460,17 @@ def evalAlphaGen(individual):
 ########################################################################
 ########################################################################
 pset = gp.PrimitiveSetTyped("main", [pd.core.frame.DataFrame,
-                                     pd.core.frame.DataFrame,
-                                     #pd.core.frame.DataFrame,
-                                     pd.core.frame.DataFrame,
-                                     pd.core.frame.DataFrame,
-                                     pd.core.frame.DataFrame,
-                                     pd.core.frame.DataFrame,
-                                     pd.core.frame.DataFrame,
-                                     pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+                                    pd.core.frame.DataFrame,
+                                    pd.core.frame.DataFrame,
+                                    pd.core.frame.DataFrame,
+                                    pd.core.frame.DataFrame,
+                                    pd.core.frame.DataFrame,
+                                    pd.core.frame.DataFrame,
+                                    pd.core.frame.DataFrame,
+                                    pd.core.frame.DataFrame,
+                                    pd.core.frame.DataFrame,
+                                    pd.core.frame.DataFrame,
+                                    pd.core.frame.DataFrame], pd.core.frame.DataFrame)
 
 for x in range(1, funcLookbackLength):
     pset.addTerminal(x, int)
@@ -470,6 +485,10 @@ pset.renameArguments(ARG4="volume")
 pset.renameArguments(ARG5="dollars_traded")
 pset.renameArguments(ARG6="adv20")
 pset.renameArguments(ARG7="returns")
+pset.renameArguments(ARG8="hist_vol_10")
+pset.renameArguments(ARG9="hist_vol_20")
+pset.renameArguments(ARG10="hist_vol_30")
+pset.renameArguments(ARG11="hist_vol_90")
 
 creator.create("FitnessMax", base.Fitness, weights=(1.0,))
 creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
