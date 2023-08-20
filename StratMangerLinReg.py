@@ -55,7 +55,7 @@ universeBlocking = False
 riskModelType = Constants.SUB_INDUSTRY_RISK_MODEL #Constants.PCA_RISK_MODEL #"TEST_FACTOR"
 riskModelNumFactors = 5
 pcaMA = 0.9
-runName = '1000_A' #'1000_LOW_CORR' #'EQUITIES_YAHOO_SUB_2' #'EQUITIES_YAHOO_SUB_2' CRYPTO_SMALL5 CRYPTO_SMALL4
+runName = 'NEW_DAO_1_SUB' #'1000_A' #'1000_LOW_CORR' #'EQUITIES_YAHOO_SUB_2' #'EQUITIES_YAHOO_SUB_2' CRYPTO_SMALL5 CRYPTO_SMALL4
 g_alphas_arr = []
 g_raw_alphas_dic = {}
 testStartDate = "2021-01-04"
@@ -304,8 +304,9 @@ def GetAlphasFromDB(numalphas):
             #  `alphasid` <= 3487653 AND
             # sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `DSRprob` IN ('TEST') ORDER BY RAND() LIMIT %s" 3484460
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` in ('3490869') ORDER BY RAND() LIMIT %s"
-            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('TEST3_U','NEW_DAO_1_PSR_SUB','NEW_DAO_2_SUB','NEW_DAO_1_SUB') LIMIT %s"
-            sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` > 1 AND `scriptversion` IN ('" + runName + "') LIMIT %s"
+            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('NEW_DAO_1_SUB','NEW_DAO_2_SUB', '1000_A', '1000_LOW_CORR') LIMIT %s"
+            sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('1000_A', '1000_LOW_CORR') LIMIT %s"
+            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` > 1 AND `scriptversion` IN ('" + runName + "') LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 2.0  AND `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 0.1 AND `riskModelType` = 'Global' LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 0  AND `turnover` < 0.5 AND `scriptversion` IN ('" + runName + "') ORDER BY RAND() LIMIT %s"
@@ -493,41 +494,37 @@ def main():
         #weightedAlpha = GPfunctions.Tail(weightedAlpha, portTail)
         weightedAlpha = weightedAlpha * 5.0  # 4
 
-    # for counter in range(len(raw_alphas_dic)):
-    #     aWeightsDF = alphaweightsTS[counter]  # .= .reindex(raw_alphas_dic[counter].index)
-    #     aWeightsDF.index = raw_alphas_dic[counter].index
+    # X = np.column_stack(
+    #     [GPfunctions.Decay_exp(raw_alphas_dic[key].multiply(alphaweightsTS[key], axis=0).fillna(0.0), expFactorDecay)#.shift(1)
+    #      for key in raw_alphas_dic])
 
     X = np.column_stack(
-        [GPfunctions.Decay_exp(raw_alphas_dic[key].multiply(alphaweightsTS[key], axis=0).fillna(0.0), expFactorDecay)#.shift(1)
+        #[raw_alphas_dic[key].multiply(alphaweightsTS[key].shift(-1), axis=0).fillna(0.0) #.shift(1)
+        [raw_alphas_dic[key].multiply(alphaweightsTS[key], axis=0).fillna(0.0) #.shift(1)
+        #[raw_alphas_dic[key].fillna(0.0)  # .shift(1)
          for key in raw_alphas_dic])
 
-    lookBack = 252
-    for i in range(testStart, len(weightedAlpha)-lookBack-1):
-        reg = linear_model.LinearRegression(fit_intercept=False,n_jobs=2) #n_jobs=-1
+    lookBack = 20
+    for i in range(testStart, len(weightedAlpha)-lookBack-2):
+        #reg = linear_model.LinearRegression(fit_intercept=False, n_jobs=2) #n_jobs=-1
+        #reg = linear_model.MultiTaskElasticNetCV()
+        reg = linear_model.MultiTaskElasticNet() # n_jobs=-1
         print("linreg: ",str(i))
-        # Create a matrix of predictors by stacking all factor outputs side by side
-        #GPfunctions.Decay_exp(alphasDF, expFactorDecay).shift(1)
-        #X = np.column_stack([GPfunctions.Decay_exp(raw_alphas_dic[key].multiply(aWeightsDF, axis=0).fillna(0.0), expFactorDecay).shift(1) for key in raw_alphas_dic])
-        #X = np.column_stack([raw_alphas_dic[key].fillna(0.0).values for key in raw_alphas_dic])
 
         # Split the data into train and test based on the optimization end date
         X_train = X[i:i+lookBack]
-        X_test = X[i+lookBack]
-        y_train = ReturnY().iloc[i:i+lookBack].fillna(0.0).values
+        X_test = X[i+lookBack+1]
+        #y_train = ReturnY().iloc[i:i+lookBack].fillna(0.0).values
+        y_train = RiskModelFunctions.hedgeSubIndustries(industries, ReturnY()).iloc[i:i + lookBack].fillna(0.0).values
 
         reg.fit(X_train, y_train)
         #T = reg.predict(X_test)
         weightedAlpha.iloc[i+lookBack+1, :] = reg.predict(X_test.reshape(1, -1))
 
-        # GPT4 please rewrite and correct this code below to do a rolling OLS regression on the factor predictions
-        # reg = linear_model.LinearRegression()
-        # TEST = ReturnY().iloc[i]
-        # reg.fit(weightedAlpha.iloc[testStart:optimEnd, :], ReturnY().iloc[testStart:optimEnd].fillna(0.0))
-        # weightedAlpha.iloc[optimEnd:, :] = reg.predict(weightedAlpha.iloc[optimEnd:, :])
-
-    weightedAlpha.replace(0, np.nan, inplace=True)
-    weightedAlpha = RiskModelFunctions.hedgeGlobal(weightedAlpha)
-    weightedAlpha.replace(np.nan,0 , inplace=True)
+    # weightedAlpha.replace(0, np.nan, inplace=True)
+    # #weightedAlpha = RiskModelFunctions.hedgeGlobal(weightedAlpha)
+    # weightedAlpha = RiskModelFunctions.hedgeSubIndustries(industries, weightedAlpha)
+    # weightedAlpha.replace(np.nan,0 , inplace=True)
 
     weightedAlpha = weightedAlpha * bookSize
 
@@ -551,8 +548,9 @@ def main():
     combinedAlpha2.replace(np.nan, 0, inplace=True)
 
     weightedAlpha.to_csv(MODEL_DATA_PATH + MODEL_NAME)
-    corr = pd.DataFrame(weightedAlpha.values).corrwith(pd.DataFrame(ReturnY().values)).mean()
-    mse = np.nanmean(np.square(np.subtract(np.array(weightedAlpha.values) / bookSize, np.array(ReturnY().values))))
+    corr = pd.DataFrame(weightedAlpha.iloc[testStart:, :].values).corrwith(pd.DataFrame(ReturnY().iloc[testStart:, :].values)).mean()
+    mse = np.nanmean(np.square(np.subtract(np.array(weightedAlpha.iloc[testStart:, :].values) / bookSize, np.array(ReturnY().iloc[testStart:, :].values))))
+
 
     sharpe = (combinedAlpha2.sum(axis=1).mean() / combinedAlpha2.sum(axis=1).std()) * math.sqrt(252.0)
     print("FULL NO FEES SHARPE:", sharpe)
@@ -610,6 +608,7 @@ def main():
     print("maxStockWeight: ", maxStockWeight)
     print("feesBSP: ", feesBSP)
     print("expFactorDecay: ", expFactorDecay)
+    print("lookBack",lookBack)
 
 
     plt.show()
