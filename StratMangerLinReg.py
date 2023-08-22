@@ -504,11 +504,11 @@ def main():
         #[raw_alphas_dic[key].fillna(0.0)  # .shift(1)
          for key in raw_alphas_dic])
 
-    lookBack = 20
+    lookBack = 252
     for i in range(testStart, len(weightedAlpha)-lookBack-2):
         #reg = linear_model.LinearRegression(fit_intercept=False, n_jobs=2) #n_jobs=-1
         #reg = linear_model.MultiTaskElasticNetCV()
-        reg = linear_model.MultiTaskElasticNet() # n_jobs=-1
+        reg = linear_model.MultiTaskLasso(alpha=1000.0) # n_jobs=-1
         print("linreg: ",str(i))
 
         # Split the data into train and test based on the optimization end date

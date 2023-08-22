@@ -258,81 +258,118 @@ class GPfunctions:
         return pset
 
     @staticmethod
-    def GP_rename_arguments(pset):
-        pset.renameArguments(ARG0="open")
-        pset.renameArguments(ARG1="high")
-        pset.renameArguments(ARG2="low")
-        pset.renameArguments(ARG3="close")
-        pset.renameArguments(ARG4="volume")
-        pset.renameArguments(ARG5="dollars_traded")
-        pset.renameArguments(ARG6="adv20")
-        pset.renameArguments(ARG7="returns")
+    def GP_rename_arguments(pset, featuresList):
+        kargs_input = {}
+        for i, f in enumerate(featuresList):
+            argString = "ARG"+str(i)
+            kargs_input[argString] = f
+        pset.renameArguments(**kargs_input)
+
+        # pset.renameArguments(ARG0="open")
+        # pset.renameArguments(ARG1="high")
+        # pset.renameArguments(ARG2="low")
+        # pset.renameArguments(ARG3="close")
+        # pset.renameArguments(ARG4="volume")
+        # pset.renameArguments(ARG5="dollars_traded")
+        # pset.renameArguments(ARG6="adv20")
+        # pset.renameArguments(ARG7="returns")
         return pset
 
     #### ADD GP FUNCTIONS TO TOOLBOX #####
     @staticmethod
-    def addGPfunctionsToToolboxFromDictionary(pset, func_dic):
+    def addGPfunctionsToToolboxFromDictionary(pset, gp_function_list):
         pset.addEphemeralConstant("rand1", lambda: random.uniform(-10, 10), float)
         pset.addEphemeralConstant("rand2", lambda: random.uniform(-1, 1), float)
         pset.addEphemeralConstant("rand3", lambda: random.uniform(0, 1), float)
 
-        ####NEW######
-        pset.addPrimitive(GPfunctions.ts_zscore, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
-        pset.addPrimitive(GPfunctions.log_diff, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
-        pset.addPrimitive(GPfunctions.s_log_1p, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
-        pset.addPrimitive(GPfunctions.df_max, [pd.core.frame.DataFrame, pd.core.frame.DataFrame], pd.core.frame.DataFrame)
-        pset.addPrimitive(GPfunctions.df_min, [pd.core.frame.DataFrame, pd.core.frame.DataFrame], pd.core.frame.DataFrame)
-        #############
-        pset.addPrimitive(GPfunctions.npfadd, [pd.core.frame.DataFrame, float], pd.core.frame.DataFrame)
-        pset.addPrimitive(GPfunctions.npfsub, [pd.core.frame.DataFrame, float], pd.core.frame.DataFrame)
-        pset.addPrimitive(GPfunctions.npfmul, [pd.core.frame.DataFrame, float], pd.core.frame.DataFrame)
-        pset.addPrimitive(GPfunctions.npfdiv, [pd.core.frame.DataFrame, float], pd.core.frame.DataFrame)
-
-        pset.addPrimitive(np.add, [pd.core.frame.DataFrame, pd.core.frame.DataFrame], pd.core.frame.DataFrame)
-        pset.addPrimitive(np.subtract, [pd.core.frame.DataFrame, pd.core.frame.DataFrame], pd.core.frame.DataFrame)
-        pset.addPrimitive(np.multiply, [pd.core.frame.DataFrame, pd.core.frame.DataFrame], pd.core.frame.DataFrame)
-        pset.addPrimitive(np.divide, [pd.core.frame.DataFrame, pd.core.frame.DataFrame], pd.core.frame.DataFrame)
-        pset.addPrimitive(np.negative, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
-        pset.addPrimitive(np.log, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
-        pset.addPrimitive(np.log10, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
-        pset.addPrimitive(np.sqrt, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
-        pset.addPrimitive(np.square, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
-
-        pset.addPrimitive(GPfunctions.true_divide, [pd.core.frame.DataFrame, pd.core.frame.DataFrame], pd.core.frame.DataFrame)
-
-        pset.addPrimitive(GPfunctions.SignedPower, [pd.core.frame.DataFrame, float], pd.core.frame.DataFrame)
-        pset.addPrimitive(GPfunctions.Sign, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
-
         pset.addPrimitive(GPfunctions.extend, [int], int)
         pset.addPrimitive(GPfunctions.extend, [float], float)
-        pset.addPrimitive(GPfunctions.sma, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
-        pset.addPrimitive(GPfunctions.delta, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
-        pset.addPrimitive(GPfunctions.stddev, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
 
-        pset.addPrimitive(GPfunctions.ts_min, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
-        pset.addPrimitive(GPfunctions.ts_max, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
-        pset.addPrimitive(GPfunctions.ts_sum, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
-        pset.addPrimitive(GPfunctions.delay, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
-        pset.addPrimitive(GPfunctions.ts_skewness, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
-        pset.addPrimitive(GPfunctions.ts_kurtosis, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
-
-        pset.addPrimitive(GPfunctions.ArgMax, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
-        pset.addPrimitive(GPfunctions.ArgMin, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
-        pset.addPrimitive(GPfunctions.Product, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
-        pset.addPrimitive(GPfunctions.ts_rank, [pd.core.frame.DataFrame,int], pd.core.frame.DataFrame)
-        #pset.addPrimitive(scale, [pd.core.frame.DataFrame,int], pd.core.frame.DataFrame)
-
-        pset.addPrimitive(GPfunctions.rank, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
-        pset.addPrimitive(GPfunctions.Abs, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
-
-        pset.addPrimitive(GPfunctions.Decay_lin, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
         pset.addPrimitive(GPfunctions.Decay_exp, [pd.core.frame.DataFrame, float], pd.core.frame.DataFrame)
+        # pset.addPrimitive(scale, [pd.core.frame.DataFrame,int], pd.core.frame.DataFrame)
 
-        pset.addPrimitive(GPfunctions.Inverse, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
-
-        pset.addPrimitive(GPfunctions.correlation, [pd.core.frame.DataFrame, pd.core.frame.DataFrame, int],
+        for f in gp_function_list:
+            match f:
+                case "ts_zscore":
+                    pset.addPrimitive(GPfunctions.ts_zscore, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
+                case "log_diff":
+                    pset.addPrimitive(GPfunctions.log_diff, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+                case "s_log_1p":
+                    pset.addPrimitive(GPfunctions.s_log_1p, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+                case "df_max":
+                    pset.addPrimitive(GPfunctions.df_max, [pd.core.frame.DataFrame, pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+                case "df_min":
+                    pset.addPrimitive(GPfunctions.df_min, [pd.core.frame.DataFrame, pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+                case "npfadd":
+                    pset.addPrimitive(GPfunctions.npfadd, [pd.core.frame.DataFrame, float], pd.core.frame.DataFrame)
+                case "npfsub":
+                    pset.addPrimitive(GPfunctions.npfsub, [pd.core.frame.DataFrame, float], pd.core.frame.DataFrame)
+                case "npfmul":
+                    pset.addPrimitive(GPfunctions.npfmul, [pd.core.frame.DataFrame, float], pd.core.frame.DataFrame)
+                case "npfdiv":
+                    pset.addPrimitive(GPfunctions.npfdiv, [pd.core.frame.DataFrame, float], pd.core.frame.DataFrame)
+                case "add":
+                    pset.addPrimitive(np.add, [pd.core.frame.DataFrame, pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+                case "subtract":
+                    pset.addPrimitive(np.subtract, [pd.core.frame.DataFrame, pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+                case "multiply":
+                    pset.addPrimitive(np.multiply, [pd.core.frame.DataFrame, pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+                case "divide":
+                    pset.addPrimitive(np.divide, [pd.core.frame.DataFrame, pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+                case "negative":
+                    pset.addPrimitive(np.negative, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+                case "log":
+                    pset.addPrimitive(np.log, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+                case "log10":
+                    pset.addPrimitive(np.log10, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+                case "sqrt":
+                    pset.addPrimitive(np.sqrt, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+                case "square":
+                    pset.addPrimitive(np.square, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+                case "true_divide":
+                    pset.addPrimitive(GPfunctions.true_divide, [pd.core.frame.DataFrame, pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+                case "SignedPower":
+                    pset.addPrimitive(GPfunctions.SignedPower, [pd.core.frame.DataFrame, float], pd.core.frame.DataFrame)
+                case "Sign":
+                    pset.addPrimitive(GPfunctions.Sign, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+                case "sma":
+                    pset.addPrimitive(GPfunctions.sma, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
+                case "delta":
+                    pset.addPrimitive(GPfunctions.delta, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
+                case "stddev":
+                    pset.addPrimitive(GPfunctions.stddev, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
+                case "ts_min":
+                    pset.addPrimitive(GPfunctions.ts_min, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
+                case "ts_max":
+                    pset.addPrimitive(GPfunctions.ts_max, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
+                case "ts_sum":
+                    pset.addPrimitive(GPfunctions.ts_sum, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
+                case "delay":
+                    pset.addPrimitive(GPfunctions.delay, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
+                case "ts_skewness":
+                    pset.addPrimitive(GPfunctions.ts_skewness, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
+                case "ts_kurtosis":
+                    pset.addPrimitive(GPfunctions.ts_kurtosis, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
+                case "ArgMax":
+                    pset.addPrimitive(GPfunctions.ArgMax, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
+                case "ArgMin":
+                    pset.addPrimitive(GPfunctions.ArgMin, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
+                case "Product":
+                    pset.addPrimitive(GPfunctions.Product, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
+                case "ts_rank":
+                    pset.addPrimitive(GPfunctions.ts_rank, [pd.core.frame.DataFrame,int], pd.core.frame.DataFrame)
+                case "rank":
+                    pset.addPrimitive(GPfunctions.rank, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+                case "Abs":
+                    pset.addPrimitive(GPfunctions.Abs, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+                case "Decay_lin":
+                    pset.addPrimitive(GPfunctions.Decay_lin, [pd.core.frame.DataFrame, int], pd.core.frame.DataFrame)
+                case "Inverse":
+                    pset.addPrimitive(GPfunctions.Inverse, [pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+                case "correlation":
+                    pset.addPrimitive(GPfunctions.correlation, [pd.core.frame.DataFrame, pd.core.frame.DataFrame, int],
                           pd.core.frame.DataFrame)
-        pset.addPrimitive(GPfunctions.covariance, [pd.core.frame.DataFrame, pd.core.frame.DataFrame, int],
+                case "covariance":
+                    pset.addPrimitive(GPfunctions.covariance, [pd.core.frame.DataFrame, pd.core.frame.DataFrame, int],
                           pd.core.frame.DataFrame)
-
         return pset

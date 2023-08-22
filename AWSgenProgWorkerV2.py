@@ -17,11 +17,6 @@ from AlphaFitnessFunctions import AlphaFitnessFunctions
 from RiskModelFunctions import RiskModelFunctions
 import Constants
 
-from numpy import abs
-from numpy import log
-from numpy import sign
-from scipy.stats import rankdata
-
 from deap import algorithms
 from deap import base
 from deap import creator
@@ -412,7 +407,7 @@ def evalAlphaGen(individual):
             individual = "Decay_exp(" + originalInd + "," + str(exponentialDecayLookback) + ")"
             func = toolbox.compile(expr=individual)
             print("NEW INDIVIDUAL :", individual)
-            out = func(open, high, low, close, volume, dollars_traded, adv20, returns,hist_vol_10, hist_vol_20, hist_vol_30, hist_vol_90)
+            out = func(*market_data_inputs)
             out = out.replace([np.inf, -np.inf], np.nan)
             ### RISK MODEL SECTION ###
             if riskModelType == Constants.GLOBAL_RISK_MODEL:
@@ -507,18 +502,10 @@ for x in range(1, funcLookbackLength):
 
 pset = GPfunctions.addGPfunctionsToToolbox(pset)
 
-pset.renameArguments(ARG0="open")
-pset.renameArguments(ARG1="high")
-pset.renameArguments(ARG2="low")
-pset.renameArguments(ARG3="close")
-pset.renameArguments(ARG4="volume")
-pset.renameArguments(ARG5="dollars_traded")
-pset.renameArguments(ARG6="adv20")
-pset.renameArguments(ARG7="returns")
-pset.renameArguments(ARG8="hist_vol_10")
-pset.renameArguments(ARG9="hist_vol_20")
-pset.renameArguments(ARG10="hist_vol_30")
-pset.renameArguments(ARG11="hist_vol_90")
+featuresList = ["open", "high", "low", "close", "volume", "dollars_traded",
+                "adv20", "returns", "hist_vol_10", "hist_vol_20", "hist_vol_30", "hist_vol_90"]
+
+pset = GPfunctions.GP_rename_arguments(pset, featuresList)
 
 creator.create("FitnessMax", base.Fitness, weights=(1.0,))
 creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)

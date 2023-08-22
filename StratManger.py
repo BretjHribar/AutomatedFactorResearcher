@@ -57,7 +57,7 @@ optimEndDate = "2022-01-03"
 minPrice = 0.0 #2.0
 maxPrice = 10000000.0 # 10000.0
 useGammaTransactionModel = False
-expFactorDecay = 0.3
+expFactorDecay = 0.1
 volumeMeanRankingWindow = 252
 
 
@@ -315,8 +315,10 @@ def GetAlphasFromDB(numalphas):
             #  `alphasid` <= 3487653 AND
             # sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `DSRprob` IN ('TEST') ORDER BY RAND() LIMIT %s" 3484460
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` in ('3490869') ORDER BY RAND() LIMIT %s"
-            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('TEST3_U','NEW_DAO_1_PSR_SUB','NEW_DAO_2_SUB','NEW_DAO_1_SUB') LIMIT %s"
-            sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` > 1 AND `scriptversion` IN ('" + runName + "') LIMIT %s"
+            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` LIMIT %s"
+            ####sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('TEST3_U','NEW_DAO_1_PSR_SUB','NEW_DAO_2_SUB','NEW_DAO_1_SUB') LIMIT %s"
+            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` > 1 AND `scriptversion` IN ('" + runName + "') LIMIT %s"
+            sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('1000_LOW_CORR') LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.95 AND `scriptversion` IN ('" + runName + "') ORDER BY RAND() LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 0  AND `turnover` < 0.5 AND `scriptversion` IN ('" + runName + "') ORDER BY RAND() LIMIT %s"
             cursor.execute(sql, (int(numalphas)))
@@ -434,7 +436,7 @@ def main():
         weightBounds = ((0, 1) for i in range(len(g_alphas_arr)))
         #gBounds = [(0.001, 1.0) for i in range(len(g_alphas_arr))]
 
-        res = minimize(calcPortReturns, startPortWeights, bounds=weightBounds, method='Nelder-Mead',options={'maxiter':20})
+        res = minimize(calcPortReturnsWithFees, startPortWeights, bounds=weightBounds, method='Nelder-Mead',options={'maxiter':20})
         #res = gp_minimize(calcPortReturnsWithFees, gBounds)
 
         optimizedWeights = res.x
@@ -442,7 +444,7 @@ def main():
         alphaweightsTS.set_index(alphasDF.T.index)
 
         optimStepSize = 1 #25
-        optimLookback = 10 #252
+        optimLookback = 40 #252
         maxiter = 100
 
         for blockStart in range(optimtestStart, len(alphasDF.T), optimStepSize): #testStart:optimEnd
@@ -451,7 +453,7 @@ def main():
             #optimEnd = optimEndStep
             startPortWeights = [0.0 for i in range(len(g_alphas_arr))]
             weightBounds = ((0, 1) for i in range(len(g_alphas_arr)))
-            res = minimize(calcPortReturns, startPortWeights, bounds=weightBounds,
+            res = minimize(calcPortReturnsWithFees, startPortWeights, bounds=weightBounds,
                                 method='Nelder-Mead', options={'maxiter':maxiter})
             #res = gp_minimize(calcPortReturnsWithFees, gBounds, initial_point_generator='sobol')
             optimizedWeights = res.x
