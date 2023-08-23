@@ -1,9 +1,11 @@
 import random
 import pymysql.cursors
 from Constants import MASTER_FEATURES_LIST, MASTER_GPFUNCTIONS_LIST
+import Constants
 
 fractionOfFeatures = 0.5
 fractionOfFunctions = 0.5
+riskModelType = Constants.SUB_INDUSTRY_RISK_MODEL
 
 def InsertNewStrategy(strategyName, universe, features, functionsList):
     try:

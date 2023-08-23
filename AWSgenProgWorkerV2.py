@@ -44,6 +44,7 @@ rankHedge = False
 funcLookbackLength = 40 #90
 linearDecay = 0
 topN = 3000
+strategyName = 'TEST_STRATEGY_1'
 runName = '1000_A' #EQUITIES_YAHOO_SUB_2
 targetDelay = 1
 # bottomN = 0
@@ -296,19 +297,6 @@ def evalAlphaGen(individual):
     start = time.time()
     func = toolbox.compile(expr=individual)
 
-    # #dum = df_vwap
-    # open = df_open
-    # high = df_high
-    # low = df_low
-    # close = df_close
-    # volume = df_volume
-    # dollars_traded = df_dollars_traded
-    # adv20 = df_dollars_traded_mean
-    # hist_vol_10 = df_hist_vol_10
-    # hist_vol_20 = df_hist_vol_20
-    # hist_vol_30 = df_hist_vol_30
-    # hist_vol_90 = df_hist_vol_90
-
     close = df_close
     returns = df_close - df_close.shift(1)
     market_data_inputs = [df_open,
@@ -334,7 +322,6 @@ def evalAlphaGen(individual):
         target = (df_close_full.shift(-1) - df_close_full) / df_close_full
 
     # apply the GP tree to the DataFrames
-    #out = func(open, high, low, close, volume, dollars_traded, adv20, returns, hist_vol_10, hist_vol_20, hist_vol_30, hist_vol_90)
     out = func(*market_data_inputs)
 
     if hedgeVol:
@@ -371,12 +358,7 @@ def evalAlphaGen(individual):
     turnover = out_normalzed_money.diff().abs().sum(axis=1).mean() / (bookSize)
     DFreturns = np.multiply(out_normalzed_money, target)
 
-    #transModelGamma = 1.0 / (10.0 * df_dollars_traded_mean_trans)
     turnoverAdj = out_normalzed_money.diff().abs().sum(axis=1)
-    # DFreturns = DFreturns.sum(axis=1)
-
-    # weightedAlphaDiff = weightedAlpha.diff().abs() ** 2
-    # turnoverModel = pd.DataFrame(transModelGamma.values * weightedAlphaDiff.values, columns=weightedAlpha.columns, index=A.index)
 
     # CPS is computed as the total P&L divided by total shares traded.
     sharesTraded = out_normalzed_money.diff().abs() / close
@@ -384,7 +366,6 @@ def evalAlphaGen(individual):
     DFreturnsRowSum = DFreturns.sum(axis=1) - (turnoverAdj * feesBSP)
     DFtotalReturns = DFreturnsRowSum.sum()
 
-    # sharpe = protectedDiv(DFreturnsRowSum.mean()*253, DFreturnsRowSum.std()*math.sqrt(253))
     sharpe = GPfunctions.protectedDiv(DFreturnsRowSum.mean(), DFreturnsRowSum.std()) * math.sqrt(252.0)
     returnsPerc = GPfunctions.protectedDiv((DFreturnsRowSum.mean() * 252.0), (bookSize * 0.5))
 
