@@ -8,6 +8,18 @@ EXP_PCA_RISK_MODEL = 'exponentialPCA'
 FLIP_MODE_MODEL = 'flipMode'
 ICA_RISK_MODEL = 'independentComponent'
 
+MASTER_FEATURES_MAP = { 'open': 'df_open',
+                        'high': 'df_high',
+                        'low': 'df_low',
+                        'close': 'df_close',
+                        'volume': 'df_volume',
+                        'dollars_traded': 'df_dollars_traded',
+                        'adv20': 'df_dollars_traded_mean',
+                        'hist_vol_10': 'df_hist_vol_10',
+                        'hist_vol_20': 'df_hist_vol_20',
+                        'hist_vol_30': 'df_hist_vol_30',
+                        'hist_vol_90': 'df_hist_vol_90' }
+
 MASTER_FEATURES_LIST = ["open",
                         "high",
                         "low",

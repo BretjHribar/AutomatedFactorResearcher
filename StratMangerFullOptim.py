@@ -46,7 +46,7 @@ rankHedge = False
 funcLookbackLength = 90
 linearDecay = 0 #7
 expDecay = 0.0
-topN = 3000 ##100
+topN = 2000 ##100
 targetDelay = 1
 targetFuture = 0
 #bottomN = 5
@@ -55,7 +55,7 @@ universeBlocking = False
 riskModelType = Constants.SUB_INDUSTRY_RISK_MODEL #Constants.PCA_RISK_MODEL #"TEST_FACTOR"
 riskModelNumFactors = 5
 pcaMA = 0.9
-runName = '1000_A' #'1000_LOW_CORR' #'EQUITIES_YAHOO_SUB_2' #'EQUITIES_YAHOO_SUB_2' CRYPTO_SMALL5 CRYPTO_SMALL4
+runName = 'TEST_STRATEGY_3_B' #'1000_LOW_CORR' #'EQUITIES_YAHOO_SUB_2' #'EQUITIES_YAHOO_SUB_2' CRYPTO_SMALL5 CRYPTO_SMALL4
 g_alphas_arr = []
 g_raw_alphas_dic = {}
 testStartDate = "2021-01-04"
@@ -63,7 +63,7 @@ optimEndDate = "2022-01-03"
 minPrice = 0.0 #2.0
 maxPrice = 10000000.0 # 10000.0
 useLambdaTransactionModel = False
-expFactorDecay = 0.1
+expFactorDecay = 0.01
 volumeMeanRankingWindow = 252
 
 
@@ -100,7 +100,7 @@ connection = pymysql.connect(host='alphasdatabase1.cysvmgsjf7ox.us-east-1.rds.am
 #         numEquities = numEquities + 1
 #
 # histMultiIndex = pd.concat(histData.values(), keys=histData.keys())
-#histMultiIndex.to_parquet('EquitiesDataFiles/' + "E1000.parquet")
+#histMultiIndex.to_parquet('EquitiesDataFiles/' + "E5000.parquet")
 #histMultiIndex = pd.read_parquet("s3://brethribar-equitiesdata-1/E1000.parquet")
 
 histMultiIndex = pd.read_parquet('EquitiesDataFiles/' + "E1000.parquet")
@@ -141,10 +141,10 @@ df_dollars_traded_mean = df_dollars_traded.rolling(window=volumeMeanRankingWindo
 df_dollars_traded_mean_trans = df_dollars_traded_mean.fillna(1.0e4).replace(0, 1.0e4)
 df_dollars_traded_mean_rank = df_dollars_traded_mean.rank(axis=1, ascending=False)
 
-# df_hist_vol_10 = df_close.pct_change().rolling(10).std()*(252**0.5)
-# df_hist_vol_20 = df_close.pct_change().rolling(20).std()*(252**0.5)
-# df_hist_vol_30 = df_close.pct_change().rolling(30).std()*(252**0.5)
-# df_hist_vol_90 = df_close.pct_change().rolling(90).std()*(252**0.5)
+df_hist_vol_10 = df_close.pct_change().rolling(10).std()*(252**0.5)
+df_hist_vol_20 = df_close.pct_change().rolling(20).std()*(252**0.5)
+df_hist_vol_30 = df_close.pct_change().rolling(30).std()*(252**0.5)
+df_hist_vol_90 = df_close.pct_change().rolling(90).std()*(252**0.5)
 
 if (universeBlocking):
     for i in range(len(df_dollars_traded_mean_rank.index)-20, 20, -20):
@@ -176,6 +176,10 @@ def evalForGraphReturns(individual):
     volume = df_volume
     dollars_traded = df_dollars_traded
     adv20 = df_dollars_traded_mean
+    hist_vol_10 = df_hist_vol_10
+    hist_vol_20 = df_hist_vol_20
+    hist_vol_30 = df_hist_vol_30
+    hist_vol_90 = df_hist_vol_90
 
     # nextOpen = open.shift(-1)
     returns = close - close.shift(1)
@@ -192,7 +196,7 @@ def evalForGraphReturns(individual):
     print("close dim:", close.shape)
 
     # apply the GP tree to the DataFrames
-    out = func(open, high, low, close, volume, dollars_traded, adv20, returns)
+    out = func(open, high, low, close, volume, dollars_traded, adv20, returns, hist_vol_10, hist_vol_20, hist_vol_30, hist_vol_90)
 
     if hedgeVol:
         stdCorrective = returns.abs().rolling(20).std().div(returns.std(axis=1), axis=0)
@@ -271,7 +275,10 @@ def ReturnY():
 ########################################################################
 pset = gp.PrimitiveSetTyped("main", [pd.core.frame.DataFrame,
                                      pd.core.frame.DataFrame,
-                                     #pd.core.frame.DataFrame,
+                                     pd.core.frame.DataFrame,
+                                     pd.core.frame.DataFrame,
+                                     pd.core.frame.DataFrame,
+                                     pd.core.frame.DataFrame,
                                      pd.core.frame.DataFrame,
                                      pd.core.frame.DataFrame,
                                      pd.core.frame.DataFrame,
@@ -292,6 +299,10 @@ pset.renameArguments(ARG4="volume")
 pset.renameArguments(ARG5="dollars_traded")
 pset.renameArguments(ARG6="adv20")
 pset.renameArguments(ARG7="returns")
+pset.renameArguments(ARG8="hist_vol_10")
+pset.renameArguments(ARG9="hist_vol_20")
+pset.renameArguments(ARG10="hist_vol_30")
+pset.renameArguments(ARG11="hist_vol_90")
 
 toolbox = base.Toolbox()
 toolbox.register("compile", gp.compile, pset=pset)
@@ -304,10 +315,10 @@ def GetAlphasFromDB(numalphas):
             #  `alphasid` <= 3487653 AND
             # sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `DSRprob` IN ('TEST') ORDER BY RAND() LIMIT %s" 3484460
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` in ('3490869') ORDER BY RAND() LIMIT %s"
-            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('TEST3_U','NEW_DAO_1_PSR_SUB','NEW_DAO_2_SUB','NEW_DAO_1_SUB') LIMIT %s"
-            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` > 1 AND `scriptversion` IN ('" + runName + "') LIMIT %s"
-            sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('1000_A', '1000_LOW_CORR') LIMIT %s"
-            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 2.0  AND `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
+            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('TEST_STRATEGY_3_B','TEST_STRATEGY_3_A' ) LIMIT %s"
+            sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` > 1 AND `scriptversion` IN ('" + runName + "') LIMIT %s"
+            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('1000_LOW_CORR') LIMIT %s"
+            sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 0.0  AND `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.99 AND `riskModelType` = 'Global' LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 0  AND `turnover` < 0.5 AND `scriptversion` IN ('" + runName + "') ORDER BY RAND() LIMIT %s"
             cursor.execute(sql, (int(numalphas)))
@@ -424,6 +435,7 @@ def main():
     alphasDFCov = EmpiricalCovariance().fit(alphasDF.iloc[:testStart, :].values)
     #alphasDFCovInv = pd.DataFrame(np.linalg.pinv(alphasDFCov.covariance_))
     alphasDFCovInv = pd.DataFrame(np.linalg.pinv(np.eye(len(alphasDFCov.covariance_))))
+
     #alphasDFCovInv = pd.DataFrame(np.linalg.pinv(np.multiply(alphasDFCov.covariance_, np.eye(len(alphasDFCov.covariance_)))))
 
     # npArrays = np.empty((len(alphasDF.index), len(alphasDF.columns)), float)
@@ -433,15 +445,17 @@ def main():
     #     pred = seso.predict_in_sample()['fitted']
     #     #pred = np.append(pred, [0])
     #     npArrays[:,col] = pred
-
-    #alphasExpectedReturns =pd.DataFrame(npArrays)
+    #
+    # alphasExpectedReturns =pd.DataFrame(npArrays)
 
     alphasExpectedReturns = GPfunctions.Decay_exp(alphasDF, expFactorDecay).shift(1)
+    alphasExpectedReturns[alphasExpectedReturns != -9999999] = 1
     alphasExpectedReturns[alphasExpectedReturns < 0] = 0
 
     alphaweightsTS = alphasExpectedReturns
 
-    #alphaweightsTS = pd.DataFrame(np.inner(alphasDFCovInv, alphasExpectedReturns)).transpose()
+    alphaweightsTS = pd.DataFrame(np.inner(alphasDFCovInv, alphasExpectedReturns)).transpose()
+    #alphaweightsTS = pd.DataFrame(alphasDFCovInv * alphasExpectedReturns).transpose()
     alphaweightsTS = pd.DataFrame(alphaweightsTS)
     alphaweightsTS = alphaweightsTS.div(alphaweightsTS.sum(axis=1), axis=0)
 

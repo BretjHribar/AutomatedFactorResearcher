@@ -111,28 +111,28 @@ def main():
     feeCombinedAlpha = (combinedAlpha2.sum(axis=1) - (turnoverAdj * feesBSP))
 
 ###################OPTIM NEW####################################
-    tradeOptimDF = pd.DataFrame().reindex_like(weightedAlpha)
-    oldTrades = get_h_star(weightedAlpha.iloc[testStart].to_numpy(),
-                           weightedAlpha.iloc[testStart].to_numpy(),
-                           Q,
-                           QT,
-                           LambdaMatrix.iloc[testStart].to_numpy())
-    for index, row in weightedAlpha[testStart:].iterrows():
-        print("index:", index)
-        newTrades = get_h_star(weightedAlpha.loc[index].to_numpy(),
-                               oldTrades,
-                               Q,
-                               QT,
-                               LambdaMatrix.loc[index].to_numpy())
-        tradeOptimDF.loc[index] = newTrades
-        oldTrades = newTrades
-
-    #tradeOptimDF.plot()
-    #plt.show()
-
-    combinedAlpha3 = pd.DataFrame(tradeOptimDF.values * returnY.values, columns=weightedAlpha.columns,
-                                  index=returnY.index)
-    ((pd.DataFrame(combinedAlpha3).sum(axis=1) - (turnoverAdj * feesBSP)).cumsum()).plot()
+    # tradeOptimDF = pd.DataFrame().reindex_like(weightedAlpha)
+    # oldTrades = get_h_star(weightedAlpha.iloc[testStart].to_numpy(),
+    #                        weightedAlpha.iloc[testStart].to_numpy(),
+    #                        Q,
+    #                        QT,
+    #                        LambdaMatrix.iloc[testStart].to_numpy())
+    # for index, row in weightedAlpha[testStart:].iterrows():
+    #     print("index:", index)
+    #     newTrades = get_h_star(weightedAlpha.loc[index].to_numpy(),
+    #                            oldTrades,
+    #                            Q,
+    #                            QT,
+    #                            LambdaMatrix.loc[index].to_numpy())
+    #     tradeOptimDF.loc[index] = newTrades
+    #     oldTrades = newTrades
+    #
+    # #tradeOptimDF.plot()
+    # #plt.show()
+    #
+    # combinedAlpha3 = pd.DataFrame(tradeOptimDF.values * returnY.values, columns=weightedAlpha.columns,
+    #                               index=returnY.index)
+    ((pd.DataFrame(combinedAlpha2).sum(axis=1) - (turnoverAdj * feesBSP)).cumsum()).plot()
     # pd.DataFrame(combinedAlpha3.loc["2021-01-04":"2021-08-11"]).sum(axis=1).cumsum().plot()
     # plt.show()
 

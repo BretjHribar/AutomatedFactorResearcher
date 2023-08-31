@@ -49,7 +49,7 @@ universeBlocking = False
 riskModelType = Constants.SUB_INDUSTRY_RISK_MODEL #Constants.PCA_RISK_MODEL GLOBAL_RISK_MODEL
 riskModelNumFactors = 5
 pcaMA = 0.9
-runName = 'NEW_DAO_1_SUB' #'EQUITIES_YAHOO_SUB_2' #'EQUITIES_YAHOO_SUB_2' CRYPTO_SMALL5 CRYPTO_SMALL4
+runName = '1000_C' #'EQUITIES_YAHOO_SUB_2' #'EQUITIES_YAHOO_SUB_2' CRYPTO_SMALL5 CRYPTO_SMALL4
 g_alphas_arr = []
 g_raw_alphas_dic = {}
 testStartDate = "2021-01-04"
@@ -316,9 +316,9 @@ def GetAlphasFromDB(numalphas):
             # sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `DSRprob` IN ('TEST') ORDER BY RAND() LIMIT %s" 3484460
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` in ('3490869') ORDER BY RAND() LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` LIMIT %s"
-            ####sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('TEST3_U','NEW_DAO_1_PSR_SUB','NEW_DAO_2_SUB','NEW_DAO_1_SUB') LIMIT %s"
-            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` > 1 AND `scriptversion` IN ('" + runName + "') LIMIT %s"
-            sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('1000_LOW_CORR') LIMIT %s"
+            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('TEST3_U','NEW_DAO_1_PSR_SUB','NEW_DAO_2_SUB','NEW_DAO_1_SUB') LIMIT %s"
+            sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` > 1 AND `scriptversion` IN ('" + runName + "') LIMIT %s"
+            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('1000_LOW_CORR') LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.95 AND `scriptversion` IN ('" + runName + "') ORDER BY RAND() LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 0  AND `turnover` < 0.5 AND `scriptversion` IN ('" + runName + "') ORDER BY RAND() LIMIT %s"
             cursor.execute(sql, (int(numalphas)))
@@ -390,6 +390,36 @@ def calcPortReturnsWithFees( weightArray ):
     return -sharpe
 ############################################################################
 ############################################################################
+def calcPortReturnsMSE( weightArray ):
+    #weightArray = pd.Series(weightArray)
+    weightArray = pd.Series(weightArray).div(weightArray.sum(), axis=0)
+    for counter, wMat in enumerate(g_raw_alphas_dic):
+        alphaWeight = weightArray[counter]
+        optimRawAlpha = g_raw_alphas_dic[counter].iloc[testStart:optimEnd]
+        if counter == 0:
+            weightedAlpha = optimRawAlpha.multiply(alphaWeight, axis=0).fillna(0.0)
+        else:
+            weightedAlpha = weightedAlpha.add(optimRawAlpha.multiply(alphaWeight, axis=0).fillna(0.0))
+
+    ##NEW NORMALIZATION
+    if riskModelType == Constants.GLOBAL_RISK_MODEL:
+        weightedAlpha.replace(0, np.nan, inplace=True)
+        weightedAlpha = RiskModelFunctions.hedgeGlobal(weightedAlpha)
+        weightedAlpha.replace(np.nan, 0, inplace=True)
+    else:
+        weightedAlpha.replace(0, np.nan, inplace=True)
+        weightedAlpha = RiskModelFunctions.hedgeSubIndustries(industries, weightedAlpha)
+        weightedAlpha.replace(np.nan, 0, inplace=True)
+
+    #weightedAlpha = weightedAlpha * bookSize
+    MSE = np.nanmean(np.square(np.subtract(np.array(weightedAlpha.values),
+                                           np.array(ReturnY().iloc[testStart:optimEnd, :].values))))
+
+    print("mse: "+str(MSE) + " testStart: "+ str(testStart) + " optimEnd: "+ str(optimEnd))
+
+    return MSE
+############################################################################
+############################################################################
 #def get_grad_func(h0, risk_aversion, Q, QT, specVar, alpha_vec, Lambda):
 def get_grad_func(h0, alpha_vec, bspCosts):
     def grad_func(h):
@@ -436,15 +466,15 @@ def main():
         weightBounds = ((0, 1) for i in range(len(g_alphas_arr)))
         #gBounds = [(0.001, 1.0) for i in range(len(g_alphas_arr))]
 
-        res = minimize(calcPortReturnsWithFees, startPortWeights, bounds=weightBounds, method='Nelder-Mead',options={'maxiter':20})
+        res = minimize(calcPortReturnsMSE, startPortWeights, bounds=weightBounds, method='Nelder-Mead',options={'maxiter':20})
         #res = gp_minimize(calcPortReturnsWithFees, gBounds)
 
         optimizedWeights = res.x
         alphaweightsTS = pd.DataFrame(np.tile(optimizedWeights, (len(alphasDF.T), 1)))
         alphaweightsTS.set_index(alphasDF.T.index)
 
-        optimStepSize = 1 #25
-        optimLookback = 40 #252
+        optimStepSize = 100 #25
+        optimLookback = 10 #252
         maxiter = 100
 
         for blockStart in range(optimtestStart, len(alphasDF.T), optimStepSize): #testStart:optimEnd
@@ -453,7 +483,7 @@ def main():
             #optimEnd = optimEndStep
             startPortWeights = [0.0 for i in range(len(g_alphas_arr))]
             weightBounds = ((0, 1) for i in range(len(g_alphas_arr)))
-            res = minimize(calcPortReturnsWithFees, startPortWeights, bounds=weightBounds,
+            res = minimize(calcPortReturnsMSE, startPortWeights, bounds=weightBounds,
                                 method='Nelder-Mead', options={'maxiter':maxiter})
             #res = gp_minimize(calcPortReturnsWithFees, gBounds, initial_point_generator='sobol')
             optimizedWeights = res.x

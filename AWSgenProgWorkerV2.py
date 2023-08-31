@@ -30,10 +30,14 @@ root = os.path.join("C:\Equities", universe)
 alphas_arr = []
 histData = {}
 corrTScache = {}
+featuresList = []
+GPfunctionsList = []
+market_data_inputs = []
+psrCutoff = 0.99 #0.99
 corrCutoff = 0.7
-fitnessCutoff = 1.0
-turnoverMax = 1.0 #0.05
-turnoverMin = 0.001
+fitnessCutoff = 0.75
+turnoverMax = 0.7 #0.05
+turnoverMin = 0.01
 addToDB = True
 bookSize = 20000000.0
 maxStockWeight = 0.01 #0.01
@@ -44,21 +48,21 @@ rankHedge = False
 funcLookbackLength = 40 #90
 linearDecay = 0
 topN = 3000
-strategyName = 'TEST_STRATEGY_1'
-runName = '1000_A' #EQUITIES_YAHOO_SUB_2
+strategyName = 'TEST_STRATEGY_3'
+strategyId = -1
+runName = 'TEST_STRATEGY_3_B' #EQUITIES_YAHOO_SUB_2
 targetDelay = 1
 # bottomN = 0
 trialCounter = 0
 maxTreeDepth = 6 #6 #4
 universeBlocking = False
-psrCutoff = 0.99
 riskModelNumFactors = 5
 minPrice = -1.0 #2.0
 maxPrice = 10000000.0 # 10000.0
 riskModelType = Constants.SUB_INDUSTRY_RISK_MODEL
 useGammaTransactionModel = False
 
-trunctateEndDate = '1/1/2021'  # '3/09/2018' #'7/18/2018' #'4/17/2019' #'07/01/2018'
+trunctateEndDate =  '1/1/2020' #'1/1/2021'
 trunctateBeginDate = '7/1/2000'
 
 print("connecting to DB")
@@ -142,22 +146,34 @@ if (universeBlocking):
         df_dollars_traded_mean_rank.iloc[i - 1:i + 19, :] = df_dollars_traded_mean_rank.iloc[i - 1].values
 
 ########################################################################
+def GetStrategyParameters(stratName):
+    try:
+        print(f"selecting strategy: {stratName}")
+        with connection.cursor() as cursor:
+            sql = ("SELECT `strategy_id`,`riskModelType`,`featuresList`,`GPfunctionsList` " +
+                   "FROM `quantschema`.`strategies` WHERE `name` = '" + stratName + "'")
+            cursor.execute(sql)
+            result = cursor.fetchall()
+    finally:
+        pass
+    return result
 ########################################################################
-def StoreAlpha(alphaString, universe, scriptName, sharpe, turnover, returns, margin, fitness, lineardecay, topN, trialCounter,
+########################################################################
+def StoreAlpha(alphaString, strategyId, universe, scriptName, sharpe, turnover, returns, margin, fitness, lineardecay, topN, trialCounter,
                feesBSP, targetDelay, universeBlocking,hedgeIndustry,corrCutoff,rankHedge,PSR,riskModelType,minPrice,maxPrice,
                maxStockWeight):
     try:
         with connection.cursor() as cursor:
             sql = "INSERT INTO `quantschema`.`alphas` " \
-                  "(`universe`,`scriptversion`,`topN`,`alphastring`,`sharpe`,`turnover`,`returns`," \
+                  "(`strategy_id`,`universe`,`scriptversion`,`topN`,`alphastring`,`sharpe`,`turnover`,`returns`," \
                   "`margin`,`fitness`,`lineardecay`,`trialCounter`,`feesBSP`,`targetDelay`," \
                   "`universeBlocking`,`hedgeIndustry`,`corrCutoff`,`rankHedge`,`PSR`,`riskModelType`," \
                   "`minPrice`,`maxPrice`,`maxStockWeight`) " \
-                  "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s )"
+                  "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s )"
             # if the connection was lost, then it reconnects
             connection.ping(reconnect=True)
             cursor.execute(sql, (
-            str(universe), str(scriptName), int(topN), str(alphaString), float(sharpe), float(turnover), float(returns), float(margin),
+            str(strategyId), str(universe), str(scriptName), int(topN), str(alphaString), float(sharpe), float(turnover), float(returns), float(margin),
             float(fitness), int(lineardecay), int(trialCounter), float(feesBSP), int(targetDelay),
             int(universeBlocking), int(hedgeIndustry), float(corrCutoff), int(rankHedge), float(PSR), str(riskModelType),
             float(minPrice),float(maxPrice),float(maxStockWeight)))
@@ -177,8 +193,6 @@ def GetAlphasFromDB():
     finally:
         pass
     return result
-
-
 ###########################################################################
 def UpdateExistingAlphas():
     alphas = GetAlphasFromDB()
@@ -215,17 +229,17 @@ def evalForGraphReturns(individual):
     # hist_vol_90 = df_hist_vol_90
 
     close = df_close
-    market_data_inputs = [df_open,
-                          df_high,
-                          df_low,
-                          df_close,
-                          df_volume,
-                          df_dollars_traded,
-                          df_dollars_traded_mean,
-                          df_hist_vol_10,
-                          df_hist_vol_20,
-                          df_hist_vol_30,
-                          df_hist_vol_90]
+    # market_data_inputs = [df_open,
+    #                       df_high,
+    #                       df_low,
+    #                       df_close,
+    #                       df_volume,
+    #                       df_dollars_traded,
+    #                       df_dollars_traded_mean,
+    #                       df_hist_vol_10,
+    #                       df_hist_vol_20,
+    #                       df_hist_vol_30,
+    #                       df_hist_vol_90]
 
     # nextOpen = open.shift(-1)
     returns = close - close.shift(1)
@@ -288,7 +302,7 @@ def evalForGraphReturns(individual):
 ########################################################################
 ########################################################################
 def evalAlphaGen(individual):
-    global trialCounter
+    global trialCounter, market_data_inputs
     print("individual: ", individual)
 
     trialCounter = trialCounter + 1
@@ -299,18 +313,18 @@ def evalAlphaGen(individual):
 
     close = df_close
     returns = df_close - df_close.shift(1)
-    market_data_inputs = [df_open,
-                          df_high,
-                          df_low,
-                          df_close,
-                          df_volume,
-                          df_dollars_traded,
-                          df_dollars_traded_mean,
-                          returns,
-                          df_hist_vol_10,
-                          df_hist_vol_20,
-                          df_hist_vol_30,
-                          df_hist_vol_90]
+    # market_data_inputs = [df_open,
+    #                       df_high,
+    #                       df_low,
+    #                       df_close,
+    #                       df_volume,
+    #                       df_dollars_traded,
+    #                       df_dollars_traded_mean,
+    #                       returns,
+    #                       df_hist_vol_10,
+    #                       df_hist_vol_20,
+    #                       df_hist_vol_30,
+    #                       df_hist_vol_90]
 
     # # nextOpen = open.shift(-1)
     # returns = close - close.shift(1)
@@ -375,7 +389,8 @@ def evalAlphaGen(individual):
     # fitness = sharpe
     if (turnover > turnoverMin):
         # fitness =  sharpe * math.sqrt(abs(returnsPerc) / turnover)
-        fitness = sharpe
+        fitness = sharpe * math.sqrt(abs(returnsPerc) / max(turnover, 0.125))
+        #fitness = sharpe
     else:
         fitness = -1
 
@@ -413,7 +428,7 @@ def evalAlphaGen(individual):
             DFreturnsRowSum = DFreturns.sum(axis=1) - (turnoverAdj * feesBSP)
             DFtotalReturns = DFreturnsRowSum.sum()
             sharpe = GPfunctions.protectedDiv(DFreturnsRowSum.mean(), DFreturnsRowSum.std()) * math.sqrt(252)
-            fitness = sharpe
+            fitness = sharpe * math.sqrt(abs(returnsPerc) / max(turnover, 0.125))
             print("COUNTOWN SHARPE:",sharpe)
             returnsPerc = GPfunctions.protectedDiv((DFreturnsRowSum.mean() * 252.0), (bookSize * 0.5))
 
@@ -436,14 +451,14 @@ def evalAlphaGen(individual):
         # print(corrTest.tail(1).iloc[:,:-1])
         # fitness = fitness * -0.2
         if (maxCorr.empty):
-            StoreAlpha(individual, universe, runName, sharpe, turnover, returnsPerc, margin, fitness, linearDecay, topN,
+            StoreAlpha(individual, strategyId, universe, runName, sharpe, turnover, returnsPerc, margin, fitness, linearDecay, topN,
                        trialCounter, feesBSP, targetDelay, universeBlocking,hedgeIndustry, corrCutoff, rankHedge, PSR, riskModelType,
                        minPrice, maxPrice, maxStockWeight)
         elif (maxCorr.transpose().max().iloc[0] < corrCutoff):
             print('maxCorr.max().iloc[0]', maxCorr.transpose().max().iloc[0])
-            fitness = sharpe
-            # fitness =  sharpe * math.sqrt(abs(returnsPerc) / turnover)
-            StoreAlpha(individual, universe, runName, sharpe, turnover, returnsPerc, margin, fitness, linearDecay, topN,
+            #fitness = sharpe
+            fitness = sharpe * math.sqrt(abs(returnsPerc) / max(turnover, 0.125))
+            StoreAlpha(individual, strategyId, universe, runName, sharpe, turnover, returnsPerc, margin, fitness, linearDecay, topN,
                        trialCounter, feesBSP, targetDelay, universeBlocking, hedgeIndustry, corrCutoff, rankHedge, PSR, riskModelType,
                        minPrice, maxPrice, maxStockWeight)
         fitness = fitness * -0.2
@@ -459,32 +474,66 @@ def evalAlphaGen(individual):
 
     if (math.isnan(sharpe)):
         fitness = 0
-        # return([sharpe,turnover,returnsPerc])
     return ([fitness])
 
 
 ########################################################################
+#Get strategy parameters
+# market_dataframes =  [df_open,
+#                       df_high,
+#                       df_low,
+#                       df_close,
+#                       df_volume,
+#                       df_dollars_traded,
+#                       df_dollars_traded_mean,
+#                       df_close - df_close.shift(1),
+#                       df_hist_vol_10,
+#                       df_hist_vol_20,
+#                       df_hist_vol_30,
+#                       df_hist_vol_90]
+market_dataframes_map =   { 'open': df_open,
+                            'high': df_high,
+                            'low': df_low,
+                            'close': df_close,
+                            'volume': df_volume,
+                            'dollars_traded': df_dollars_traded,
+                            'adv20': df_dollars_traded_mean,
+                            'returns': df_close - df_close.shift(1),
+                            'hist_vol_10': df_hist_vol_10,
+                            'hist_vol_20': df_hist_vol_20,
+                            'hist_vol_30': df_hist_vol_30,
+                            'hist_vol_90': df_hist_vol_90}
+
+strategyParams = GetStrategyParameters(strategyName)
+strategyId = strategyParams[0]['strategy_id']
+featuresList = eval(strategyParams[0]['featuresList'])
+GPfunctionsList = eval(strategyParams[0]['GPfunctionsList'])
+for f in featuresList:
+    market_data_inputs.append(market_dataframes_map[f])
+
 ########################################################################
+# TODO: set below to number of datapoints used in strategy from DB
 pset = gp.PrimitiveSetTyped("main", [pd.core.frame.DataFrame,
                                     pd.core.frame.DataFrame,
                                     pd.core.frame.DataFrame,
                                     pd.core.frame.DataFrame,
                                     pd.core.frame.DataFrame,
-                                    pd.core.frame.DataFrame,
-                                    pd.core.frame.DataFrame,
-                                    pd.core.frame.DataFrame,
-                                    pd.core.frame.DataFrame,
-                                    pd.core.frame.DataFrame,
-                                    pd.core.frame.DataFrame,
+                                    # pd.core.frame.DataFrame,
+                                    # pd.core.frame.DataFrame,
+                                    # pd.core.frame.DataFrame,
+                                    # pd.core.frame.DataFrame,
+                                    # pd.core.frame.DataFrame,
+                                    # pd.core.frame.DataFrame,
                                     pd.core.frame.DataFrame], pd.core.frame.DataFrame)
 
 for x in range(1, funcLookbackLength):
     pset.addTerminal(x, int)
 
-pset = GPfunctions.addGPfunctionsToToolbox(pset)
+#pset = GPfunctions.addGPfunctionsToToolbox(pset)
+pset = GPfunctions.addGPfunctionsToToolboxFromDictionary(pset, GPfunctionsList)
 
-featuresList = ["open", "high", "low", "close", "volume", "dollars_traded",
-                "adv20", "returns", "hist_vol_10", "hist_vol_20", "hist_vol_30", "hist_vol_90"]
+# featuresList = ["open", "high", "low", "close", "volume", "dollars_traded",
+#                 "adv20", "returns", "hist_vol_10", "hist_vol_20", "hist_vol_30", "hist_vol_90"]
 
 pset = GPfunctions.GP_rename_arguments(pset, featuresList)
 
