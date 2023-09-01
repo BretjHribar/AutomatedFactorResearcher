@@ -318,7 +318,7 @@ def GetAlphasFromDB(numalphas):
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('TEST_STRATEGY_3_B','TEST_STRATEGY_3_A' ) LIMIT %s"
             sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` > 1 AND `scriptversion` IN ('" + runName + "') LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('1000_LOW_CORR') LIMIT %s"
-            sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 0.0  AND `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
+            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 0.0  AND `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.99 AND `riskModelType` = 'Global' LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 0  AND `turnover` < 0.5 AND `scriptversion` IN ('" + runName + "') ORDER BY RAND() LIMIT %s"
             cursor.execute(sql, (int(numalphas)))

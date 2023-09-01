@@ -52,7 +52,7 @@ targetFuture = 0
 #bottomN = 5
 portTail = 0.00 #0.0015##0.00000001 #0.0015#0.001 #0.0015 0.0025
 universeBlocking = False
-riskModelType = Constants.SUB_INDUSTRY_RISK_MODEL #Constants.PCA_RISK_MODEL #"TEST_FACTOR"
+riskModelType = Constants.GLOBAL_RISK_MODEL #Constants.PCA_RISK_MODEL #"TEST_FACTOR"
 riskModelNumFactors = 5
 pcaMA = 0.9
 runName = 'TEST_STRATEGY_3_B' #'1000_LOW_CORR' #'EQUITIES_YAHOO_SUB_2' #'EQUITIES_YAHOO_SUB_2' CRYPTO_SMALL5 CRYPTO_SMALL4
@@ -63,7 +63,7 @@ optimEndDate = "2022-01-03"
 minPrice = 0.0 #2.0
 maxPrice = 10000000.0 # 10000.0
 useLambdaTransactionModel = False
-expFactorDecay = 0.9
+expFactorDecay = 0.1
 volumeMeanRankingWindow = 252
 
 
@@ -316,10 +316,10 @@ def GetAlphasFromDB(numalphas):
             # sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `DSRprob` IN ('TEST') ORDER BY RAND() LIMIT %s" 3484460
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` in ('3490869') ORDER BY RAND() LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('TEST_STRATEGY_3_B','TEST_STRATEGY_3_A' ) LIMIT %s"
-            sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` > 1 AND `scriptversion` IN ('" + runName + "') LIMIT %s"
-            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('1000_LOW_CORR') LIMIT %s"
-            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 2.0  AND `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
-            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.99 AND `riskModelType` = 'Global' LIMIT %s"
+            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` > 1 AND `scriptversion` IN ('" + runName + "') LIMIT %s"
+            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 0.0  AND `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
+            ####sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 0.0 AND `riskModelType` = 'subIndustry' LIMIT %s"
+            sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.99 AND `riskModelType` = 'Global' LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 0  AND `turnover` < 0.5 AND `scriptversion` IN ('" + runName + "') ORDER BY RAND() LIMIT %s"
             cursor.execute(sql, (int(numalphas)))
             # sql = "SELECT `alphastring` FROM `quantschema`.`distinctuniquealphas` WHERE `corr` > 0.3 LIMIT %s"
@@ -473,41 +473,65 @@ def main():
     alphasDF = pd.DataFrame(alphas_arr)
 
     ############################
+    optimLookback = 20
+
+    A_trans = alphasDF.transpose().diff().fillna(0)
+    #alphasExpectedReturns = GPfunctions.Decay_exp(A_trans, expFactorDecay).shift(1)
+    alphasExpectedReturns = GPfunctions.sma(A_trans, optimLookback).shift(1)
+    alphasExpectedReturns[alphasExpectedReturns < 0] = 0
     ############################
     optimizer = True
     if optimizer:
         optimtestStart = testStart
-        optimtestEnd = optimEnd
+
         startPortWeights = [0.01 for i in range(len(g_alphas_arr))]
-        weightBounds = ((0.001, 0.9999) for i in range(len(g_alphas_arr)))
-        #gBounds = [(0.001, 1.0) for i in range(len(g_alphas_arr))]
 
-        res = minimize(calcEMAportReturns, startPortWeights, bounds=weightBounds, method='Nelder-Mead',options={'maxiter':20})
-        #res = gp_minimize(calcPortReturnsWithFees, gBounds)
-
-        optimizedWeights = res.x
-        alphaweightsTS = pd.DataFrame(np.tile(optimizedWeights, (len(alphasDF.T), 1)))
+        alphaweightsTS = pd.DataFrame(np.tile(startPortWeights, (len(alphasDF.T), 1)))
         alphaweightsTS.set_index(alphasDF.T.index)
         combinedAlpha = pd.DataFrame(alphaweightsTS.values * alphasDF.transpose().values, columns=alphaweightsTS.columns,index=A.index)
 
         optimStepSize = 1 #25
-        optimLookback = 20 #252
+        #optimLookback = 10 #252
         maxiter = 1000
 
-        prevOptimizedWeights = [0.01 for i in range(len(g_alphas_arr))]
+        bilAlphasDF = alphasDF.T.copy()
+
         for blockStart in range(optimtestStart, len(alphasDF.T)-optimLookback-2, optimStepSize): #testStart:optimEnd
             testStart = testStart + optimStepSize
             optimEnd = testStart + optimLookback
-            #optimEnd = optimEndStep
-            startPortWeights = [0.01 for i in range(len(g_alphas_arr))]
-            weightBounds = ((0.001, 0.9999) for i in range(len(g_alphas_arr)))
-            # res = minimize(calcEMAportReturns, startPortWeights, bounds=weightBounds,
-            #                     method='Nelder-Mead', options={'maxiter':maxiter})
-            res = minimize(calcEMAportReturns, startPortWeights, bounds=weightBounds,
-                                method='Nelder-Mead', options={'maxiter':maxiter})
-            optimizedWeights = res.x
+
+            subAlphaExpRet = alphasExpectedReturns.iloc[testStart:optimEnd].copy()
+            #BILLIONS REGRESSION N = number of alphas, M = number of observations
+            # Start with a time series of alpha returns
+            bilAlphasDF = alphasDF.T.iloc[testStart:optimEnd].copy()
+            # Calculate the serially demeaned returns
+            bilAlphasDFdemeaned = bilAlphasDF - bilAlphasDF.mean(axis=0)
+            #Calculate sample variances ( std only used )
+            sampleStd = bilAlphasDFdemeaned.std(axis=0)
+            #Calculate the normalized demeaned returns
+            normalizedDemeanedReturns = bilAlphasDFdemeaned.divide(sampleStd)
+            #Keep only the first M ( observations / samples ) columns in normalizedDemeanedReturns
+            Y_is = normalizedDemeanedReturns.iloc[:, :optimLookback]
+            # Cross-sectionally demean ( sum of N )
+            A_is = Y_is - Y_is.mean(axis=0)
+            #Keep only the first M − 1 columns in Λis:
+            A_is = A_is.iloc[:, :optimLookback-1]
+            # Take the alpha expected returns E and normalize them
+            subAlphaExpRet = subAlphaExpRet.divide(sampleStd)  #.divide(subAlphaExpRet.std())
+            subAlphaExpRet = subAlphaExpRet.fillna(0.0)
+            # Calculate the residuals εei of the unit-weighted regression of expected returns E over A_is
+            reg = linear_model.LinearRegression(fit_intercept=False, n_jobs=2)
+            X_train = A_is
+            Y_train = subAlphaExpRet
+            reg.fit(X_train, Y_train)
+            residuals = reg.predict(X_train) - Y_train
+            #Set the alpha portfolio weights to wi = residuals / std of residuals
+            optimizedWeights = residuals.divide(sampleStd)  #residuals.divide(residuals.std())
+            optimizedWeights = optimizedWeights.div(optimizedWeights.sum(axis=1), axis=0)
+            #TODO : figure out why this is a matrix
+            optimizedWeights = optimizedWeights.tail(1)
             print("new optimizedWeights: " + str(optimizedWeights))
-            alphaweightsTS.iloc[optimEnd+1] = calcEMAoutput(optimizedWeights, optimEnd + 1)
+            alphaweightsTS.iloc[optimEnd+1] = optimizedWeights
 
         testStart = int(df_close.index.get_loc(testStartDate))
         optimEnd = int(df_close.index.get_loc(optimEndDate))
