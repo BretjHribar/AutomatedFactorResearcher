@@ -3,9 +3,9 @@ import pymysql.cursors
 from Constants import MASTER_FEATURES_LIST, MASTER_GPFUNCTIONS_LIST
 import Constants
 
-strategyName = "TEST_STRATEGY_3"
+strategyName = "TEST_STRATEGY_5"
 fractionOfFeatures = 0.5
-fractionOfFunctions = 1.0
+fractionOfFunctions = 0.5
 riskModelType = Constants.SUB_INDUSTRY_RISK_MODEL
 
 def InsertNewStrategy(strategyName, universe, features, functionsList):

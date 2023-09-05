@@ -13,6 +13,7 @@ import s3fs
 from sklearn.metrics import mean_squared_error
 
 from statsforecast.models import SimpleExponentialSmoothing, ARIMA
+from AlphaFitnessFunctions import AlphaFitnessFunctions
 
 import pymysql.cursors
 
@@ -32,7 +33,7 @@ import Constants
 from sklearn import linear_model
 
 ##############################
-root = "C:\Equities\YFINANCE3"
+root = "C:\Equities\YFINANCE"
 timeRateMin = 1440
 
 alphas_arr = []
@@ -52,7 +53,7 @@ targetFuture = 0
 #bottomN = 5
 portTail = 0.00 #0.0015##0.00000001 #0.0015#0.001 #0.0015 0.0025
 universeBlocking = False
-riskModelType = Constants.GLOBAL_RISK_MODEL #Constants.PCA_RISK_MODEL #"TEST_FACTOR"
+riskModelType = Constants.SUB_INDUSTRY_RISK_MODEL #Constants.PCA_RISK_MODEL #"TEST_FACTOR"
 riskModelNumFactors = 5
 pcaMA = 0.9
 runName = 'TEST_STRATEGY_3_B' #'1000_LOW_CORR' #'EQUITIES_YAHOO_SUB_2' #'EQUITIES_YAHOO_SUB_2' CRYPTO_SMALL5 CRYPTO_SMALL4
@@ -318,13 +319,11 @@ def GetAlphasFromDB(numalphas):
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('TEST_STRATEGY_3_B','TEST_STRATEGY_3_A' ) LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` > 1 AND `scriptversion` IN ('" + runName + "') LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 0.0  AND `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
-            ####sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 0.0 AND `riskModelType` = 'subIndustry' LIMIT %s"
-            sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.99 AND `riskModelType` = 'Global' LIMIT %s"
+            sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
+            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.99 AND `riskModelType` = 'Global' LIMIT %s"
+            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.00 LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 0  AND `turnover` < 0.5 AND `scriptversion` IN ('" + runName + "') ORDER BY RAND() LIMIT %s"
             cursor.execute(sql, (int(numalphas)))
-            # sql = "SELECT `alphastring` FROM `quantschema`.`distinctuniquealphas` WHERE `corr` > 0.3 LIMIT %s"
-            # sql = "SELECT `alphastring` FROM `quantschema`.`permalphalist`"
-            # cursor.execute(sql)
             result = cursor.fetchall()
             # print(result)
     finally:
@@ -473,9 +472,9 @@ def main():
     alphasDF = pd.DataFrame(alphas_arr)
 
     ############################
-    optimLookback = 20
+    optimLookback = 5
 
-    A_trans = alphasDF.transpose().diff().fillna(0)
+    A_trans = alphasDF.transpose().fillna(0)
     #alphasExpectedReturns = GPfunctions.Decay_exp(A_trans, expFactorDecay).shift(1)
     alphasExpectedReturns = GPfunctions.sma(A_trans, optimLookback).shift(1)
     alphasExpectedReturns[alphasExpectedReturns < 0] = 0
@@ -490,14 +489,8 @@ def main():
         alphaweightsTS.set_index(alphasDF.T.index)
         combinedAlpha = pd.DataFrame(alphaweightsTS.values * alphasDF.transpose().values, columns=alphaweightsTS.columns,index=A.index)
 
-        optimStepSize = 1 #25
-        #optimLookback = 10 #252
-        maxiter = 1000
-
-        bilAlphasDF = alphasDF.T.copy()
-
-        for blockStart in range(optimtestStart, len(alphasDF.T)-optimLookback-2, optimStepSize): #testStart:optimEnd
-            testStart = testStart + optimStepSize
+        for blockStart in range(optimtestStart, len(alphasDF.T)-optimLookback-2): #testStart:optimEnd
+            testStart = testStart + 1
             optimEnd = testStart + optimLookback
 
             subAlphaExpRet = alphasExpectedReturns.iloc[testStart:optimEnd].copy()
@@ -512,10 +505,16 @@ def main():
             normalizedDemeanedReturns = bilAlphasDFdemeaned.divide(sampleStd)
             #Keep only the first M ( observations / samples ) columns in normalizedDemeanedReturns
             Y_is = normalizedDemeanedReturns.iloc[:, :optimLookback]
-            # Cross-sectionally demean ( sum of N )
-            A_is = Y_is - Y_is.mean(axis=0)
-            #Keep only the first M − 1 columns in Λis:
-            A_is = A_is.iloc[:, :optimLookback-1]
+            ##########OPTIONAL IN ALGO https://arxiv.org/pdf/1603.05937.pdf
+            # # Cross-sectionally demean ( sum of N - columns )
+            # ######A_is = Y_is - Y_is.mean(axis=0)
+            # A_is =  Y_is.sub(Y_is.mean(axis=1), axis=0)
+            # #Keep only the first M − 1 columns in Λis:
+            # A_is = A_is.iloc[:, :optimLookback-1]
+            ##################################################
+
+            A_is = Y_is
+
             # Take the alpha expected returns E and normalize them
             subAlphaExpRet = subAlphaExpRet.divide(sampleStd)  #.divide(subAlphaExpRet.std())
             subAlphaExpRet = subAlphaExpRet.fillna(0.0)
@@ -602,16 +601,16 @@ def main():
     combinedAlpha2.replace(np.nan, 0, inplace=True)
 
     weightedAlpha.to_csv(MODEL_DATA_PATH + MODEL_NAME)
-    corr = pd.DataFrame(weightedAlpha.iloc[testStart:, :].values).corrwith(pd.DataFrame(ReturnY().iloc[testStart:, :].values)).mean()
-    mse = np.nanmean(np.square(np.subtract(np.array(weightedAlpha.iloc[testStart:, :].values) / bookSize, np.array(ReturnY().iloc[testStart:, :].values))))
+    corr = pd.DataFrame(weightedAlpha.iloc[optimEnd:, :].values).corrwith(pd.DataFrame(ReturnY().iloc[optimEnd:, :].values)).mean()
+    mse = np.nanmean(np.square(np.subtract(np.array(weightedAlpha.iloc[optimEnd:, :].values) / bookSize, np.array(ReturnY().iloc[optimEnd:, :].values))))
 
     sharpe = (combinedAlpha2.sum(axis=1).mean() / combinedAlpha2.sum(axis=1).std()) * math.sqrt(252.0)
     print("FULL NO FEES SHARPE:", sharpe)
-    sharpe = (combinedAlpha2.iloc[testStart:, :].sum(axis=1).mean() /
-                combinedAlpha2.iloc[testStart:, :].sum(axis=1).std()) * math.sqrt(252)
+    sharpe = (combinedAlpha2.iloc[optimEnd:, :].sum(axis=1).mean() /
+                combinedAlpha2.iloc[optimEnd:, :].sum(axis=1).std()) * math.sqrt(252)
     print("TEST NO FEES SHARPE:", sharpe)
-    sharpe = (combinedAlpha2.iloc[:testStart, :].sum(axis=1).mean() /
-                combinedAlpha2.iloc[:testStart, :].sum(axis=1).std()) * math.sqrt(252)
+    sharpe = (combinedAlpha2.iloc[:optimEnd, :].sum(axis=1).mean() /
+                combinedAlpha2.iloc[:optimEnd, :].sum(axis=1).std()) * math.sqrt(252)
     print("TRAIN NO FEES SHARPE:", sharpe)
     # annCorrection = (1440 / timeRateMin) * 252
     # annSharpe = (combinedAlpha2.iloc[optimEnd:].sum(axis=1).mean() * annCorrection) / (
@@ -621,7 +620,7 @@ def main():
     # print("returns:", returns)
 
     ((pd.DataFrame(combinedAlpha2).sum(axis=1) - (turnoverAdj * feesBSP)).cumsum()).plot()
-    (((combinedAlpha2-turnoverModel).sum(axis=1)).cumsum()).plot()
+    #(((combinedAlpha2-turnoverModel).sum(axis=1)).cumsum()).plot()
 
     finalTurnover = turnoverAdj.mean() / bookSize
     #finalTurnoverModel = turnoverModel.mean()
@@ -631,9 +630,9 @@ def main():
 
     sharpe = (feeCombinedAlpha.mean() / feeCombinedAlpha.std()) * math.sqrt(252.0)
     print("FEES FULL SHARPE:", sharpe)
-    sharpe = (feeCombinedAlpha.iloc[:testStart].mean() / feeCombinedAlpha.iloc[:testStart].std()) * math.sqrt(252.0)
+    sharpe = (feeCombinedAlpha.iloc[:optimEnd].mean() / feeCombinedAlpha.iloc[:optimEnd].std()) * math.sqrt(252.0)
     print("FEES TRAIN SHARPE:", sharpe)
-    sharpe = (feeCombinedAlpha.iloc[testStart:].mean() / feeCombinedAlpha.iloc[testStart:].std()) * math.sqrt(252.0)
+    sharpe = (feeCombinedAlpha.iloc[optimEnd:].mean() / feeCombinedAlpha.iloc[optimEnd:].std()) * math.sqrt(252.0)
     print("FEES TEST SHARPE:", sharpe)
 
     # annFeeSharpe = (feeCombinedAlpha.iloc[optimEnd:].mean() * annCorrection) / (
@@ -641,7 +640,7 @@ def main():
     # print("ANNUALIZED FEES TEST SHARPE:", annFeeSharpe)
 
     #returns = (pd.DataFrame(feeCombinedAlpha).cumsum()).tail(90).diff().sum() * ((1400 / timeRateMin * 365 * 24) / 365.0)
-    returns = ((feeCombinedAlpha.iloc[testStart:].cumsum()).diff().sum() / len(feeCombinedAlpha.iloc[testStart:])) / bookSize * 252.0
+    returns = ((feeCombinedAlpha.iloc[optimEnd:].cumsum()).diff().sum() / len(feeCombinedAlpha.iloc[optimEnd:])) / bookSize * 252.0
 
     print("FEES returns:", returns)
     print("finalTurnover: ", finalTurnover)
@@ -649,20 +648,25 @@ def main():
     print("corr with: ", corr)
     print("MSE with: ", mse)
     print("mean daily returns: ", returns / 252.0)
-    combinedAlpha2.sum(axis=1).to_csv(LOG_DATA_PATH+'combinedAlpha2.csv')
     print("linearDecay: ", linearDecay)
     print("expDecay: ", expDecay)
     print("riskModelNumFactors: ", riskModelNumFactors)
     print("topN: ", topN)
     print("universeBlocking: ", universeBlocking)
-    # print("optimStepSize: ", optimStepSize)
-    # print("optimLookback: ", optimLookback)
-    # print("maxiter: ", maxiter)
     print("maxStockWeight: ", maxStockWeight)
     print("feesBSP: ", feesBSP)
     print("expFactorDecay: ", expFactorDecay)
     print("optimLookback: ", optimLookback)
-    print("maxiter: ", maxiter)
+    print("riskModel: ", riskModelType)
+    print("Test t-statistic: ", sharpe * math.sqrt(len(feeCombinedAlpha.iloc[optimEnd:])))
+    print("TEST ", len(feeCombinedAlpha.iloc[optimEnd:]))
+    print("PSR of OOS returns > 0: ",
+          AlphaFitnessFunctions.probabalisticSharpeRatio(feeCombinedAlpha.iloc[optimEnd:], 0))
+    print("PSR of OOS returns > 1: ",
+          AlphaFitnessFunctions.probabalisticSharpeRatio(feeCombinedAlpha.iloc[optimEnd:], 1))
+    print("PSR of OOS returns > 2: ",
+          AlphaFitnessFunctions.probabalisticSharpeRatio(feeCombinedAlpha.iloc[optimEnd:], 2))
+    print("number of Alphas: ", )
 
     plt.show()
 
