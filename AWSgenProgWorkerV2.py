@@ -34,7 +34,7 @@ featuresList = []
 GPfunctionsList = []
 market_data_inputs = []
 psrCutoff = 0.99 #0.99
-corrCutoff = 0.7
+corrCutoff = 0.5
 fitnessCutoff = 0.5
 turnoverMax = 0.7 #0.05
 turnoverMin = 0.01
@@ -48,9 +48,9 @@ rankHedge = False
 funcLookbackLength = 40 #90
 linearDecay = 0
 topN = 3000
-strategyName = 'TEST_STRATEGY_5'
+strategyName = 'TEST_STRATEGY_9'
 strategyId = -1
-runName = 'TEST_STRATEGY_5_A' #EQUITIES_YAHOO_SUB_2
+runName = 'TEST_STRATEGY_9_A' #EQUITIES_YAHOO_SUB_2
 targetDelay = 1
 # bottomN = 0
 trialCounter = 0
@@ -512,29 +512,16 @@ for f in featuresList:
     market_data_inputs.append(market_dataframes_map[f])
 
 ########################################################################
-# TODO: set below to number of datapoints used in strategy from DB
-pset = gp.PrimitiveSetTyped("main", [pd.core.frame.DataFrame,
-                                    pd.core.frame.DataFrame,
-                                    pd.core.frame.DataFrame,
-                                    pd.core.frame.DataFrame,
-                                    pd.core.frame.DataFrame,
-                                    # pd.core.frame.DataFrame,
-                                    # pd.core.frame.DataFrame,
-                                    # pd.core.frame.DataFrame,
-                                    # pd.core.frame.DataFrame,
-                                    # pd.core.frame.DataFrame,
-                                    # pd.core.frame.DataFrame,
-                                    pd.core.frame.DataFrame], pd.core.frame.DataFrame)
+gpDataFramList = []
+for f in featuresList:
+    gpDataFramList.append(pd.core.frame.DataFrame)
+
+pset = gp.PrimitiveSetTyped("main", gpDataFramList, pd.core.frame.DataFrame)
 
 for x in range(1, funcLookbackLength):
     pset.addTerminal(x, int)
 
-#pset = GPfunctions.addGPfunctionsToToolbox(pset)
 pset = GPfunctions.addGPfunctionsToToolboxFromDictionary(pset, GPfunctionsList)
-
-# featuresList = ["open", "high", "low", "close", "volume", "dollars_traded",
-#                 "adv20", "returns", "hist_vol_10", "hist_vol_20", "hist_vol_30", "hist_vol_90"]
-
 pset = GPfunctions.GP_rename_arguments(pset, featuresList)
 
 creator.create("FitnessMax", base.Fitness, weights=(1.0,))

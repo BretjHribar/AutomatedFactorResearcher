@@ -56,7 +56,7 @@ universeBlocking = False
 riskModelType = Constants.SUB_INDUSTRY_RISK_MODEL #Constants.PCA_RISK_MODEL #"TEST_FACTOR"
 riskModelNumFactors = 5
 pcaMA = 0.9
-runName = 'TEST_STRATEGY_3_B' #'1000_LOW_CORR' #'EQUITIES_YAHOO_SUB_2' #'EQUITIES_YAHOO_SUB_2' CRYPTO_SMALL5 CRYPTO_SMALL4
+runName = 'TEST_STRATEGY_7_A' #'1000_LOW_CORR' #'EQUITIES_YAHOO_SUB_2' #'EQUITIES_YAHOO_SUB_2' CRYPTO_SMALL5 CRYPTO_SMALL4
 g_alphas_arr = []
 g_raw_alphas_dic = {}
 testStartDate = "2021-01-04"
@@ -319,9 +319,10 @@ def GetAlphasFromDB(numalphas):
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('TEST_STRATEGY_3_B','TEST_STRATEGY_3_A' ) LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` > 1 AND `scriptversion` IN ('" + runName + "') LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 0.0  AND `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
-            sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
-            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.99 AND `riskModelType` = 'Global' LIMIT %s"
-            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.00 LIMIT %s"
+            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
+            sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE  `turnover` < 0.15 AND `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
+            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
+            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `strategy_id` IN (4,5) LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 0  AND `turnover` < 0.5 AND `scriptversion` IN ('" + runName + "') ORDER BY RAND() LIMIT %s"
             cursor.execute(sql, (int(numalphas)))
             result = cursor.fetchall()
@@ -659,14 +660,16 @@ def main():
     print("optimLookback: ", optimLookback)
     print("riskModel: ", riskModelType)
     print("Test t-statistic: ", sharpe * math.sqrt(len(feeCombinedAlpha.iloc[optimEnd:])))
-    print("TEST ", len(feeCombinedAlpha.iloc[optimEnd:]))
-    print("PSR of OOS returns > 0: ",
+    #print("TEST ", len(feeCombinedAlpha.iloc[optimEnd:]))
+    print("PSR of OOS returns > 0 Sharpe: ",
           AlphaFitnessFunctions.probabalisticSharpeRatio(feeCombinedAlpha.iloc[optimEnd:], 0))
-    print("PSR of OOS returns > 1: ",
+    print("PSR of OOS returns > 1 Sharpe: ",
           AlphaFitnessFunctions.probabalisticSharpeRatio(feeCombinedAlpha.iloc[optimEnd:], 1))
-    print("PSR of OOS returns > 2: ",
+    print("PSR of OOS returns > 2 Sharpe: ",
           AlphaFitnessFunctions.probabalisticSharpeRatio(feeCombinedAlpha.iloc[optimEnd:], 2))
-    print("number of Alphas: ", )
+    print("PSR of OOS returns > 3 Sharpe: ",
+          AlphaFitnessFunctions.probabalisticSharpeRatio(feeCombinedAlpha.iloc[optimEnd:], 3))
+    print("number of Alphas: ", len(alphasDF) )
 
     plt.show()
 

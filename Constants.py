@@ -31,7 +31,8 @@ MASTER_FEATURES_LIST = ["open",
                         "hist_vol_10",
                         "hist_vol_20",
                         "hist_vol_30",
-                        "hist_vol_90"]
+                        "hist_vol_90"
+                        ]
 
 
 MASTER_GPFUNCTIONS_LIST = [ "ts_zscore",

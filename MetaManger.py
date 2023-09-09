@@ -50,8 +50,9 @@ optimEnd = int(g_alphas_arr[0].index.get_loc(optimEndDate))
 def get_obj_func(h0, risk_aversion, alpha_vec, Q, Lambda):
     def obj_func(h):
         #f = 0
-        f = 0.5 * risk_aversion * np.sum(np.matmul(Q, h) ** 2)
-        f -= np.dot(h, alpha_vec)
+        #f = 0.5 * risk_aversion * np.sum(np.matmul(Q, h) ** 2)
+        #f = np.dot(h, alpha_vec)
+        f = np.sum(h - alpha_vec)
         ########f += np.dot((h - h0) ** 2, Lambda)
         f += np.nansum(((h - h0) ** 2) * Lambda)
         return f
@@ -60,9 +61,9 @@ def get_obj_func(h0, risk_aversion, alpha_vec, Q, Lambda):
 #def get_grad_func(h0, risk_aversion, Q, QT, specVar, alpha_vec, Lambda):
 def get_grad_func(h0, risk_aversion, Q, QT, alpha_vec, Lambda):
     def grad_func(h):
-        g = risk_aversion * np.matmul(QT, np.matmul(Q, h))
-        g -= alpha_vec
-        g += 2 * (h - h0) * Lambda
+        #g = risk_aversion * np.matmul(QT, np.matmul(Q, h))
+        g = np.dot(alpha_vec,1.0)
+        #g += 2 * (h - h0) * Lambda
         return np.asarray(g)
     return grad_func
 ############################################################################
@@ -72,10 +73,14 @@ def get_h_star(alpha_vec, h0, Q, QT, Lambda):
     obj_func = get_obj_func(h0, risk_aversion, alpha_vec, Q, Lambda)
     grad_func = get_grad_func(h0, risk_aversion, Q, QT, alpha_vec, Lambda)
 
-    optimizer_result = scipy.optimize.fmin_l_bfgs_b(obj_func, h0, fprime=grad_func)
+    #optimizer_result = scipy.optimize.fmin_l_bfgs_b(obj_func, h0, fprime=grad_func)
+    #optimizer_result = minimize(obj_func, h0, bounds=weightBounds, method='Nelder-Mead',options={'maxiter':20})
+    optimizer_result = minimize(obj_func, h0, method='Nelder-Mead', options={'maxiter': 2000})
+    #optimizer_result = minimize(obj_func, h0, method='Nelder-Mead')
     #optimizer_result = scipy.optimize.fmin_l_bfgs_b(obj_func, h0, approx_grad=True)
 
-    return optimizer_result[0]
+    return optimizer_result.x
+    #return optimizer_result[0]
 ############################################################################
 
 def main():
@@ -85,7 +90,7 @@ def main():
     alphaweightsTS = pd.DataFrame(zero_data)
     alphaweightsTS = alphaweightsTS.div(alphaweightsTS.sum(axis=1), axis=0)
 
-    testStart = 800 #int(g_alphas_arr[0].index.get_loc(testStartDate))
+    testStart = int(g_alphas_arr[0].index.get_loc(testStartDate))
     optimEnd = int(g_alphas_arr[0].index.get_loc(optimEndDate))
     #######################################
 
@@ -112,6 +117,7 @@ def main():
 
     combinedAlpha2 = pd.DataFrame(weightedAlpha.values * returnY.values, columns=weightedAlpha.columns, index=returnY.index)
     feeCombinedAlpha = (combinedAlpha2.sum(axis=1) - (turnoverAdj * feesBSP))
+    feeCombinedAlpha.iloc[testStart:].cumsum().plot()
 
 ###################OPTIM NEW####################################
     tradeOptimDF = pd.DataFrame().reindex_like(weightedAlpha)
@@ -120,28 +126,36 @@ def main():
     #                        Q,
     #                        QT,
     #                        LambdaMatrix.iloc[testStart].to_numpy())
-    oldTrades = weightedAlpha.iloc[testStart].to_numpy()
+    oldPositions = weightedAlpha.iloc[testStart].to_numpy()
+    tradeOptimDF.iloc[testStart] = oldPositions
     for index, row in weightedAlpha[testStart+1:].iterrows():
         print("index:", index)
-        newTrades = get_h_star(row.to_numpy(),
-                               oldTrades,
-                               Q,
-                               QT,
-                               LambdaMatrix.iloc[testStart].to_numpy())
         index_num = tradeOptimDF.index.get_loc(index)
-        if index_num < len(tradeOptimDF)-1:
+        if index_num < len(tradeOptimDF)-100:
+            newPositions = get_h_star(row.to_numpy(),
+                                   oldPositions,
+                                   Q,
+                                   QT,
+                                   LambdaMatrix.iloc[testStart].to_numpy())
             #tradeOptimDF.iloc[index_num+1] = newTrades
-            tradeOptimDF.loc[index] = newTrades
-            oldTrades = newTrades
+            tradeOptimDF.loc[index] = newPositions
+            oldPositions = newPositions
 
-    # tradeOptimDF.plot()
-    # plt.show()
 
-    combinedAlpha3 = pd.DataFrame(tradeOptimDF.values * returnY.values, columns=weightedAlpha.columns,
+    weightedAlphaDiff = tradeOptimDF.diff().abs() ** 2
+    turnoverModel = pd.DataFrame(LambdaMatrix.values * weightedAlphaDiff.values, columns=weightedAlpha.columns, index=weightedAlpha.index)
+
+    tradeOptimReturns = pd.DataFrame(tradeOptimDF.values * returnY.values, columns=weightedAlpha.columns,
                                   index=returnY.index)
-    ((pd.DataFrame(combinedAlpha2.iloc[testStart:,:]).sum(axis=1) - (turnoverAdj * feesBSP)).cumsum()).plot()
+    tradeOptimReturns.iloc[testStart:, :].sum(axis=1).cumsum().plot()
+
+    #tradeOptimReturnsAgg = pd.DataFrame(tradeOptimReturns.iloc[testStart:,:] - turnoverModel.iloc[testStart:,:]).sum(axis=1)
+    tradeOptimPostFeesAgg = pd.DataFrame(tradeOptimReturns - turnoverModel).sum(axis=1)
+    tradeOptimPostFeesAgg.iloc[testStart:].cumsum().plot()
+
+    #((pd.DataFrame(combinedAlpha2.iloc[testStart:,:]).sum(axis=1) - (turnoverAdj * feesBSP)).cumsum()).plot()
     #pd.DataFrame(combinedAlpha3.loc["2021-01-04":"2021-08-11"]).sum(axis=1).cumsum().plot()
-    pd.DataFrame(combinedAlpha3.iloc[testStart:,:]).sum(axis=1).cumsum().plot()
+
     plt.show()
 
     sharpe = (feeCombinedAlpha.mean() * 252.0) / (feeCombinedAlpha.std() * math.sqrt(252.0))
