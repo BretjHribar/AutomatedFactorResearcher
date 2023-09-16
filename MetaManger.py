@@ -75,8 +75,8 @@ def get_h_star(alpha_vec, h0, Q, QT, Lambda):
 
     #optimizer_result = scipy.optimize.fmin_l_bfgs_b(obj_func, h0, fprime=grad_func)
     #optimizer_result = minimize(obj_func, h0, bounds=weightBounds, method='Nelder-Mead',options={'maxiter':20})
-    optimizer_result = minimize(obj_func, h0, method='Nelder-Mead', options={'maxiter': 2000})
-    #optimizer_result = minimize(obj_func, h0, method='Nelder-Mead')
+    #optimizer_result = minimize(obj_func, h0, method='Nelder-Mead', options={'maxiter': 200})
+    optimizer_result = minimize(obj_func, h0, method='Nelder-Mead')
     #optimizer_result = scipy.optimize.fmin_l_bfgs_b(obj_func, h0, approx_grad=True)
 
     return optimizer_result.x
@@ -107,10 +107,10 @@ def main():
             weightedAlpha = weightedAlpha.add(g_alphas_arr[counter].multiply(1, axis=0).fillna(0.0))
             pass
 
-    #NEW NORMALIZATION!!
-    weightedAlpha.replace(0, np.nan, inplace=True)
-    weightedAlpha = RiskModelFunctions.hedgeGlobal(weightedAlpha)
-    weightedAlpha.replace(np.nan,0 , inplace=True)
+    # #NEW NORMALIZATION!!
+    # weightedAlpha.replace(0, np.nan, inplace=True)
+    # weightedAlpha = RiskModelFunctions.hedgeGlobal(weightedAlpha)
+    # weightedAlpha.replace(np.nan,0 , inplace=True)
 
     weightedAlpha = weightedAlpha * bookSize
     turnoverAdj = weightedAlpha.diff().abs().sum(axis=1)
@@ -131,7 +131,7 @@ def main():
     for index, row in weightedAlpha[testStart+1:].iterrows():
         print("index:", index)
         index_num = tradeOptimDF.index.get_loc(index)
-        if index_num < len(tradeOptimDF)-100:
+        if index_num < len(tradeOptimDF)-5:  #100 500
             newPositions = get_h_star(row.to_numpy(),
                                    oldPositions,
                                    Q,
@@ -153,23 +153,18 @@ def main():
     tradeOptimPostFeesAgg = pd.DataFrame(tradeOptimReturns - turnoverModel).sum(axis=1)
     tradeOptimPostFeesAgg.iloc[testStart:].cumsum().plot()
 
-    #((pd.DataFrame(combinedAlpha2.iloc[testStart:,:]).sum(axis=1) - (turnoverAdj * feesBSP)).cumsum()).plot()
-    #pd.DataFrame(combinedAlpha3.loc["2021-01-04":"2021-08-11"]).sum(axis=1).cumsum().plot()
-
-    plt.show()
-
     sharpe = (feeCombinedAlpha.mean() * 252.0) / (feeCombinedAlpha.std() * math.sqrt(252.0))
-    print("FEES FULL SHARPE:", sharpe)
-    sharpe = (feeCombinedAlpha.iloc[:optimEnd].mean() * 252.0) / (feeCombinedAlpha.iloc[:optimEnd].std() * math.sqrt(252.0))
-    print("FEES TRAIN SHARPE:", sharpe)
-    sharpe = (feeCombinedAlpha.iloc[optimEnd:].mean() * 252.0) / (
-                feeCombinedAlpha.iloc[optimEnd:].std() * math.sqrt(252.0))
-    print("FEES TEST SHARPE:", sharpe)
+    print("feeCombinedAlpha FULL SHARPE:", sharpe)
+    sharpe = (feeCombinedAlpha.iloc[optimEnd:].mean() * 252.0) / (feeCombinedAlpha.iloc[optimEnd:].std() * math.sqrt(252.0))
+    print("feeCombinedAlpha TRAIN SHARPE:", sharpe)
+    sharpe = (tradeOptimPostFeesAgg.iloc[testStart:].mean() * 252.0) / (
+                tradeOptimPostFeesAgg.iloc[testStart:].std() * math.sqrt(252.0))
+    print("QP OPTIM FEES TEST SHARPE:", sharpe)
 
-    annFeeSharpe = (feeCombinedAlpha.iloc[optimEnd:].mean() * annCorrection) / (
-                feeCombinedAlpha.iloc[optimEnd:].std() * math.sqrt(annCorrection))  #35040 #17520
+    annFeeSharpe = (tradeOptimPostFeesAgg.iloc[testStart:].mean() * annCorrection) / (
+                tradeOptimPostFeesAgg.iloc[testStart:].std() * math.sqrt(annCorrection))  #35040 #17520
     print("ANNUALIZED FEES TEST SHARPE:", annFeeSharpe)
-    ((pd.DataFrame(combinedAlpha2).sum(axis=1) - (turnoverAdj * feesBSP)).cumsum()).plot()
+    #((pd.DataFrame(combinedAlpha2).sum(axis=1) - (turnoverAdj * feesBSP)).cumsum()).plot()
     print("feesBSP: ",feesBSP)
     TEST = 1
     plt.show()

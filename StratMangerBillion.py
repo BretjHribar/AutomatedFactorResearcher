@@ -54,9 +54,9 @@ targetFuture = 0
 portTail = 0.00 #0.0015##0.00000001 #0.0015#0.001 #0.0015 0.0025
 universeBlocking = False
 riskModelType = Constants.SUB_INDUSTRY_RISK_MODEL #Constants.PCA_RISK_MODEL #"TEST_FACTOR"
-riskModelNumFactors = 5
+riskModelNumFactors = 150
 pcaMA = 0.9
-runName = 'TEST_STRATEGY_7_A' #'1000_LOW_CORR' #'EQUITIES_YAHOO_SUB_2' #'EQUITIES_YAHOO_SUB_2' CRYPTO_SMALL5 CRYPTO_SMALL4
+runName = 'TEST_STRATEGY_11_A' #'1000_LOW_CORR' #'EQUITIES_YAHOO_SUB_2' #'EQUITIES_YAHOO_SUB_2' CRYPTO_SMALL5 CRYPTO_SMALL4
 g_alphas_arr = []
 g_raw_alphas_dic = {}
 testStartDate = "2021-01-04"
@@ -66,7 +66,7 @@ maxPrice = 10000000.0 # 10000.0
 useLambdaTransactionModel = False
 expFactorDecay = 0.1
 volumeMeanRankingWindow = 252
-
+postPortfolioOptimReScaleRiskModel = False
 
 LOG_DATA_PATH = 'logDataFiles/'
 MODEL_DATA_PATH = 'ModelOutputs/'
@@ -228,7 +228,8 @@ def evalForGraphReturns(individual):
         endtest = time.time()
         print("RiskModelFunctions.hedgeSubIndustries eval time: ", startTest - endtest)
     elif riskModelType == Constants.PCA_RISK_MODEL:
-        out = RiskModelFunctions.pcaConvertAlpha(returns.iloc[:testStart, :], out, riskModelNumFactors)
+        #out = RiskModelFunctions.pcaConvertAlpha(returns.iloc[:testStart, :], out, riskModelNumFactors)
+        out = RiskModelFunctions.pcaConvertAlpha(returns.iloc[testStart:, :], out, riskModelNumFactors)
         out_normalzed = RiskModelFunctions.hedgeGlobal(out)
     elif riskModelType == Constants.EXP_PCA_RISK_MODEL:
         out = RiskModelFunctions.pcaMovingAvg(returns.iloc[:testStart, :], out, riskModelNumFactors, pcaMA)
@@ -317,10 +318,12 @@ def GetAlphasFromDB(numalphas):
             # sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `DSRprob` IN ('TEST') ORDER BY RAND() LIMIT %s" 3484460
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` in ('3490869') ORDER BY RAND() LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('TEST_STRATEGY_3_B','TEST_STRATEGY_3_A' ) LIMIT %s"
-            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` > 1 AND `scriptversion` IN ('" + runName + "') LIMIT %s"
-            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 0.0  AND `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
-            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
-            sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE  `turnover` < 0.15 AND `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
+            ####sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` > 1 AND `scriptversion` IN ('" + runName + "') LIMIT %s"
+            #sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE `riskModelType` = 'subIndustry' LIMIT %s"
+            sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.00 AND `riskModelType` = 'subIndustry' LIMIT %s"
+            #sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` < 3491324 AND `PSR` > 0.00 AND `riskModelType` = 'subIndustry' LIMIT %s"
+            #sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` >= 3491205 AND `riskModelType` = 'subIndustry' LIMIT %s"
+            #sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE  `turnover` < 0.15 AND `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `strategy_id` IN (4,5) LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 0  AND `turnover` < 0.5 AND `scriptversion` IN ('" + runName + "') ORDER BY RAND() LIMIT %s"
@@ -534,7 +537,8 @@ def main():
             alphaweightsTS.iloc[optimEnd+1] = optimizedWeights
 
         testStart = int(df_close.index.get_loc(testStartDate))
-        optimEnd = int(df_close.index.get_loc(optimEndDate))
+        #optimEnd = int(df_close.index.get_loc(optimEndDate))
+        optimEnd = testStart + optimLookback
     #######################################
     #######################################
     print('TEST!!!')
@@ -570,9 +574,11 @@ def main():
             pass
 
     #NEW NORMALIZATION!!
-    weightedAlpha.replace(0, np.nan, inplace=True)
-    weightedAlpha = RiskModelFunctions.hedgeGlobal(weightedAlpha)
-    weightedAlpha.replace(np.nan,0 , inplace=True)
+    if postPortfolioOptimReScaleRiskModel:
+        weightedAlpha.replace(0, np.nan, inplace=True)
+        weightedAlpha = RiskModelFunctions.hedgeSubIndustries(industries, weightedAlpha)
+        #weightedAlpha = RiskModelFunctions.hedgeGlobal( weightedAlpha)
+        weightedAlpha.replace(np.nan,0 , inplace=True)
 
     weightedAlpha = weightedAlpha * bookSize
 
@@ -649,9 +655,10 @@ def main():
     print("corr with: ", corr)
     print("MSE with: ", mse)
     print("mean daily returns: ", returns / 252.0)
-    print("linearDecay: ", linearDecay)
-    print("expDecay: ", expDecay)
+    #print("linearDecay: ", linearDecay)
+    #print("expDecay: ", expDecay)
     print("riskModelNumFactors: ", riskModelNumFactors)
+    print("postPortfolioOptimReScaleRiskModel", postPortfolioOptimReScaleRiskModel)
     print("topN: ", topN)
     print("universeBlocking: ", universeBlocking)
     print("maxStockWeight: ", maxStockWeight)

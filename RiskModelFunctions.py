@@ -37,6 +37,36 @@ class RiskModelFunctions:
         return adjOut
 
     @staticmethod
+    def windowedPcaConvertAlpha(ret, out, numberOfFactors=1, fillNanAlpha=True):
+        ret = ret.fillna(0)
+
+        if fillNanAlpha:
+            out = out.fillna(0)
+
+        pca = PCA(n_components=numberOfFactors)
+        principalComponents = pca.fit(ret)
+
+        eigVectors = pd.DataFrame(principalComponents.components_)
+        #adjEigVectors = pd.DataFrame((pca.components_.T * pca.singular_values_).T)
+
+        eigVectors.columns = out.columns
+        # adjEigVectors.columns = out.columns
+        # adjEigVectors.to_csv('C:\\Crypto\\QuoteEigVectors.csv')
+
+        # factorMap = np.linalg.lstsq(eigVectors.transpose(), out.transpose(), rcond=None)[0]
+        # outPostRisk = np.inner(factorMap.transpose(), eigVectors.transpose())
+
+        tmp = np.linalg.lstsq(eigVectors.transpose(), out.transpose(), rcond=None)
+        factorMap = tmp[0]
+        #factorMap.plot()
+        outPostRisk = np.inner(factorMap.transpose(), eigVectors.transpose())
+
+        outPostRisk = pd.DataFrame(outPostRisk, index=out.index, columns=out.columns)
+        # adjOut = outPostRisk - out
+        adjOut = out - outPostRisk
+        return adjOut
+
+    @staticmethod
     def hedgeSubIndustries(industriesMap, signal):
         indCodes = industriesMap.iloc[:, 0]
         indGroups = np.unique(indCodes)

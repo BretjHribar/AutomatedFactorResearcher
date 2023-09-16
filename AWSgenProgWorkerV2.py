@@ -34,7 +34,7 @@ featuresList = []
 GPfunctionsList = []
 market_data_inputs = []
 psrCutoff = 0.99 #0.99
-corrCutoff = 0.5
+corrCutoff = 0.7
 fitnessCutoff = 0.5
 turnoverMax = 0.7 #0.05
 turnoverMin = 0.01
@@ -48,9 +48,9 @@ rankHedge = False
 funcLookbackLength = 40 #90
 linearDecay = 0
 topN = 3000
-strategyName = 'TEST_STRATEGY_9'
+strategyName = 'TEST_STRATEGY_11'
 strategyId = -1
-runName = 'TEST_STRATEGY_9_A' #EQUITIES_YAHOO_SUB_2
+runName = 'TEST_STRATEGY_11_A' #EQUITIES_YAHOO_SUB_2
 targetDelay = 1
 # bottomN = 0
 trialCounter = 0
@@ -59,6 +59,7 @@ universeBlocking = False
 riskModelNumFactors = 5
 minPrice = -1.0 #2.0
 maxPrice = 10000000.0 # 10000.0
+gp_population = 250
 riskModelType = Constants.SUB_INDUSTRY_RISK_MODEL
 useGammaTransactionModel = False
 
@@ -543,7 +544,7 @@ toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max
 
 
 def main():
-    pop = toolbox.population(n=1000)
+    pop = toolbox.population(n=gp_population)
     hof = tools.HallOfFame(1)
 
     stats_fit = tools.Statistics(lambda ind: ind.fitness.values)

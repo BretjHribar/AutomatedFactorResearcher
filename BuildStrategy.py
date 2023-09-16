@@ -3,7 +3,7 @@ import pymysql.cursors
 from Constants import MASTER_FEATURES_LIST, MASTER_GPFUNCTIONS_LIST
 import Constants
 
-strategyName = "TEST_STRATEGY_9"
+strategyName = "TEST_STRATEGY_11"
 fractionOfFeatures = 0.5
 fractionOfFunctions = 0.5
 riskModelType = Constants.SUB_INDUSTRY_RISK_MODEL
