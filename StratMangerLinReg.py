@@ -141,10 +141,10 @@ df_dollars_traded_mean = df_dollars_traded.rolling(window=volumeMeanRankingWindo
 df_dollars_traded_mean_trans = df_dollars_traded_mean.fillna(1.0e4).replace(0, 1.0e4)
 df_dollars_traded_mean_rank = df_dollars_traded_mean.rank(axis=1, ascending=False)
 
-# df_hist_vol_10 = df_close.pct_change().rolling(10).std()*(252**0.5)
-# df_hist_vol_20 = df_close.pct_change().rolling(20).std()*(252**0.5)
-# df_hist_vol_30 = df_close.pct_change().rolling(30).std()*(252**0.5)
-# df_hist_vol_90 = df_close.pct_change().rolling(90).std()*(252**0.5)
+df_hist_vol_10 = df_close.pct_change().rolling(10).std()*(252**0.5)
+df_hist_vol_20 = df_close.pct_change().rolling(20).std()*(252**0.5)
+df_hist_vol_30 = df_close.pct_change().rolling(30).std()*(252**0.5)
+df_hist_vol_90 = df_close.pct_change().rolling(90).std()*(252**0.5)
 
 if (universeBlocking):
     for i in range(len(df_dollars_traded_mean_rank.index)-20, 20, -20):
@@ -176,6 +176,10 @@ def evalForGraphReturns(individual):
     volume = df_volume
     dollars_traded = df_dollars_traded
     adv20 = df_dollars_traded_mean
+    hist_vol_10 = df_hist_vol_10
+    hist_vol_20 = df_hist_vol_20
+    hist_vol_30 = df_hist_vol_30
+    hist_vol_90 = df_hist_vol_90
 
     # nextOpen = open.shift(-1)
     returns = close - close.shift(1)
@@ -192,7 +196,7 @@ def evalForGraphReturns(individual):
     print("close dim:", close.shape)
 
     # apply the GP tree to the DataFrames
-    out = func(open, high, low, close, volume, dollars_traded, adv20, returns)
+    out = func(open, high, low, close, volume, dollars_traded, adv20, returns, hist_vol_10, hist_vol_20, hist_vol_30, hist_vol_90)
 
     if hedgeVol:
         stdCorrective = returns.abs().rolling(20).std().div(returns.std(axis=1), axis=0)
@@ -271,7 +275,10 @@ def ReturnY():
 ########################################################################
 pset = gp.PrimitiveSetTyped("main", [pd.core.frame.DataFrame,
                                      pd.core.frame.DataFrame,
-                                     #pd.core.frame.DataFrame,
+                                     pd.core.frame.DataFrame,
+                                     pd.core.frame.DataFrame,
+                                     pd.core.frame.DataFrame,
+                                     pd.core.frame.DataFrame,
                                      pd.core.frame.DataFrame,
                                      pd.core.frame.DataFrame,
                                      pd.core.frame.DataFrame,
@@ -292,6 +299,10 @@ pset.renameArguments(ARG4="volume")
 pset.renameArguments(ARG5="dollars_traded")
 pset.renameArguments(ARG6="adv20")
 pset.renameArguments(ARG7="returns")
+pset.renameArguments(ARG8="hist_vol_10")
+pset.renameArguments(ARG9="hist_vol_20")
+pset.renameArguments(ARG10="hist_vol_30")
+pset.renameArguments(ARG11="hist_vol_90")
 
 toolbox = base.Toolbox()
 toolbox.register("compile", gp.compile, pset=pset)
@@ -307,7 +318,7 @@ def GetAlphasFromDB(numalphas):
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('NEW_DAO_1_SUB','NEW_DAO_2_SUB', '1000_A', '1000_LOW_CORR') LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('1000_A', '1000_LOW_CORR') LIMIT %s"
             sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` > 1 AND `scriptversion` IN ('" + runName + "') LIMIT %s"
-            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 2.0  AND `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
+            sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` <= 3491343 AND `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 0.1 AND `riskModelType` = 'Global' LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 0  AND `turnover` < 0.5 AND `scriptversion` IN ('" + runName + "') ORDER BY RAND() LIMIT %s"
             cursor.execute(sql, (int(numalphas)))
@@ -485,7 +496,8 @@ def main():
 
     #NEW NORMALIZATION!!
     weightedAlpha.replace(0, np.nan, inplace=True)
-    weightedAlpha = RiskModelFunctions.hedgeGlobal(weightedAlpha)
+    #weightedAlpha = RiskModelFunctions.hedgeGlobal(weightedAlpha)
+    weightedAlpha = RiskModelFunctions.hedgeSubIndustries(industries, weightedAlpha)
     weightedAlpha.replace(np.nan,0 , inplace=True)
 
     #weightedAlpha = weightedAlpha * bookSize
@@ -505,11 +517,12 @@ def main():
         [raw_alphas_dic[key].fillna(0.0)  # .shift(1)
          for key in raw_alphas_dic])
 
-    lookBack = 10
+    lookBack = 5
+    #range(testStart,829):  #
     for i in range(testStart, len(weightedAlpha)-lookBack-2):
         reg = linear_model.LinearRegression(fit_intercept=False, n_jobs=2) #n_jobs=-1
         #reg = linear_model.MultiTaskElasticNetCV()
-        #reg = linear_model.MultiTaskLasso(alpha=1000.0) # n_jobs=-1
+        reg = linear_model.MultiTaskLasso(alpha=0.00) # n_jobs=-1
         print("linreg: ",str(i))
 
         # Split the data into train and test based on the optimization end date

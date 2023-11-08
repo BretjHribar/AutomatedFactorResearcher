@@ -22,11 +22,12 @@ g_alphas_arr = []
 bookSize = 20000000.0
 feesBSP = 0.0000
 annCorrection = 252
+maxStockWeight = 0.005
 
 returnY = pd.read_csv(LOG_DATA_PATH+"returnY.csv",index_col='date', parse_dates=True)
 
 LambdaMatrix = pd.read_parquet('EquitiesDataFiles/' + "Lambda1000.parquet")
-#LambdaMatrix[:] = 0
+LambdaMatrix[:] = 0
 B = pd.read_parquet('logDataFiles/' + "B.parquet")
 F_cov = pd.read_parquet('logDataFiles/' + "F_cov.parquet")
 BT = B.transpose()
@@ -62,7 +63,7 @@ def get_obj_func(h0, risk_aversion, alpha_vec, Q, Lambda):
 def get_grad_func(h0, risk_aversion, Q, QT, alpha_vec, Lambda):
     def grad_func(h):
         #g = risk_aversion * np.matmul(QT, np.matmul(Q, h))
-        g = np.dot(alpha_vec,1.0)
+        g = np.dot(alpha_vec,-1.0)
         #g += 2 * (h - h0) * Lambda
         return np.asarray(g)
     return grad_func
@@ -73,14 +74,19 @@ def get_h_star(alpha_vec, h0, Q, QT, Lambda):
     obj_func = get_obj_func(h0, risk_aversion, alpha_vec, Q, Lambda)
     grad_func = get_grad_func(h0, risk_aversion, Q, QT, alpha_vec, Lambda)
 
-    #optimizer_result = scipy.optimize.fmin_l_bfgs_b(obj_func, h0, fprime=grad_func)
-    #optimizer_result = minimize(obj_func, h0, bounds=weightBounds, method='Nelder-Mead',options={'maxiter':20})
-    #optimizer_result = minimize(obj_func, h0, method='Nelder-Mead', options={'maxiter': 200})
-    optimizer_result = minimize(obj_func, h0, method='Nelder-Mead')
-    #optimizer_result = scipy.optimize.fmin_l_bfgs_b(obj_func, h0, approx_grad=True)
+    weightBounds = ((-maxStockWeight * bookSize, maxStockWeight * bookSize) for i in range(alpha_vec.size))
+    weightBounds_lbfgs = [(-maxStockWeight * bookSize, maxStockWeight * bookSize) for i in range(alpha_vec.size)]
 
-    return optimizer_result.x
-    #return optimizer_result[0]
+    #optimizer_result = scipy.optimize.fmin_l_bfgs_b(obj_func, h0, fprime=grad_func)
+    #optimizer_result = minimize(obj_func, h0, bounds=weightBounds, method='Nelder-Mead',options={'maxiter':200})
+    ####optimizer_result = minimize(obj_func, h0, bounds=weightBounds, method='Nelder-Mead', options={'maxiter': 200})
+
+    #optimizer_result = minimize(obj_func, h0, method='Nelder-Mead', options={'maxiter': 10})
+    #optimizer_result = minimize(obj_func, h0, method='Nelder-Mead')
+    optimizer_result = scipy.optimize.fmin_l_bfgs_b(obj_func, h0,grad_func, bounds=weightBounds_lbfgs)
+
+    #return optimizer_result.x
+    return optimizer_result[0]
 ############################################################################
 
 def main():
@@ -112,7 +118,7 @@ def main():
     # weightedAlpha = RiskModelFunctions.hedgeGlobal(weightedAlpha)
     # weightedAlpha.replace(np.nan,0 , inplace=True)
 
-    weightedAlpha = weightedAlpha * bookSize
+    #weightedAlpha = weightedAlpha * bookSize
     turnoverAdj = weightedAlpha.diff().abs().sum(axis=1)
 
     combinedAlpha2 = pd.DataFrame(weightedAlpha.values * returnY.values, columns=weightedAlpha.columns, index=returnY.index)
@@ -151,7 +157,9 @@ def main():
 
     #tradeOptimReturnsAgg = pd.DataFrame(tradeOptimReturns.iloc[testStart:,:] - turnoverModel.iloc[testStart:,:]).sum(axis=1)
     tradeOptimPostFeesAgg = pd.DataFrame(tradeOptimReturns - turnoverModel).sum(axis=1)
+    noOptimWithFees = pd.DataFrame(weightedAlpha - turnoverModel).sum(axis=1)
     tradeOptimPostFeesAgg.iloc[testStart:].cumsum().plot()
+    #noOptimWithFees.iloc[testStart:].cumsum().plot()
 
     sharpe = (feeCombinedAlpha.mean() * 252.0) / (feeCombinedAlpha.std() * math.sqrt(252.0))
     print("feeCombinedAlpha FULL SHARPE:", sharpe)
