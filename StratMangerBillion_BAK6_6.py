@@ -10,11 +10,10 @@ import datetime
 import boto
 import s3fs
 
-from sklearn.pipeline import make_pipeline
-from sklearn.decomposition import PCA
 from sklearn.metrics import mean_squared_error
 
-from statsforecast.models import SimpleExponentialSmoothingOptimized
+from statsforecast.models import SimpleExponentialSmoothing, ARIMA
+from AlphaFitnessFunctions import AlphaFitnessFunctions
 
 import pymysql.cursors
 
@@ -34,7 +33,9 @@ import Constants
 from sklearn import linear_model
 
 ##############################
-root = "C:\Equities\YFINANCE"
+#root = "C:\Equities\YFINANCE3" #AOdataSctor15m
+#root = "C:\Equities\YAOdataSctor15m"
+root = "C:\Equities\AV_Russell2000_DATA"
 timeRateMin = 1440
 
 alphas_arr = []
@@ -48,26 +49,26 @@ rankHedge = False
 funcLookbackLength = 90
 linearDecay = 0 #7
 expDecay = 0.0
-topN = 3000 ##100
+topN = 4000 ##100
 targetDelay = 1
 targetFuture = 0
 #bottomN = 5
-portTail = 0.00 #0.0015##0.00000001 #0.0015#0.001 #0.0015 0.0025
+portTail = 0.002 #0.0015##0.00000001 #0.0015#0.001 #0.0015 0.0025
 universeBlocking = False
-riskModelType = Constants.SUB_INDUSTRY_RISK_MODEL #Constants.PCA_RISK_MODEL #"TEST_FACTOR"
-riskModelNumFactors = 5
+riskModelType = Constants.GLOBAL_RISK_MODEL #Constants.PCA_RISK_MODEL #"TEST_FACTOR"
+riskModelNumFactors = 150
 pcaMA = 0.9
-runName = 'TEST3_U' #'1000_A' #'1000_LOW_CORR' #'EQUITIES_YAHOO_SUB_2' #'EQUITIES_YAHOO_SUB_2' CRYPTO_SMALL5 CRYPTO_SMALL4
+runName = 'TEST_STRATEGY_3' #'1000_LOW_CORR' #'EQUITIES_YAHOO_SUB_2' #'EQUITIES_YAHOO_SUB_2' CRYPTO_SMALL5 CRYPTO_SMALL4
 g_alphas_arr = []
 g_raw_alphas_dic = {}
-testStartDate = "2021-01-04"
-optimEndDate = "2022-01-03"
+testStartDate = "2023-01-04"
+optimEndDate = "2024-05-15"
 minPrice = 0.0 #2.0
 maxPrice = 10000000.0 # 10000.0
 useLambdaTransactionModel = False
 expFactorDecay = 0.1
 volumeMeanRankingWindow = 252
-
+postPortfolioOptimReScaleRiskModel = True
 
 LOG_DATA_PATH = 'logDataFiles/'
 MODEL_DATA_PATH = 'ModelOutputs/'
@@ -80,7 +81,7 @@ print("connecting to DB")
 #                              db='quantschema',
 #                              charset='utf8mb4',
 #                              cursorclass=pymysql.cursors.DictCursor)
-#
+
 connection = pymysql.connect(host='alphasdatabase1.cysvmgsjf7ox.us-east-1.rds.amazonaws.com',#'localhost',
                              user='admin', #mysqluser',
                              password='SALMON44', #'mysqluser',
@@ -88,34 +89,31 @@ connection = pymysql.connect(host='alphasdatabase1.cysvmgsjf7ox.us-east-1.rds.am
                              charset='utf8mb4',
                              cursorclass=pymysql.cursors.DictCursor)
 
-# for path, subdirs, files in os.walk(root):
-#     for name in files:
-#         print(name.split(".")[0])
-#         histData[name.split(".")[0]] = pd.read_csv(os.path.join(root, name),
-#                                                    index_col='date',
-#                                                    parse_dates=True,
-#                                                    # skiprows=1,
-#                                                    names=['date', 'dum', 'open', 'high', 'low', 'close', 'volume'],
-#                                                    usecols=['date', 'dum', 'open', 'high', 'low', 'close', 'volume'],
-#                                                    dtype={'dum': np.int64, 'open': np.float64, 'high': np.float64,
-#                                                           'low': np.float64, 'close': np.float64, 'volume': np.int64})
-#         numEquities = numEquities + 1
-#
-# histMultiIndex = pd.concat(histData.values(), keys=histData.keys())
-#histMultiIndex.to_parquet('EquitiesDataFiles/' + "E1000.parquet")
+for path, subdirs, files in os.walk(root):
+    for name in files:
+        print(name.split(".")[0])
+        histData[name.split(".")[0]] = pd.read_csv(os.path.join(root, name),
+                                                   index_col='date',
+                                                   parse_dates=True,
+                                                   # skiprows=1,
+                                                   names=['date', 'dum', 'open', 'high', 'low', 'close', 'volume'],
+                                                   usecols=['date', 'dum', 'open', 'high', 'low', 'close', 'volume'],
+                                                   dtype={'dum': np.int64, 'open': np.float64, 'high': np.float64,
+                                                          'low': np.float64, 'close': np.float64, 'volume': np.int64})
+        numEquities = numEquities + 1
+
+histMultiIndex = pd.concat(histData.values(), keys=histData.keys())
+#histMultiIndex.to_parquet('EquitiesDataFiles/' + "E5000.parquet")
 #histMultiIndex = pd.read_parquet("s3://brethribar-equitiesdata-1/E1000.parquet")
 
-histMultiIndex = pd.read_parquet('EquitiesDataFiles/' + "E1000.parquet")
+#histMultiIndex = pd.read_parquet('EquitiesDataFiles/' + "E1000.parquet")
 
 industries = pd.read_csv('C:\Equities\symSubIndustries.csv', index_col=0)
 industries = industries[industries['INDUSTRY'] != '1c3d7001-dc68-4c36-b148-483741091c86'] # BIOTECH REMOVAL
 industries = industries[industries['INDUSTRY'] != 'd6c806bb-aaaf-4bbc-9737-3575d53ca96f'] # Finance-Mortgage REIT
 industries = industries[industries['INDUSTRY'] != 'ed543f01-e605-4a2a-a386-ce0c09dba19e'] # Finance-Property REIT
 
-print(industries)
-# for date, new_df in histMultiIndex.groupby(level=1):
-#     print(f"date{date}")
-#     print(f"new_df{new_df}")
+#print(industries)
 
 df_open = histMultiIndex["open"].unstack(level=0)
 df_high = histMultiIndex["high"].unstack(level=0)
@@ -123,11 +121,11 @@ df_low = histMultiIndex["low"].unstack(level=0)
 df_close = histMultiIndex["close"].unstack(level=0)
 df_volume = histMultiIndex["volume"].unstack(level=0)
 
-df_open = df_open[df_open.columns.intersection(industries.index.tolist())]
-df_high = df_high[df_high.columns.intersection(industries.index.tolist())]
-df_low = df_low[df_low.columns.intersection(industries.index.tolist())]
-df_close = df_close[df_close.columns.intersection(industries.index.tolist())]
-df_volume = df_volume[df_volume.columns.intersection(industries.index.tolist())]
+# df_open = df_open[df_open.columns.intersection(industries.index.tolist())]
+# df_high = df_high[df_high.columns.intersection(industries.index.tolist())]
+# df_low = df_low[df_low.columns.intersection(industries.index.tolist())]
+# df_close = df_close[df_close.columns.intersection(industries.index.tolist())]
+# df_volume = df_volume[df_volume.columns.intersection(industries.index.tolist())]
 
 #trunctateEndDate = '1614801600000'
 # trunctateEndDate = '999999999999999'#'5/1/2019' #'3/09/2018' #'7/18/2018' #'4/17/2019'
@@ -232,10 +230,14 @@ def evalForGraphReturns(individual):
         endtest = time.time()
         print("RiskModelFunctions.hedgeSubIndustries eval time: ", startTest - endtest)
     elif riskModelType == Constants.PCA_RISK_MODEL:
-        out = RiskModelFunctions.pcaConvertAlpha(returns.iloc[:testStart, :], out, riskModelNumFactors)
+        #out = RiskModelFunctions.pcaConvertAlpha(returns.iloc[:testStart, :], out, riskModelNumFactors)
+        out = RiskModelFunctions.pcaConvertAlpha(returns.iloc[testStart:, :], out, riskModelNumFactors)
         out_normalzed = RiskModelFunctions.hedgeGlobal(out)
     elif riskModelType == Constants.EXP_PCA_RISK_MODEL:
         out = RiskModelFunctions.pcaMovingAvg(returns.iloc[:testStart, :], out, riskModelNumFactors, pcaMA)
+        out_normalzed = RiskModelFunctions.hedgeGlobal(out)
+    elif riskModelType == Constants.FLIP_MODE_MODEL:
+        out = RiskModelFunctions.flipMode(out)
         out_normalzed = RiskModelFunctions.hedgeGlobal(out)
     ##########################
     F_cov, B = RiskModelFunctions.getPCAfactorCovMatrix(returns)
@@ -317,20 +319,16 @@ toolbox.register("compile", gp.compile, pset=pset)
 def GetAlphasFromDB(numalphas):
     try:
         with connection.cursor() as cursor:
-            #  `alphasid` <= 3487653 AND
-            # sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `DSRprob` IN ('TEST') ORDER BY RAND() LIMIT %s" 3484460
-            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` in ('3490869') ORDER BY RAND() LIMIT %s"
-            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('NEW_DAO_1_SUB','NEW_DAO_2_SUB', '1000_A', '1000_LOW_CORR') LIMIT %s"
-            sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('1000_A', '1000_LOW_CORR') LIMIT %s"
-            sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
+            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('TEST_STRATEGY_3_B','TEST_STRATEGY_3_A' ) LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` > 1 AND `scriptversion` IN ('" + runName + "') LIMIT %s"
-            #sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` <= 3491353 AND `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
-            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 0.1 AND `riskModelType` = 'Global' LIMIT %s"
+            ##sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE `riskModelType` = 'subIndustry' AND `margin` > 5 LIMIT %s"
+            sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
+            #sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` < 3491324 AND `PSR` > 0.00 AND `riskModelType` = 'subIndustry' LIMIT %s"
+            ##sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE  `turnover` < 0.5 AND `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
+            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
+            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `strategy_id` IN (4,5) LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 0  AND `turnover` < 0.5 AND `scriptversion` IN ('" + runName + "') ORDER BY RAND() LIMIT %s"
             cursor.execute(sql, (int(numalphas)))
-            # sql = "SELECT `alphastring` FROM `quantschema`.`distinctuniquealphas` WHERE `corr` > 0.3 LIMIT %s"
-            # sql = "SELECT `alphastring` FROM `quantschema`.`permalphalist`"
-            # cursor.execute(sql)
             result = cursor.fetchall()
             # print(result)
     finally:
@@ -339,6 +337,59 @@ def GetAlphasFromDB(numalphas):
 
 
 ###########################################################################
+############################################################################
+def calcEMAportReturns( weightArray ):
+    alphasDF = pd.DataFrame(g_alphas_arr)
+    alphasDF = alphasDF.transpose().fillna(0)
+    expectRet = alphasDF.copy()
+
+    alphasDFCov = EmpiricalCovariance().fit(alphasDF.iloc[testStart:optimEnd].values)
+    alphasDFCovInv = pd.DataFrame(np.linalg.pinv(alphasDFCov.covariance_))
+
+    c = 0
+    for column in alphasDF:
+        expectRet[column] = GPfunctions.Decay_exp(alphasDF[column], weightArray[c]).shift(1)
+        c += 1
+    expectRet[expectRet < 0] = 0
+
+    alphaweightsTS = pd.DataFrame(np.inner(alphasDFCovInv, expectRet)).transpose()
+    alphaweightsTS = pd.DataFrame(alphaweightsTS)
+    alphaweightsTS = alphaweightsTS.div(alphaweightsTS.sum(axis=1), axis=0)
+
+    temp = pd.DataFrame(alphaweightsTS.values * alphasDF.values, columns=alphaweightsTS.columns, index=alphasDF.index)
+
+    combinedAlpha = temp.iloc[testStart:optimEnd]
+
+    sharpe = (combinedAlpha.sum(axis=1).mean() * 252.0) / (combinedAlpha.sum(axis=1).std() * math.sqrt(252))
+    print("sharpe EMA: "+str(sharpe) + " testStart: "+ str(testStart) + " optimEnd: "+ str(optimEnd))
+    return -sharpe
+
+############################################################################
+############################################################################
+def calcEMAoutput( weightArray, location ):
+    alphasDF = pd.DataFrame(g_alphas_arr)
+    alphasDF = alphasDF.transpose().fillna(0)
+    expectRet = alphasDF.copy()
+
+    alphasDFCov = EmpiricalCovariance().fit(alphasDF.iloc[testStart:optimEnd].values)
+    alphasDFCovInv = pd.DataFrame(np.linalg.pinv(alphasDFCov.covariance_))
+
+    c = 0
+    for column in alphasDF:
+        expectRet[column] = GPfunctions.Decay_exp(alphasDF[column], weightArray[c]).shift(1)
+        c += 1
+    expectRet[expectRet < 0] = 0
+
+    alphaweightsTS = pd.DataFrame(np.inner(alphasDFCovInv, expectRet)).transpose()
+    alphaweightsTS = pd.DataFrame(alphaweightsTS)
+    alphaweightsTS = alphaweightsTS.div(alphaweightsTS.sum(axis=1), axis=0)
+
+    return alphaweightsTS.iloc[location, :]
+
+    # temp = pd.DataFrame(alphaweightsTS.values * alphasDF.values, columns=alphaweightsTS.columns, index=alphasDF.index)
+    # return temp.iloc[location, :]
+
+############################################################################
 ############################################################################
 
 def calcPortReturns( weightArray ):
@@ -396,19 +447,11 @@ def calcPortReturnsWithFees( weightArray ):
     return -sharpe
 ############################################################################
 ############################################################################
-#def get_grad_func(h0, risk_aversion, Q, QT, specVar, alpha_vec, Lambda):
-def get_grad_func(h0, alpha_vec, bsp_costs):
-    def grad_func(h):
-        g = -alpha_vec
-        g += (h - h0) * bsp_costs
-        return np.asarray(g)
-    return grad_func
-############################################################################
 
 def main():
     global testStart, optimEnd
-    pd.DataFrame(ReturnY()).fillna(0).to_csv(LOG_DATA_PATH+'returnY.csv')
-    numberOfAlphas = 100
+    pd.DataFrame(ReturnY()).fillna(0).to_csv(LOG_DATA_PATH+'returnY2.csv')
+    numberOfAlphas = 1000
     alphas = GetAlphasFromDB(numberOfAlphas)
 
     counter = 0
@@ -425,7 +468,6 @@ def main():
         if percentNan < 999999:
             g_raw_alphas_dic[counter] = B
             raw_alphas_dic[counter] = B
-            #ema_raw_alphas_dic[counter] = B
             counter = counter + 1
         alphas_arr.append(A.sum(axis=1))
         g_alphas_arr.append(C)
@@ -435,49 +477,80 @@ def main():
     alphasDF = pd.DataFrame(alphas_arr)
 
     ############################
-    ##################################
-    print('TEST!!!')
-    alphasDF = alphasDF.transpose().fillna(0)
-    #alphasDFCov = LedoitWolf().fit(alphasDF.iloc[:testStart,:].values)
-    alphasDFCov = EmpiricalCovariance().fit(alphasDF.iloc[:testStart, :].values)
-    #alphasDFCovInv = pd.DataFrame(np.linalg.pinv(alphasDFCov.covariance_))
-    alphasDFCovInv = pd.DataFrame(np.linalg.pinv(np.eye(len(alphasDFCov.covariance_))))
-    #alphasDFCovInv = pd.DataFrame(np.linalg.pinv(np.multiply(alphasDFCov.covariance_, np.eye(len(alphasDFCov.covariance_)))))
+    optimLookback = 5
 
-    # npArrays = np.empty((len(alphasDF.index), len(alphasDF.columns)), float)
-    # for col in alphasDF:
-    #     seso = SimpleExponentialSmoothingOptimized()
-    #     seso = seso.fit(y=alphasDF[col].to_numpy())
-    #     pred = seso.predict_in_sample()['fitted']
-    #     #pred = np.append(pred, [0])
-    #     npArrays[:,col] = pred
-    #
-    # alphasExpectedReturns =pd.DataFrame(npArrays)
-    optimLookback = 10
-    #alphasExpectedReturns = GPfunctions.Decay_exp(alphasDF, expFactorDecay).shift(1)
-    alphasExpectedReturns = GPfunctions.sma(alphasDF, optimLookback).shift(1)
+    A_trans = alphasDF.transpose().fillna(0)
+    #alphasExpectedReturns = GPfunctions.Decay_exp(A_trans, expFactorDecay).shift(1)
+    alphasExpectedReturns = GPfunctions.sma(A_trans, optimLookback).shift(1)
+    #alphasExpectedReturns = GPfunctions.sma(A_trans, 3).shift(1)
     alphasExpectedReturns[alphasExpectedReturns < 0] = 0
+    ############################
+    optimizer = True
+    if optimizer:
+        optimtestStart = testStart
 
-    alphaweightsTS = alphasExpectedReturns
-    alphaweightsTS = alphasDF
+        startPortWeights = [0.01 for i in range(len(g_alphas_arr))]
 
-    #alphaweightsTS = pd.DataFrame(np.inner(alphasDFCovInv, alphasExpectedReturns)).transpose()
-    alphaweightsTS = pd.DataFrame(alphaweightsTS)
-    alphaweightsTS = alphaweightsTS.div(alphaweightsTS.sum(axis=1), axis=0)
+        alphaweightsTS = pd.DataFrame(np.tile(startPortWeights, (len(alphasDF.T), 1)))
+        alphaweightsTS.set_index(alphasDF.T.index)
+        combinedAlpha = pd.DataFrame(alphaweightsTS.values * alphasDF.transpose().values, columns=alphaweightsTS.columns,index=A.index)
 
+        for blockStart in range(optimtestStart, len(alphasDF.T)-optimLookback-2): #testStart:optimEnd
+            testStart = testStart + 1
+            optimEnd = testStart + optimLookback
 
-    print('alphaweightsTS: ', alphaweightsTS)
+            subAlphaExpRet = alphasExpectedReturns.iloc[testStart:optimEnd].copy()
+            #BILLIONS REGRESSION N = number of alphas, M = number of observations
+            # Start with a time series of alpha returns
+            bilAlphasDF = alphasDF.T.iloc[testStart:optimEnd].copy()
+            # Calculate the serially demeaned returns
+            bilAlphasDFdemeaned = bilAlphasDF - bilAlphasDF.mean(axis=0)
+            #Calculate sample variances ( std only used )
+            sampleStd = bilAlphasDFdemeaned.std(axis=0)
+            #Calculate the normalized demeaned returns
+            normalizedDemeanedReturns = bilAlphasDFdemeaned.divide(sampleStd)
+            #Keep only the first M ( observations / samples ) columns in normalizedDemeanedReturns
+            Y_is = normalizedDemeanedReturns.iloc[:, :optimLookback]
+            ##########OPTIONAL IN ALGO https://arxiv.org/pdf/1603.05937.pdf
+            # # Cross-sectionally demean ( sum of N - columns )
+            # ######A_is = Y_is - Y_is.mean(axis=0)
+            # A_is =  Y_is.sub(Y_is.mean(axis=1), axis=0)
+            # #Keep only the first M − 1 columns in Λis:
+            # A_is = A_is.iloc[:, :optimLookback-1]
+            ##################################################
 
-    print(alphaweightsTS)
-    alphaweightsTS.to_csv(LOG_DATA_PATH+'AlphaweightsTS.csv')
+            A_is = Y_is
 
-    combinedAlpha = pd.DataFrame(alphaweightsTS.values * alphasDF.values, columns=alphaweightsTS.columns, index=A.index)
-    combinedAlpha.to_csv(LOG_DATA_PATH+'combinedAlpha.csv')
+            # Take the alpha expected returns E and normalize them
+            subAlphaExpRet = subAlphaExpRet.divide(sampleStd)  #.divide(subAlphaExpRet.std())
+            subAlphaExpRet = subAlphaExpRet.fillna(0.0)
+            # Calculate the residuals εei of the unit-weighted regression of expected returns E over A_is
+            reg = linear_model.LinearRegression(fit_intercept=False, n_jobs=2)
+            X_train = A_is
+            Y_train = subAlphaExpRet
+            reg.fit(X_train, Y_train)
+            residuals = reg.predict(X_train) - Y_train
+            #Set the alpha portfolio weights to wi = residuals / std of residuals
+            optimizedWeights = residuals.divide(sampleStd)  #residuals.divide(residuals.std())
+            optimizedWeights = optimizedWeights.div(optimizedWeights.sum(axis=1), axis=0)
+            #TODO : figure out why this is a matrix
+            optimizedWeights = optimizedWeights.tail(1)
+            print("new optimizedWeights: " + str(optimizedWeights))
+            alphaweightsTS.iloc[optimEnd+1] = optimizedWeights
+            ##alphaweightsTS.iloc[optimEnd] = optimizedWeights
+
+        testStart = int(df_close.index.get_loc(testStartDate))
+        #optimEnd = int(df_close.index.get_loc(optimEndDate))
+        optimEnd = testStart + optimLookback
+    #######################################
+    #######################################
+    print('TEST!!!')
 
     sharpe = (combinedAlpha.sum(axis=1).mean() * 252.0) / (combinedAlpha.sum(axis=1).std() * math.sqrt(252))
     print("PCA COMBINE SHARPE:", sharpe)
     sharpe = (combinedAlpha.iloc[testStart:, :].sum(axis=1).mean() * 252.0) / (
                 combinedAlpha.iloc[testStart:, :].sum(axis=1).std() * math.sqrt(252))
+    sharpe = (combinedAlpha.iloc[testStart:, :].sum(axis=1).mean() / combinedAlpha.iloc[testStart:, :].sum(axis=1).std()) * math.sqrt(252)
     print("TEST PCA COMBINE SHARPE:", sharpe)
     returns = (pd.DataFrame(combinedAlpha).sum(axis=1).cumsum()).tail(252).diff().sum() * (252.0 / 252)
     print("returns:", returns)
@@ -503,91 +576,19 @@ def main():
             pass
 
     #NEW NORMALIZATION!!
-    weightedAlpha.replace(0, np.nan, inplace=True)
-    #weightedAlpha = RiskModelFunctions.hedgeGlobal(weightedAlpha)
-    weightedAlpha = RiskModelFunctions.hedgeSubIndustries(industries, weightedAlpha)
-    weightedAlpha.replace(np.nan,0 , inplace=True)
-
-    #weightedAlpha = weightedAlpha * bookSize
-
-    if (portTail > 0):
-        #weightedAlpha = GPfunctions.Tail(weightedAlpha, portTail)
-        weightedAlpha = weightedAlpha * 5.0  # 4
-
-    # X = np.column_stack(
-    #     [GPfunctions.Decay_exp(raw_alphas_dic[key].multiply(alphaweightsTS[key], axis=0).fillna(0.0), expFactorDecay)#.shift(1)
-    #      for key in raw_alphas_dic])
-
-    X = np.column_stack(
-        #[raw_alphas_dic[key].multiply(alphaweightsTS[key].shift(-1), axis=0).fillna(0.0) #.shift(1)
-        [raw_alphas_dic[key].multiply(alphaweightsTS[key], axis=0).fillna(0.0) #.shift(1)
-        #[RiskModelFunctions.hedgeSubIndustries(industries,raw_alphas_dic[key]).multiply(alphaweightsTS[key], axis=0).fillna(0.0)
-        ####[raw_alphas_dic[key].fillna(0.0)  # .shift(1)
-         for key in raw_alphas_dic])
-
-    single_X = {}
-    for key in raw_alphas_dic:
-        single_X[key] = raw_alphas_dic[key].multiply(alphaweightsTS[key], axis=0).fillna(0.0)
-
-    test_multi_index = pd.concat(single_X.values(), keys=single_X.keys())
-
-    lookBack = 20
-
-    y_master = RiskModelFunctions.hedgeSubIndustries(industries, ReturnY())
-
-
-    for i in range(testStart,810-lookBack):  #1350
-    #for i in range(testStart, len(weightedAlpha)-lookBack-3):
-        #reg = linear_model.LinearRegression(fit_intercept=False, n_jobs=2) #n_jobs=-1
-        #reg = linear_model.MultiTaskElasticNetCV()
-        #reg = linear_model.MultiTaskLasso(alpha=0.0020) # n_jobs=-1
-        reg = linear_model.Ridge(alpha=0.001)
-        #reg = linear_model.LinearRegression()
-        print("linreg: ",str(i))
-
-        ###pca_2 = make_pipeline(PCA(n_components=50), linear_model.LinearRegression())
-        #pca_2 = make_pipeline(PCA(n_components=2), linear_model.MultiTaskLasso())
-
-        # Split the data into train and test based on the optimization end date
-        X_train = X[i:i+lookBack,:]
-        X_test = X[i+lookBack+1,:]
-
-        #y_train = y_master.iloc[i:i + lookBack].fillna(0.0).values
-
-##########################
-        for j, k in enumerate(y_master.columns):
-            y_train = y_master.iloc[i:i + lookBack, j].fillna(0.0).values
-            X_by_symbol = test_multi_index[k].unstack(level=0)
-            #pca_2 = make_pipeline(PCA(n_components=20), linear_model.Ridge(alpha=0.001))
-            pca_2 = make_pipeline(linear_model.Ridge(alpha=0.001))
-            pca_2.fit(X_by_symbol.iloc[i:i+lookBack,:], y_train)
-            weightedAlpha.iloc[i + lookBack + 1, j] = pca_2.predict(X_by_symbol.iloc[i+lookBack+1,:].values.reshape(1,-1))
-######################
-
-        #y_train = ReturnY().iloc[i:i+lookBack].fillna(0.0).values
-        #y_train = RiskModelFunctions.hedgeSubIndustries(industries, ReturnY()).iloc[i:i + lookBack].fillna(0.0).values
-
-        ##LOOK AT THIS GOOGLE AI
-        # ###y_train = y_master.iloc[i:i + lookBack].fillna(0.0).values
-        # y_test = RiskModelFunctions.hedgeSubIndustries(industries, ReturnY()).iloc[i+lookBack+1].fillna(0.0).values
-        # #reg.fit(X_train, y_train)
-        # reg.fit(np.append(X_train, X_test.reshape(1, -1), axis=0),np.append(y_train, y_test.reshape(1, -1), axis=0))
-        #
-        # #T = reg.predict(X_test)
-        # ####weightedAlpha.iloc[i + lookBack + 1, :] = pca_2.predict(X_test.reshape(1, -1))
-        # ##weightedAlpha.iloc[i + lookBack + 1, 1] = pca_2.predict(X_test.reshape(1, -1))
-        #
-        # #weightedAlpha.iloc[i + lookBack+1, :] = reg.predict(X_test.reshape(1, -1))
-        # weightedAlpha.iloc[i + lookBack + 1, :] = reg.predict(X_test.reshape(1, -1))
-        # #weightedAlpha.iloc[i + lookBack+1, :] = y_test  # i+lookBack+1 +2
-        test = 1
-
-    weightedAlpha.replace(0, np.nan, inplace=True)
-    ###weightedAlpha = RiskModelFunctions.hedgeGlobal(weightedAlpha)
-    weightedAlpha = RiskModelFunctions.hedgeSubIndustries(industries, weightedAlpha)
-    weightedAlpha.replace(np.nan,0 , inplace=True)
+    if postPortfolioOptimReScaleRiskModel:
+        weightedAlpha.replace(0, np.nan, inplace=True)
+        #weightedAlpha = RiskModelFunctions.hedgeSubIndustries(industries, weightedAlpha)
+        weightedAlpha = RiskModelFunctions.hedgeGlobal( weightedAlpha)
+        weightedAlpha.replace(np.nan,0 , inplace=True)
 
     weightedAlpha = weightedAlpha * bookSize
+
+    if (portTail > 0):
+        weightedAlpha = GPfunctions.Tail(weightedAlpha, portTail * bookSize)
+        #weightedAlpha = weightedAlpha * 5.0  # 4
+
+    print("weightedAlpha.shape", weightedAlpha.shape)
 
     weightedAlpha.to_csv('C:\Equities\WA.csv')
 
@@ -609,17 +610,16 @@ def main():
     combinedAlpha2.replace(np.nan, 0, inplace=True)
 
     weightedAlpha.to_csv(MODEL_DATA_PATH + MODEL_NAME)
-    corr = pd.DataFrame(weightedAlpha.iloc[testStart:, :].values).corrwith(pd.DataFrame(ReturnY().iloc[testStart:, :].values)).mean()
-    mse = np.nanmean(np.square(np.subtract(np.array(weightedAlpha.iloc[testStart:, :].values) / bookSize, np.array(ReturnY().iloc[testStart:, :].values))))
-
+    corr = pd.DataFrame(weightedAlpha.iloc[optimEnd:, :].values).corrwith(pd.DataFrame(ReturnY().iloc[optimEnd:, :].values)).mean()
+    mse = np.nanmean(np.square(np.subtract(np.array(weightedAlpha.iloc[optimEnd:, :].values) / bookSize, np.array(ReturnY().iloc[optimEnd:, :].values))))
 
     sharpe = (combinedAlpha2.sum(axis=1).mean() / combinedAlpha2.sum(axis=1).std()) * math.sqrt(252.0)
     print("FULL NO FEES SHARPE:", sharpe)
-    sharpe = (combinedAlpha2.iloc[testStart:, :].sum(axis=1).mean() /
-                combinedAlpha2.iloc[testStart:, :].sum(axis=1).std()) * math.sqrt(252)
+    sharpe = (combinedAlpha2.iloc[optimEnd:, :].sum(axis=1).mean() /
+                combinedAlpha2.iloc[optimEnd:, :].sum(axis=1).std()) * math.sqrt(252)
     print("TEST NO FEES SHARPE:", sharpe)
-    sharpe = (combinedAlpha2.iloc[:testStart, :].sum(axis=1).mean() /
-                combinedAlpha2.iloc[:testStart, :].sum(axis=1).std()) * math.sqrt(252)
+    sharpe = (combinedAlpha2.iloc[:optimEnd, :].sum(axis=1).mean() /
+                combinedAlpha2.iloc[:optimEnd, :].sum(axis=1).std()) * math.sqrt(252)
     print("TRAIN NO FEES SHARPE:", sharpe)
     # annCorrection = (1440 / timeRateMin) * 252
     # annSharpe = (combinedAlpha2.iloc[optimEnd:].sum(axis=1).mean() * annCorrection) / (
@@ -639,9 +639,9 @@ def main():
 
     sharpe = (feeCombinedAlpha.mean() / feeCombinedAlpha.std()) * math.sqrt(252.0)
     print("FEES FULL SHARPE:", sharpe)
-    sharpe = (feeCombinedAlpha.iloc[:testStart].mean() / feeCombinedAlpha.iloc[:testStart].std()) * math.sqrt(252.0)
+    sharpe = (feeCombinedAlpha.iloc[:optimEnd].mean() / feeCombinedAlpha.iloc[:optimEnd].std()) * math.sqrt(252.0)
     print("FEES TRAIN SHARPE:", sharpe)
-    sharpe = (feeCombinedAlpha.iloc[testStart:].mean() / feeCombinedAlpha.iloc[testStart:].std()) * math.sqrt(252.0)
+    sharpe = (feeCombinedAlpha.iloc[optimEnd:].mean() / feeCombinedAlpha.iloc[optimEnd:].std()) * math.sqrt(252.0)
     print("FEES TEST SHARPE:", sharpe)
 
     # annFeeSharpe = (feeCombinedAlpha.iloc[optimEnd:].mean() * annCorrection) / (
@@ -649,7 +649,7 @@ def main():
     # print("ANNUALIZED FEES TEST SHARPE:", annFeeSharpe)
 
     #returns = (pd.DataFrame(feeCombinedAlpha).cumsum()).tail(90).diff().sum() * ((1400 / timeRateMin * 365 * 24) / 365.0)
-    returns = ((feeCombinedAlpha.iloc[testStart:].cumsum()).diff().sum() / len(feeCombinedAlpha.iloc[testStart:])) / bookSize * 252.0
+    returns = ((feeCombinedAlpha.iloc[optimEnd:].cumsum()).diff().sum() / len(feeCombinedAlpha.iloc[optimEnd:])) / bookSize * 252.0
 
     print("FEES returns:", returns)
     print("finalTurnover: ", finalTurnover)
@@ -657,20 +657,28 @@ def main():
     print("corr with: ", corr)
     print("MSE with: ", mse)
     print("mean daily returns: ", returns / 252.0)
-    combinedAlpha2.sum(axis=1).to_csv(LOG_DATA_PATH+'combinedAlpha2.csv')
-    print("linearDecay: ", linearDecay)
-    print("expDecay: ", expDecay)
+    #print("linearDecay: ", linearDecay)
+    #print("expDecay: ", expDecay)
     print("riskModelNumFactors: ", riskModelNumFactors)
+    print("postPortfolioOptimReScaleRiskModel", postPortfolioOptimReScaleRiskModel)
     print("topN: ", topN)
     print("universeBlocking: ", universeBlocking)
-    # print("optimStepSize: ", optimStepSize)
-    # print("optimLookback: ", optimLookback)
-    # print("maxiter: ", maxiter)
     print("maxStockWeight: ", maxStockWeight)
-    print("feesBSP: ", feesBSP)
+    print("portTail: ", portTail)
     print("expFactorDecay: ", expFactorDecay)
-    print("lookBack",lookBack)
-
+    print("optimLookback: ", optimLookback)
+    print("riskModel: ", riskModelType)
+    print("Test t-statistic: ", sharpe * math.sqrt(len(feeCombinedAlpha.iloc[optimEnd:])))
+    #print("TEST ", len(feeCombinedAlpha.iloc[optimEnd:]))
+    print("PSR of OOS returns > 0 Sharpe: ",
+          AlphaFitnessFunctions.probabalisticSharpeRatio(feeCombinedAlpha.iloc[optimEnd:], 0))
+    print("PSR of OOS returns > 1 Sharpe: ",
+          AlphaFitnessFunctions.probabalisticSharpeRatio(feeCombinedAlpha.iloc[optimEnd:], 1))
+    print("PSR of OOS returns > 2 Sharpe: ",
+          AlphaFitnessFunctions.probabalisticSharpeRatio(feeCombinedAlpha.iloc[optimEnd:], 2))
+    print("PSR of OOS returns > 3 Sharpe: ",
+          AlphaFitnessFunctions.probabalisticSharpeRatio(feeCombinedAlpha.iloc[optimEnd:], 3))
+    print("number of Alphas: ", len(alphasDF) )
 
     plt.show()
 

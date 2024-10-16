@@ -17,11 +17,11 @@ class RiskModelFunctions:
         principalComponents = pca.fit(ret)
 
         eigVectors = pd.DataFrame(principalComponents.components_)
-        #adjEigVectors = pd.DataFrame((pca.components_.T * pca.singular_values_).T)
+        adjEigVectors = pd.DataFrame((pca.components_.T * pca.singular_values_).T)
 
         eigVectors.columns = out.columns
-        # adjEigVectors.columns = out.columns
-        # adjEigVectors.to_csv('C:\\Crypto\\QuoteEigVectors.csv')
+        adjEigVectors.columns = out.columns
+        adjEigVectors.to_csv('C:\\Crypto\\QuoteEigVectors.csv')
 
         # factorMap = np.linalg.lstsq(eigVectors.transpose(), out.transpose(), rcond=None)[0]
         # outPostRisk = np.inner(factorMap.transpose(), eigVectors.transpose())

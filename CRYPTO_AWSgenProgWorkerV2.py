@@ -24,9 +24,9 @@ from deap import tools
 from deap import gp
 
 ##############################
-universe = "Russell2000"
-#root = os.path.join("C:\Equities", universe)
-root = "C:\Equities\AV_Russell2000_DATA"
+universe = "okxFutures1m" #"binanceMargin4h"
+root = os.path.join("C:\Crypto", universe)
+#root = r"C:\Crypto\BinBTC1d_NEW1T"
 
 alphas_arr = []
 histData = {}
@@ -36,12 +36,12 @@ GPfunctionsList = []
 market_data_inputs = []
 psrCutoff = 0.99 #0.99
 corrCutoff = 0.7
-fitnessCutoff = 0.5
-turnoverMax = 99.3 #0.05
+fitnessCutoff = 1.5
+turnoverMax = 0.9 #0.05
 turnoverMin = 0.01
 addToDB = True
 bookSize = 20000000.0
-maxStockWeight = 0.01 #0.01
+maxStockWeight = 1.05 #0.01
 feesBSP = 0.000  # 0.0010
 hedgeVol = False
 hedgeIndustry = False
@@ -49,10 +49,10 @@ rankHedge = False
 funcLookbackLength = 40 #90
 linearDecay = 0
 topN = 3000
-strategyName = 'DAY_STRATEGY_1'
+strategyName = 'CRYPTO_STRATEGY_1'
 strategyId = -1
-runName = 'DAY_STRATEGY_1_A' #EQUITIES_YAHOO_SUB_2
-targetDelay = -1
+runName = 'FUT_CRYPTO_STRATEGY_1_A' #EQUITIES_YAHOO_SUB_2
+targetDelay = 0
 # bottomN = 0
 trialCounter = 0
 maxTreeDepth = 6 #6 #4
@@ -60,12 +60,12 @@ universeBlocking = False
 riskModelNumFactors = 5
 minPrice = -1.0 #2.0
 maxPrice = 10000000.0 # 10000.0
-gp_population = 6000
-riskModelType = Constants.SUB_INDUSTRY_RISK_MODEL
+gp_population = 5000
+riskModelType = Constants.PCA_RISK_MODEL
 useGammaTransactionModel = False
 
-trunctateEndDate =  '1/1/2023' #'1/1/2021'
-trunctateBeginDate = '7/1/2000'
+trunctateEndDate =  9999999999999 #1636747200000 #1656561600000
+trunctateBeginDate = 1 #
 
 print("connecting to DB")
 connection = pymysql.connect(host='alphasdatabase1.cysvmgsjf7ox.us-east-1.rds.amazonaws.com',#'localhost',
@@ -75,17 +75,16 @@ connection = pymysql.connect(host='alphasdatabase1.cysvmgsjf7ox.us-east-1.rds.am
                              charset='utf8mb4',
                              cursorclass=pymysql.cursors.DictCursor)
 
+start = time.time()
 for path, subdirs, files in os.walk(root):
+    print('FILES',files)
     for name in files:
-        print(name.split(".")[0])
-        histData[name.split(".")[0]] = pd.read_csv(os.path.join(root, name),
-                                                   index_col='date',
-                                                   parse_dates=True,
-                                                   # skiprows=1,
-                                                   names=['date', 'dum', 'open', 'high', 'low', 'close', 'volume'],
-                                                   usecols=['date', 'dum', 'open', 'high', 'low', 'close', 'volume'],
-                                                   dtype={'dum': np.int64, 'open': np.float64, 'high': np.float64,
-                                                          'low': np.float64, 'close': np.float64, 'volume': np.int64})
+        print (name)
+        histData[name] = pd.read_csv(os.path.join(root,name), index_col='time',
+                                     parse_dates=False,
+                                     names=['open', 'high', 'low', 'close', 'time', 'volume', 'volumeDollars'])
+        print(histData[name].dtypes)
+        print(histData[name])
 
 histMultiIndex = pd.concat(histData.values(), keys=histData.keys())
 
@@ -101,11 +100,11 @@ df_low = histMultiIndex["low"].unstack(level=0)
 df_close = histMultiIndex["close"].unstack(level=0)
 df_volume = histMultiIndex["volume"].unstack(level=0)
 
-df_open = df_open[df_open.columns.intersection(industries.index.tolist())]
-df_high = df_high[df_high.columns.intersection(industries.index.tolist())]
-df_low = df_low[df_low.columns.intersection(industries.index.tolist())]
-df_close = df_close[df_close.columns.intersection(industries.index.tolist())]
-df_volume = df_volume[df_volume.columns.intersection(industries.index.tolist())]
+# df_open = df_open[df_open.columns.intersection(industries.index.tolist())]
+# df_high = df_high[df_high.columns.intersection(industries.index.tolist())]
+# df_low = df_low[df_low.columns.intersection(industries.index.tolist())]
+# df_close = df_close[df_close.columns.intersection(industries.index.tolist())]
+# df_volume = df_volume[df_volume.columns.intersection(industries.index.tolist())]
 
 df_open_full = df_open.copy()
 df_close_full = df_close.copy()

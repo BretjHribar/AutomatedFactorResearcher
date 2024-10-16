@@ -33,7 +33,9 @@ import Constants
 from sklearn import linear_model
 
 ##############################
-root = "C:\Equities\YFINANCE"
+#root = "C:\Equities\YFINANCE3" #AOdataSctor15m
+#root = "C:\Equities\YAOdataSctor15m"
+root = "C:\Equities\AV_Russell2000_DATA"
 timeRateMin = 1440
 
 alphas_arr = []
@@ -47,26 +49,26 @@ rankHedge = False
 funcLookbackLength = 90
 linearDecay = 0 #7
 expDecay = 0.0
-topN = 2000 ##100
-targetDelay = 1
+topN = 4000 ##100
+targetDelay = -1
 targetFuture = 0
 #bottomN = 5
 portTail = 0.00 #0.0015##0.00000001 #0.0015#0.001 #0.0015 0.0025
 universeBlocking = False
 riskModelType = Constants.SUB_INDUSTRY_RISK_MODEL #Constants.PCA_RISK_MODEL #"TEST_FACTOR"
 riskModelNumFactors = 150
-pcaMA = 0.9
-runName = 'TEST_STRATEGY_11_A' #'1000_LOW_CORR' #'EQUITIES_YAHOO_SUB_2' #'EQUITIES_YAHOO_SUB_2' CRYPTO_SMALL5 CRYPTO_SMALL4
+pcaMA = 0.0
+runName = 'DAY_STRATEGY_1_A' #'1000_LOW_CORR' #'EQUITIES_YAHOO_SUB_2' #'EQUITIES_YAHOO_SUB_2' CRYPTO_SMALL5 CRYPTO_SMALL4
 g_alphas_arr = []
 g_raw_alphas_dic = {}
-testStartDate = "2021-01-04"
-optimEndDate = "2022-01-03"
+testStartDate = "2023-01-04"
+optimEndDate = "2024-05-15"
 minPrice = 0.0 #2.0
 maxPrice = 10000000.0 # 10000.0
 useLambdaTransactionModel = False
-expFactorDecay = 0.1
+expFactorDecay = 0.0
 volumeMeanRankingWindow = 252
-postPortfolioOptimReScaleRiskModel = False
+postPortfolioOptimReScaleRiskModel = True
 
 LOG_DATA_PATH = 'logDataFiles/'
 MODEL_DATA_PATH = 'ModelOutputs/'
@@ -87,31 +89,31 @@ connection = pymysql.connect(host='alphasdatabase1.cysvmgsjf7ox.us-east-1.rds.am
                              charset='utf8mb4',
                              cursorclass=pymysql.cursors.DictCursor)
 
-# for path, subdirs, files in os.walk(root):
-#     for name in files:
-#         print(name.split(".")[0])
-#         histData[name.split(".")[0]] = pd.read_csv(os.path.join(root, name),
-#                                                    index_col='date',
-#                                                    parse_dates=True,
-#                                                    # skiprows=1,
-#                                                    names=['date', 'dum', 'open', 'high', 'low', 'close', 'volume'],
-#                                                    usecols=['date', 'dum', 'open', 'high', 'low', 'close', 'volume'],
-#                                                    dtype={'dum': np.int64, 'open': np.float64, 'high': np.float64,
-#                                                           'low': np.float64, 'close': np.float64, 'volume': np.int64})
-#         numEquities = numEquities + 1
-#
-# histMultiIndex = pd.concat(histData.values(), keys=histData.keys())
+for path, subdirs, files in os.walk(root):
+    for name in files:
+        print(name.split(".")[0])
+        histData[name.split(".")[0]] = pd.read_csv(os.path.join(root, name),
+                                                   index_col='date',
+                                                   parse_dates=True,
+                                                   # skiprows=1,
+                                                   names=['date', 'dum', 'open', 'high', 'low', 'close', 'volume'],
+                                                   usecols=['date', 'dum', 'open', 'high', 'low', 'close', 'volume'],
+                                                   dtype={'dum': np.int64, 'open': np.float64, 'high': np.float64,
+                                                          'low': np.float64, 'close': np.float64, 'volume': np.int64})
+        numEquities = numEquities + 1
+
+histMultiIndex = pd.concat(histData.values(), keys=histData.keys())
 #histMultiIndex.to_parquet('EquitiesDataFiles/' + "E5000.parquet")
 #histMultiIndex = pd.read_parquet("s3://brethribar-equitiesdata-1/E1000.parquet")
 
-histMultiIndex = pd.read_parquet('EquitiesDataFiles/' + "E1000.parquet")
+#histMultiIndex = pd.read_parquet('EquitiesDataFiles/' + "E1000.parquet")
 
 industries = pd.read_csv('C:\Equities\symSubIndustries.csv', index_col=0)
 industries = industries[industries['INDUSTRY'] != '1c3d7001-dc68-4c36-b148-483741091c86'] # BIOTECH REMOVAL
 industries = industries[industries['INDUSTRY'] != 'd6c806bb-aaaf-4bbc-9737-3575d53ca96f'] # Finance-Mortgage REIT
 industries = industries[industries['INDUSTRY'] != 'ed543f01-e605-4a2a-a386-ce0c09dba19e'] # Finance-Property REIT
 
-print(industries)
+#print(industries)
 
 df_open = histMultiIndex["open"].unstack(level=0)
 df_high = histMultiIndex["high"].unstack(level=0)
@@ -119,11 +121,11 @@ df_low = histMultiIndex["low"].unstack(level=0)
 df_close = histMultiIndex["close"].unstack(level=0)
 df_volume = histMultiIndex["volume"].unstack(level=0)
 
-df_open = df_open[df_open.columns.intersection(industries.index.tolist())]
-df_high = df_high[df_high.columns.intersection(industries.index.tolist())]
-df_low = df_low[df_low.columns.intersection(industries.index.tolist())]
-df_close = df_close[df_close.columns.intersection(industries.index.tolist())]
-df_volume = df_volume[df_volume.columns.intersection(industries.index.tolist())]
+# df_open = df_open[df_open.columns.intersection(industries.index.tolist())]
+# df_high = df_high[df_high.columns.intersection(industries.index.tolist())]
+# df_low = df_low[df_low.columns.intersection(industries.index.tolist())]
+# df_close = df_close[df_close.columns.intersection(industries.index.tolist())]
+# df_volume = df_volume[df_volume.columns.intersection(industries.index.tolist())]
 
 #trunctateEndDate = '1614801600000'
 # trunctateEndDate = '999999999999999'#'5/1/2019' #'3/09/2018' #'7/18/2018' #'4/17/2019'
@@ -234,6 +236,9 @@ def evalForGraphReturns(individual):
     elif riskModelType == Constants.EXP_PCA_RISK_MODEL:
         out = RiskModelFunctions.pcaMovingAvg(returns.iloc[:testStart, :], out, riskModelNumFactors, pcaMA)
         out_normalzed = RiskModelFunctions.hedgeGlobal(out)
+    elif riskModelType == Constants.FLIP_MODE_MODEL:
+        out = RiskModelFunctions.flipMode(out)
+        out_normalzed = RiskModelFunctions.hedgeGlobal(out)
     ##########################
     F_cov, B = RiskModelFunctions.getPCAfactorCovMatrix(returns)
     F_cov.to_parquet(LOG_DATA_PATH + 'F_cov.parquet')
@@ -314,16 +319,12 @@ toolbox.register("compile", gp.compile, pset=pset)
 def GetAlphasFromDB(numalphas):
     try:
         with connection.cursor() as cursor:
-            #  `alphasid` <= 3487653 AND
-            # sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `DSRprob` IN ('TEST') ORDER BY RAND() LIMIT %s" 3484460
-            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` in ('3490869') ORDER BY RAND() LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('TEST_STRATEGY_3_B','TEST_STRATEGY_3_A' ) LIMIT %s"
-            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` > 1 AND `scriptversion` IN ('" + runName + "') LIMIT %s"
-            #sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE `riskModelType` = 'subIndustry' LIMIT %s"
-            sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
+            sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` > 1 AND `scriptversion` IN ('" + runName + "') LIMIT %s"
+            ##sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE `riskModelType` = 'subIndustry' AND `margin` > 5 LIMIT %s"
+            #sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
             #sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` < 3491324 AND `PSR` > 0.00 AND `riskModelType` = 'subIndustry' LIMIT %s"
-            ###sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` <= 3491343 AND `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
-            #sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE  `turnover` < 1.10 AND `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
+            ##sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE  `turnover` < 0.5 AND `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `strategy_id` IN (4,5) LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 0  AND `turnover` < 0.5 AND `scriptversion` IN ('" + runName + "') ORDER BY RAND() LIMIT %s"
@@ -449,7 +450,7 @@ def calcPortReturnsWithFees( weightArray ):
 
 def main():
     global testStart, optimEnd
-    pd.DataFrame(ReturnY()).fillna(0).to_csv(LOG_DATA_PATH+'returnY.csv')
+    pd.DataFrame(ReturnY()).fillna(0).to_csv(LOG_DATA_PATH+'returnY2.csv')
     numberOfAlphas = 1000
     alphas = GetAlphasFromDB(numberOfAlphas)
 
@@ -481,6 +482,7 @@ def main():
     A_trans = alphasDF.transpose().fillna(0)
     #alphasExpectedReturns = GPfunctions.Decay_exp(A_trans, expFactorDecay).shift(1)
     alphasExpectedReturns = GPfunctions.sma(A_trans, optimLookback).shift(1)
+    #alphasExpectedReturns = GPfunctions.sma(A_trans, 3).shift(1)
     alphasExpectedReturns[alphasExpectedReturns < 0] = 0
     ############################
     optimizer = True
@@ -535,6 +537,7 @@ def main():
             optimizedWeights = optimizedWeights.tail(1)
             print("new optimizedWeights: " + str(optimizedWeights))
             alphaweightsTS.iloc[optimEnd+1] = optimizedWeights
+            ##alphaweightsTS.iloc[optimEnd] = optimizedWeights
 
         testStart = int(df_close.index.get_loc(testStartDate))
         #optimEnd = int(df_close.index.get_loc(optimEndDate))
@@ -543,12 +546,11 @@ def main():
     #######################################
     print('TEST!!!')
 
-    combinedAlpha.to_csv(LOG_DATA_PATH+'combinedAlpha.csv')
-
     sharpe = (combinedAlpha.sum(axis=1).mean() * 252.0) / (combinedAlpha.sum(axis=1).std() * math.sqrt(252))
     print("PCA COMBINE SHARPE:", sharpe)
     sharpe = (combinedAlpha.iloc[testStart:, :].sum(axis=1).mean() * 252.0) / (
                 combinedAlpha.iloc[testStart:, :].sum(axis=1).std() * math.sqrt(252))
+    sharpe = (combinedAlpha.iloc[testStart:, :].sum(axis=1).mean() / combinedAlpha.iloc[testStart:, :].sum(axis=1).std()) * math.sqrt(252)
     print("TEST PCA COMBINE SHARPE:", sharpe)
     returns = (pd.DataFrame(combinedAlpha).sum(axis=1).cumsum()).tail(252).diff().sum() * (252.0 / 252)
     print("returns:", returns)
@@ -576,14 +578,14 @@ def main():
     #NEW NORMALIZATION!!
     if postPortfolioOptimReScaleRiskModel:
         weightedAlpha.replace(0, np.nan, inplace=True)
-        weightedAlpha = RiskModelFunctions.hedgeSubIndustries(industries, weightedAlpha)
-        #weightedAlpha = RiskModelFunctions.hedgeGlobal( weightedAlpha)
+        #weightedAlpha = RiskModelFunctions.hedgeSubIndustries(industries, weightedAlpha)
+        weightedAlpha = RiskModelFunctions.hedgeGlobal( weightedAlpha)
         weightedAlpha.replace(np.nan,0 , inplace=True)
 
     weightedAlpha = weightedAlpha * bookSize
 
     if (portTail > 0):
-        weightedAlpha = GPfunctions.Tail(weightedAlpha, portTail)
+        weightedAlpha = GPfunctions.Tail(weightedAlpha, portTail * bookSize)
         #weightedAlpha = weightedAlpha * 5.0  # 4
 
     print("weightedAlpha.shape", weightedAlpha.shape)
@@ -662,7 +664,7 @@ def main():
     print("topN: ", topN)
     print("universeBlocking: ", universeBlocking)
     print("maxStockWeight: ", maxStockWeight)
-    print("feesBSP: ", feesBSP)
+    print("portTail: ", portTail)
     print("expFactorDecay: ", expFactorDecay)
     print("optimLookback: ", optimLookback)
     print("riskModel: ", riskModelType)

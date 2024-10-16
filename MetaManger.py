@@ -20,14 +20,15 @@ LOG_DATA_PATH = 'logDataFiles/'
 g_alphas_arr = []
 
 bookSize = 20000000.0
-feesBSP = 0.0000
+feesBSP = 0.0005
+feesAdj = 1e7
 annCorrection = 252
-maxStockWeight = 0.005
+maxStockWeight = 0.01
 
 returnY = pd.read_csv(LOG_DATA_PATH+"returnY.csv",index_col='date', parse_dates=True)
 
 LambdaMatrix = pd.read_parquet('EquitiesDataFiles/' + "Lambda1000.parquet")
-LambdaMatrix[:] = 0
+#LambdaMatrix[:] = 0
 B = pd.read_parquet('logDataFiles/' + "B.parquet")
 F_cov = pd.read_parquet('logDataFiles/' + "F_cov.parquet")
 BT = B.transpose()
@@ -52,10 +53,20 @@ def get_obj_func(h0, risk_aversion, alpha_vec, Q, Lambda):
     def obj_func(h):
         #f = 0
         #f = 0.5 * risk_aversion * np.sum(np.matmul(Q, h) ** 2)
-        #f = np.dot(h, alpha_vec)
-        f = np.sum(h - alpha_vec)
+        # f = 0
+        # f -= np.dot(h , alpha_vec)
+        # f += np.sum((h - h0) * feesBSP)
+        #f = np.sum(f ** 2)
+
+        f = 0.0
+        costs = (h - h0) * feesBSP
+        errors = h - alpha_vec
+        f = np.sum(errors ** 2)
+        #f += np.sum(costs) * 5e5
+        f += np.dot((h - h0) ** 2, Lambda) * feesAdj
+
         ########f += np.dot((h - h0) ** 2, Lambda)
-        f += np.nansum(((h - h0) ** 2) * Lambda)
+        ##f += np.nansum(((h - h0) ** 2) * Lambda)
         return f
     return obj_func
 ############################################################################
@@ -69,21 +80,26 @@ def get_grad_func(h0, risk_aversion, Q, QT, alpha_vec, Lambda):
     return grad_func
 ############################################################################
 def get_h_star(alpha_vec, h0, Q, QT, Lambda):
-    # obj_func = get_obj_func(h0, alpha_vec, Lambda)
-    # grad_func = get_grad_func(h0, alpha_vec, Lambda)
+    #obj_func = get_obj_func(h0, alpha_vec, Lambda)
+    #grad_func = get_grad_func(h0, alpha_vec, Lambda)
     obj_func = get_obj_func(h0, risk_aversion, alpha_vec, Q, Lambda)
     grad_func = get_grad_func(h0, risk_aversion, Q, QT, alpha_vec, Lambda)
 
-    weightBounds = ((-maxStockWeight * bookSize, maxStockWeight * bookSize) for i in range(alpha_vec.size))
+    #weightBounds = ((-maxStockWeight * bookSize, maxStockWeight * bookSize) for i in range(alpha_vec.size))
     weightBounds_lbfgs = [(-maxStockWeight * bookSize, maxStockWeight * bookSize) for i in range(alpha_vec.size)]
+    #weightBounds_lbfgs = [(-maxStockWeight, maxStockWeight) for i in range(alpha_vec.size)]
 
     #optimizer_result = scipy.optimize.fmin_l_bfgs_b(obj_func, h0, fprime=grad_func)
+
+    #optimizer_result = scipy.optimize.fmin_l_bfgs_b(obj_func, h0, approx_grad=True)
+    optimizer_result = scipy.optimize.fmin_l_bfgs_b(obj_func, h0, approx_grad=True, bounds = weightBounds_lbfgs)
+
     #optimizer_result = minimize(obj_func, h0, bounds=weightBounds, method='Nelder-Mead',options={'maxiter':200})
-    ####optimizer_result = minimize(obj_func, h0, bounds=weightBounds, method='Nelder-Mead', options={'maxiter': 200})
+    #optimizer_result = minimize(obj_func, h0, bounds=weightBounds, method='Nelder-Mead', options={'maxiter': 1000})
 
     #optimizer_result = minimize(obj_func, h0, method='Nelder-Mead', options={'maxiter': 10})
     #optimizer_result = minimize(obj_func, h0, method='Nelder-Mead')
-    optimizer_result = scipy.optimize.fmin_l_bfgs_b(obj_func, h0,grad_func, bounds=weightBounds_lbfgs)
+    ###optimizer_result = scipy.optimize.fmin_l_bfgs_b(obj_func, h0,grad_func, bounds=weightBounds_lbfgs)
 
     #return optimizer_result.x
     return optimizer_result[0]
@@ -105,10 +121,10 @@ def main():
         NANs = g_alphas_arr[counter].isna().sum().sum()
         print("NANs: ", NANs)
         print("Percent NANs: ", NANs / g_alphas_arr[counter].size)
-        aWeightsDF = alphaweightsTS[[counter]]  # .= .reindex(raw_alphas_dic[counter].index)
+        #aWeightsDF = alphaweightsTS[[counter]]  # .= .reindex(raw_alphas_dic[counter].index)
         #aWeightsDF.index = g_alphas_arr[counter].index
         if counter == 0:
-            weightedAlpha = g_alphas_arr[counter].multiply(1, axis=0).fillna(0.0)
+            weightedAlpha = g_alphas_arr[counter].multiply(5, axis=0).fillna(0.0) #1
         else:
             weightedAlpha = weightedAlpha.add(g_alphas_arr[counter].multiply(1, axis=0).fillna(0.0))
             pass
@@ -174,6 +190,8 @@ def main():
     print("ANNUALIZED FEES TEST SHARPE:", annFeeSharpe)
     #((pd.DataFrame(combinedAlpha2).sum(axis=1) - (turnoverAdj * feesBSP)).cumsum()).plot()
     print("feesBSP: ",feesBSP)
+    print("feesAdj: ", feesAdj)
+
     TEST = 1
     plt.show()
 

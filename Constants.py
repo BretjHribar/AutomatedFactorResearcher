@@ -72,6 +72,6 @@ MASTER_GPFUNCTIONS_LIST = [ "ts_zscore",
                             "rank",
                             "Abs",
                             "Decay_lin",
-                            "Inverse",
+                            #"Inverse",
                             "correlation",
                             "covariance" ]
