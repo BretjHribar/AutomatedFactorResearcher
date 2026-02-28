@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+*.whl
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Data files
+*.parquet
+*.duckdb
+*.db
+
+# Environment variables
+.env
+.env.local
+
+# Model outputs
+ModelOutputs/
+
+# Cache and data directories
+**/fmp_cache/
+**/data/cache/
+logDataFiles/
+EquitiesDataFiles/
+
+# Gemini
+.gemini/
