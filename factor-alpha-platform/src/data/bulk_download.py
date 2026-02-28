@@ -414,7 +414,12 @@ def download_all_fundamentals(symbols: list[str]):
 
 
 # ===========================================================================
-# Step 5: Download SIC codes from SEC EDGAR + Build Classification Map
+# Step 5: Download SIC codes from SEC EDGAR (Legacy Fallback)
+#
+# NOTE: Production classifications use GICS codes built by
+# build_gics_classifications.py, which maps FMP sector/industry names to
+# official 8-digit GICS sub-industry codes. The SIC-based code below is
+# retained as a fallback for tickers where GICS mapping is unavailable.
 # ===========================================================================
 
 # SIC Division Table: 2-digit SIC -> Sector name
@@ -551,15 +556,17 @@ def build_classification_map(
     sic_codes: dict[str, dict] | None = None,
 ) -> dict[str, dict]:
     """
-    Build classification hierarchy for neutralization.
+    Build classification hierarchy for neutralization (LEGACY SIC fallback).
 
-    Uses SIC codes from SEC EDGAR (NAICS-equivalent) when available,
-    falls back to FMP sector/industry as a secondary source.
+    NOTE: For production use, run build_gics_classifications.py instead,
+    which produces GICS-based classifications:
+      - sector: 2-digit GICS sector code (e.g., "45" = Info Tech)
+      - industry_group: 4-digit GICS group (e.g., "4520")
+      - industry: 6-digit GICS industry (e.g., "452030")
+      - subindustry: 8-digit GICS sub-industry (e.g., "45203010")
 
-    Hierarchy:
-    - sector: 2-digit SIC division (e.g., "Manufacturing", "Services")
-    - industry: 3-digit SIC group (e.g., "357", "737")
-    - subindustry: 4-digit SIC code (e.g., "3571", "7372")
+    This SIC-based fallback uses SEC EDGAR SIC codes when available,
+    falling back to FMP sector/industry as a secondary source.
     """
     classifications = {}
     sector_counts = {}
@@ -602,10 +609,10 @@ def build_classification_map(
     with open(map_path, "w") as f:
         json.dump(classifications, f, indent=2)
 
-    logger.info(f"Classifications: {len(classifications)} symbols")
+    logger.info(f"Classifications (SIC fallback): {len(classifications)} symbols")
     logger.info(f"  {len(sector_counts)} sectors, "
-                f"{len(industry_counts)} industries (3-digit SIC), "
-                f"{len(subindustry_counts)} subindustries (4-digit SIC)")
+                f"{len(industry_counts)} industries, "
+                f"{len(subindustry_counts)} subindustries")
 
     # Print sector breakdown
     for sec in sorted(sector_counts, key=sector_counts.get, reverse=True):
