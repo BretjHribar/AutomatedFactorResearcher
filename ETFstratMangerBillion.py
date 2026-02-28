@@ -34,14 +34,13 @@ from sklearn import linear_model
 
 ##############################
 #root = "C:\Equities\YFINANCE3" #AOdataSctor15m
-#root = "C:\Equities\YAOdataSctor15m"
-root = "C:\Equities\AV_Russell2000_DATA"
+root = "C:\Equities\sector15m"
 timeRateMin = 1440
 
 alphas_arr = []
 histData = {}
 numEquities = 0
-bookSize = 100_000.0 #100000000.0 #1000000000
+bookSize = 20000000.0 #100000000.0 #1000000000
 maxStockWeight = 0.01
 feesBSP = 0.0000 #0.0020
 hedgeVol = False
@@ -50,27 +49,25 @@ funcLookbackLength = 90
 linearDecay = 0 #7
 expDecay = 0.0
 topN = 4000 ##100
-targetDelay = -1
+targetDelay = 1
 targetFuture = 0
 #bottomN = 5
 portTail = 0.00 #0.0015##0.00000001 #0.0015#0.001 #0.0015 0.0025
 universeBlocking = False
 riskModelType = Constants.GLOBAL_RISK_MODEL #Constants.PCA_RISK_MODEL #"TEST_FACTOR"
-riskModelNumFactors = 2
-pcaMA = 0.0
-runName = 'DAY_STRATEGY_1_A' #'1000_LOW_CORR' #'EQUITIES_YAHOO_SUB_2' #'EQUITIES_YAHOO_SUB_2' CRYPTO_SMALL5 CRYPTO_SMALL4
+riskModelNumFactors = 150
+pcaMA = 0.9
+runName = 'TEST_STRATEGY_11_A' #'1000_LOW_CORR' #'EQUITIES_YAHOO_SUB_2' #'EQUITIES_YAHOO_SUB_2' CRYPTO_SMALL5 CRYPTO_SMALL4
 g_alphas_arr = []
 g_raw_alphas_dic = {}
-testStartDate = "2024-05-13" #"2023-01-04"
-optimEndDate = "2024-05-15"
+testStartDate = "2021-01-04"
+optimEndDate = "2022-01-03"
 minPrice = 0.0 #2.0
 maxPrice = 10000000.0 # 10000.0
 useLambdaTransactionModel = False
-expFactorDecay = 0.0
+expFactorDecay = 0.1
 volumeMeanRankingWindow = 252
-postPortfolioOptimReScaleRiskModel = True
-use_top_bottom_100 = True
-num_long_short = 3
+postPortfolioOptimReScaleRiskModel = False
 
 LOG_DATA_PATH = 'logDataFiles/'
 MODEL_DATA_PATH = 'ModelOutputs/'
@@ -108,14 +105,14 @@ histMultiIndex = pd.concat(histData.values(), keys=histData.keys())
 #histMultiIndex.to_parquet('EquitiesDataFiles/' + "E5000.parquet")
 #histMultiIndex = pd.read_parquet("s3://brethribar-equitiesdata-1/E1000.parquet")
 
-#histMultiIndex = pd.read_parquet('EquitiesDataFiles/' + "E1000.parquet")
+####histMultiIndex = pd.read_parquet('EquitiesDataFiles/' + "E1000.parquet")
 
 industries = pd.read_csv('C:\Equities\symSubIndustries.csv', index_col=0)
 industries = industries[industries['INDUSTRY'] != '1c3d7001-dc68-4c36-b148-483741091c86'] # BIOTECH REMOVAL
 industries = industries[industries['INDUSTRY'] != 'd6c806bb-aaaf-4bbc-9737-3575d53ca96f'] # Finance-Mortgage REIT
 industries = industries[industries['INDUSTRY'] != 'ed543f01-e605-4a2a-a386-ce0c09dba19e'] # Finance-Property REIT
 
-#print(industries)
+print(industries)
 
 df_open = histMultiIndex["open"].unstack(level=0)
 df_high = histMultiIndex["high"].unstack(level=0)
@@ -123,11 +120,11 @@ df_low = histMultiIndex["low"].unstack(level=0)
 df_close = histMultiIndex["close"].unstack(level=0)
 df_volume = histMultiIndex["volume"].unstack(level=0)
 
-# df_open = df_open[df_open.columns.intersection(industries.index.tolist())]
-# df_high = df_high[df_high.columns.intersection(industries.index.tolist())]
-# df_low = df_low[df_low.columns.intersection(industries.index.tolist())]
-# df_close = df_close[df_close.columns.intersection(industries.index.tolist())]
-# df_volume = df_volume[df_volume.columns.intersection(industries.index.tolist())]
+df_open = df_open[df_open.columns.intersection(industries.index.tolist())]
+df_high = df_high[df_high.columns.intersection(industries.index.tolist())]
+df_low = df_low[df_low.columns.intersection(industries.index.tolist())]
+df_close = df_close[df_close.columns.intersection(industries.index.tolist())]
+df_volume = df_volume[df_volume.columns.intersection(industries.index.tolist())]
 
 #trunctateEndDate = '1614801600000'
 # trunctateEndDate = '999999999999999'#'5/1/2019' #'3/09/2018' #'7/18/2018' #'4/17/2019'
@@ -157,8 +154,8 @@ if (universeBlocking):
         df_dollars_traded_mean_rank.iloc[i - 1:i + 19, :] = df_dollars_traded_mean_rank.iloc[i - 1].values
 
 #df_close.to_csv('C:\Crypto\df_close.csv')
-testStart = int(df_close.index.get_loc(testStartDate))
-optimEnd = int(df_close.index.get_loc(optimEndDate))
+testStart = 600 #int(df_close.index.get_loc(testStartDate))
+optimEnd = 610 #int(df_close.index.get_loc(optimEndDate))
 
 # startTest = time.time()
 # T = GPfunctions.ArgMax(df_close)
@@ -170,32 +167,6 @@ optimEnd = int(df_close.index.get_loc(optimEndDate))
 # print("ArgMax2 eval time: ", startTest - endtest)
 # print(" equal? "+str(T.equals(TT)))
 ########################################################################
-
-def calculate_top_bottom_X_returns(weightedAlpha, df_open, df_close, num_long_short):
-    # Get the aggregate factor signals for each day
-    daily_signals = weightedAlpha.rank(axis=1, ascending=False)
-
-    # Initialize a DataFrame to store the returns
-    returns = pd.DataFrame(index=weightedAlpha.index, columns=['return'])
-
-    for date in weightedAlpha.index:
-        # Get top 100 and bottom 100 equities for the day
-        bottom_100 = daily_signals.loc[date].nsmallest(num_long_short).index
-        top_100 = daily_signals.loc[date].nlargest(num_long_short).index
-
-        # Calculate returns for top 100 (long positions)
-        long_returns = (df_close.loc[date, top_100] - df_open.loc[date, top_100]) / df_open.loc[date, top_100]
-
-        # Calculate returns for bottom 100 (short positions)
-        short_returns = (df_open.loc[date, bottom_100] - df_close.loc[date, bottom_100]) / df_open.loc[date, bottom_100]
-
-        # Combine returns (equal weight for all positions)
-        daily_return = (long_returns.mean() + short_returns.mean()) / 2  * bookSize
-
-        returns.loc[date, 'return'] = daily_return
-
-    return returns
-
 def evalForGraphReturns(individual):
     start = time.time()
     func = toolbox.compile(expr=individual)
@@ -347,13 +318,12 @@ toolbox.register("compile", gp.compile, pset=pset)
 def GetAlphasFromDB(numalphas):
     try:
         with connection.cursor() as cursor:
-            sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` IN ('3491504', '3491527','3491509','3491510') LIMIT %s"
-            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` > 1 AND `scriptversion` IN ('" + runName + "') LIMIT %s"
-
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `turnover` < 999.1 AND `scriptversion` IN ('TEST_STRATEGY_3_B','TEST_STRATEGY_3_A' ) LIMIT %s"
-            ##sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE `riskModelType` = 'subIndustry' AND `margin` > 5 LIMIT %s"
-            #sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
-                        ##sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE  `turnover` < 0.5 AND `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
+            #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` > 1 AND `scriptversion` IN ('" + runName + "') LIMIT %s"
+            ####sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE `riskModelType` = 'subIndustry' AND `margin` > 5 LIMIT %s"
+            sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
+            #sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE `alphasid` < 3491324 AND `PSR` > 0.00 AND `riskModelType` = 'subIndustry' LIMIT %s"
+            ####sql = "SELECT DISTINCT `alphastring` FROM `quantschema`.`alphas` WHERE  `turnover` < 0.5 AND `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `PSR` > 0.99 AND `riskModelType` = 'subIndustry' LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `strategy_id` IN (4,5) LIMIT %s"
             #sql = "SELECT `alphastring` FROM `quantschema`.`alphas` WHERE `sharpe` > 0  AND `turnover` < 0.5 AND `scriptversion` IN ('" + runName + "') ORDER BY RAND() LIMIT %s"
@@ -480,9 +450,8 @@ def calcPortReturnsWithFees( weightArray ):
 def main():
     global testStart, optimEnd
     pd.DataFrame(ReturnY()).fillna(0).to_csv(LOG_DATA_PATH+'returnY2.csv')
-    numberOfAlphas = 5
+    numberOfAlphas = 200
     alphas = GetAlphasFromDB(numberOfAlphas)
-
 
     counter = 0
     aINT = 0
@@ -554,10 +523,13 @@ def main():
             # Take the alpha expected returns E and normalize them
             subAlphaExpRet = subAlphaExpRet.divide(sampleStd)  #.divide(subAlphaExpRet.std())
             subAlphaExpRet = subAlphaExpRet.fillna(0.0)
+            subAlphaExpRet.replace([np.inf, -np.inf], 0, inplace=True)
             # Calculate the residuals εei of the unit-weighted regression of expected returns E over A_is
             reg = linear_model.LinearRegression(fit_intercept=False, n_jobs=2)
             X_train = A_is
             Y_train = subAlphaExpRet
+
+
             reg.fit(X_train, Y_train)
             residuals = reg.predict(X_train) - Y_train
             #Set the alpha portfolio weights to wi = residuals / std of residuals
@@ -569,7 +541,7 @@ def main():
             alphaweightsTS.iloc[optimEnd+1] = optimizedWeights
             ##alphaweightsTS.iloc[optimEnd] = optimizedWeights
 
-        testStart = int(df_close.index.get_loc(testStartDate))
+        testStart = 600#int(df_close.index.get_loc(testStartDate))
         #optimEnd = int(df_close.index.get_loc(optimEndDate))
         optimEnd = testStart + optimLookback
     #######################################
@@ -608,28 +580,11 @@ def main():
     #NEW NORMALIZATION!!
     if postPortfolioOptimReScaleRiskModel:
         weightedAlpha.replace(0, np.nan, inplace=True)
-        #weightedAlpha = RiskModelFunctions.hedgeSubIndustries(industries, weightedAlpha)
-        weightedAlpha = RiskModelFunctions.hedgeGlobal( weightedAlpha)
+        weightedAlpha = RiskModelFunctions.hedgeSubIndustries(industries, weightedAlpha)
+        #weightedAlpha = RiskModelFunctions.hedgeGlobal( weightedAlpha)
         weightedAlpha.replace(np.nan,0 , inplace=True)
 
     weightedAlpha = weightedAlpha * bookSize
-
-    if use_top_bottom_100:
-        top_bottom_returns = calculate_top_bottom_X_returns(weightedAlpha, df_open, df_close, num_long_short)
-
-        # Calculate metrics for the top/bottom 100 method
-        sharpe_top_bottom = (top_bottom_returns['return'].tail(252).mean() / top_bottom_returns['return'].tail(252).std()) * math.sqrt(
-            252.0)
-        print(f"Top/Bottom {num_long_short} SHARPE: {sharpe_top_bottom}")
-
-        # Calculate returns for the last 90 days
-        returns_top_bottom = top_bottom_returns['return'].tail(252).sum() * (252.0 / 252)
-        print(f"Top/Bottom {num_long_short} returns: {returns_top_bottom}")
-
-        # Plot cumulative returns
-        top_bottom_returns['return'].cumsum().plot(title='Top/Bottom 100 Cumulative Returns')
-        plt.ylabel('Cumulative Returns')
-        plt.show()
 
     if (portTail > 0):
         weightedAlpha = GPfunctions.Tail(weightedAlpha, portTail * bookSize)

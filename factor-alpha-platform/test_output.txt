@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "C:\Users\breth\PycharmProjects\AWSautoAlpha - Copy\factor-alpha-platform\test_fmp_eval.py", line 10, in <module>
+    ctx = loader.build_context(
+          ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\breth\PycharmProjects\AWSautoAlpha - Copy\factor-alpha-platform\src\data\fmp_loader.py", line 361, in build_context
+    print(f"\n\U0001f4e5 FMP Data Loader — {len(symbols)} symbols")
+  File "C:\Users\breth\AppData\Local\Programs\Python\Python312\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f4e5' in position 2: character maps to <undefined>

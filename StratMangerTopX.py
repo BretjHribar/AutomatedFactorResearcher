@@ -214,16 +214,28 @@ class StratManagerBillionTOP100:
         return (DFreturns, out_normalzed, DFreturnsRowSum)
 
     def calculate_top_bottom_x_returns(self, weighted_alpha: pd.DataFrame, num_long_short: int) -> pd.DataFrame:
+        # Get the aggregate factor signals for each day
         daily_signals = weighted_alpha.rank(axis=1, ascending=False)
+
+        # Initialize a DataFrame to store the returns
         returns = pd.DataFrame(index=weighted_alpha.index, columns=['return'])
 
         for date in weighted_alpha.index:
+            daily_signal = daily_signals.loc[date]
+
+            # Skip dates with all NaN values
+            if daily_signal.isna().all():
+                continue
+            # Get top 100 and bottom 100 equities for the day
             bottom_100 = daily_signals.loc[date].nsmallest(num_long_short).index
             top_100 = daily_signals.loc[date].nlargest(num_long_short).index
 
+            # Calculate returns for top 100 (long positions)
             long_returns = (self.df_close.loc[date, top_100] - self.df_open.loc[date, top_100]) / self.df_open.loc[date, top_100]
-            short_returns = (self.df_open.loc[date, bottom_100] - self.df_close.loc[date, bottom_100]) / self.df_open.loc[date, bottom_100]
 
+            # Calculate returns for bottom 100 (short positions)
+            short_returns = (self.df_open.loc[date, bottom_100] - self.df_close.loc[date, bottom_100]) / self.df_open.loc[
+                date, bottom_100]
             daily_return = (long_returns.mean() + short_returns.mean()) / 2 * config.BOOK_SIZE
             returns.loc[date, 'return'] = daily_return
 

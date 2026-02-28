@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alpha Research Platform</title>
+    <meta name="description" content="Automated equity factor alpha research, backtesting, and portfolio optimization">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+
+<body>
+    <!-- Top nav bar -->
+    <header id="header">
+        <div class="header-left">
+            <div class="logo">
+                <span class="logo-icon">&#x03B1;</span>
+                <span class="logo-text">ALPHA<span class="logo-sub">RESEARCH</span></span>
+            </div>
+            <nav class="tabs" id="mainTabs">
+                <button class="tab active" data-tab="simulate">Simulate</button>
+                <button class="tab" data-tab="library">Alphas</button>
+                <button class="tab" data-tab="portfolio">Portfolio</button>
+                <button class="tab" data-tab="campaigns">Campaigns</button>
+                <button class="tab" data-tab="fields">Data</button>
+            </nav>
+        </div>
+        <div class="header-right">
+            <div class="status-badge" id="statusBadge">
+                <span class="status-dot"></span>
+                <span id="statusText">Connecting...</span>
+            </div>
+            <div class="stats-bar">
+                <div class="stat-chip" id="statAlphas"><span class="stat-label">Alphas</span><span
+                        class="stat-value">0</span></div>
+                <div class="stat-chip" id="statBestSharpe"><span class="stat-label">Best Sharpe</span><span
+                        class="stat-value">--</span></div>
+            </div>
+        </div>
+    </header>
+
+    <!-- ================================================================= -->
+    <!-- TAB: Simulate (WQ BRAIN-style split pane) -->
+    <!-- ================================================================= -->
+    <main id="tab-simulate" class="tab-content active">
+        <!-- Simulation sub-tabs -->
+        <div class="sim-tabs-bar">
+            <div class="sim-tab active" id="simTab1">
+                <span>Simulation 1</span>
+                <button class="sim-tab-close">&times;</button>
+            </div>
+            <button class="sim-tab-add" title="New simulation">+</button>
+            <div class="sim-settings">
+                <span class="settings-chip" id="chipSettings">⚙ Settings</span>
+                <span class="settings-chip active">USA/D1/TOP3000</span>
+            </div>
+        </div>
+
+        <div class="sim-layout">
+            <!-- LEFT: Code panel -->
+            <div class="sim-left">
+                <div class="code-panel">
+                    <div class="code-gutter">
+                        <span class="line-num">1</span>
+                    </div>
+                    <textarea id="exprInput" spellcheck="false" rows="4"
+                        placeholder="rank(ts_delta(close, 20)) * rank(ts_rank(volume, 60))"></textarea>
+                </div>
+                <div class="code-toolbar">
+                    <div class="params-row">
+                        <label>Delay <input type="number" id="paramDelay" value="1" min="0" max="5"
+                                class="input-sm"></label>
+                        <label>Decay <input type="number" id="paramDecay" value="0" min="0" max="20"
+                                class="input-sm"></label>
+                        <label>Neutralization
+                            <select id="paramNeutralize" class="select-sm">
+                                <option value="subindustry">SUBINDUSTRY</option>
+                                <option value="industry">INDUSTRY</option>
+                                <option value="sector">SECTOR</option>
+                                <option value="market">MARKET</option>
+                                <option value="none">None</option>
+                            </select>
+                        </label>
+                        <label>Universe
+                            <select id="paramUniverse" class="select-sm">
+                                <option value="TOP3000">TOP3000</option>
+                                <option value="TOP2000">TOP2000</option>
+                                <option value="TOP1000">TOP1000</option>
+                                <option value="TOP500">TOP500</option>
+                                <option value="TOP200">TOP200</option>
+                            </select>
+                        </label>
+                        <label>Truncation <input type="number" id="paramTruncation" value="0.08" step="0.01" min="0"
+                                max="0.5" class="input-sm"></label>
+                    </div>
+                    <div class="toolbar-right">
+                        <select id="exampleSelect" class="select-sm">
+                            <option value="">Examples ▾</option>
+                            <option value="rank(ts_delta(close, 20))">Momentum 20d</option>
+                            <option value="rank(ts_rank(close, 60))">Rank Momentum 60d</option>
+                            <option value="rank(ts_delta(divide(close, volume), 30)) * rank(ts_rank(close, 60))">
+                                Price/Vol Momentum</option>
+                            <option value="rank(ts_zscore(close, 60))">Mean Reversion 60d</option>
+                            <option value="rank(ts_regression(close, volume, 60, lag=0, rettype=2))">Regression Residual
+                            </option>
+                            <option value="rank(group_rank(inverse(ts_std_dev(close, 60)), subindustry))">Industry Low
+                                Vol</option>
+                        </select>
+                        <button id="btnSimulate" class="btn-simulate">
+                            Simulate
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT: Results panel (tabs: CODE / RESULTS) -->
+            <div class="sim-right">
+                <div class="results-tab-bar">
+                    <button class="rtab" data-rtab="code">CODE</button>
+                    <button class="rtab active" data-rtab="results">RESULTS</button>
+                    <button class="rtab" data-rtab="data">DATA</button>
+                </div>
+
+                <div class="rtab-content active" id="rtab-results">
+                    <!-- Chart area -->
+                    <div class="chart-area" id="chartArea">
+                        <div class="chart-placeholder" id="chartPlaceholder">
+                            <div class="placeholder-icon">📊</div>
+                            <div>Run a simulation to see results</div>
+                        </div>
+                        <canvas id="pnlCanvas" style="display:none"></canvas>
+                    </div>
+
+                    <!-- IS Summary section -->
+                    <div class="is-summary" id="isSummary">
+                        <div class="is-header">
+                            <h3>📈 IS Summary</h3>
+                            <div class="is-period-toggle">
+                                <span class="period-btn active">Average</span>
+                                <div class="period-switch">
+                                    <span>Period</span>
+                                    <button class="period-toggle active">IS</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Aggregate Data row -->
+                        <div class="aggregate-row" id="aggregateRow">
+                            <div class="agg-label">Aggregate Data</div>
+                            <div class="agg-metrics">
+                                <div class="agg-metric">
+                                    <span class="agg-name">Sharpe<sup>★</sup></span>
+                                    <span class="agg-value" id="aggSharpe">--</span>
+                                </div>
+                                <div class="agg-metric">
+                                    <span class="agg-name">Turnover<sup>★</sup></span>
+                                    <span class="agg-value" id="aggTurnover">--</span>
+                                </div>
+                                <div class="agg-metric">
+                                    <span class="agg-name">Fitness<sup>★</sup></span>
+                                    <span class="agg-value" id="aggFitness">--</span>
+                                </div>
+                                <div class="agg-metric">
+                                    <span class="agg-name">Returns<sup>★</sup></span>
+                                    <span class="agg-value" id="aggReturns">--</span>
+                                </div>
+                                <div class="agg-metric">
+                                    <span class="agg-name">Drawdown<sup>★</sup></span>
+                                    <span class="agg-value" id="aggDrawdown">--</span>
+                                </div>
+                                <div class="agg-metric">
+                                    <span class="agg-name">Margin<sup>★</sup></span>
+                                    <span class="agg-value" id="aggMargin">--</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Year-by-year table -->
+                        <div class="yearly-table-wrap">
+                            <table class="yearly-table" id="yearlyTable">
+                                <thead>
+                                    <tr>
+                                        <th>Year</th>
+                                        <th>Sharpe</th>
+                                        <th>Turnover</th>
+                                        <th>Fitness</th>
+                                        <th>Returns</th>
+                                        <th>Drawdown</th>
+                                        <th>Margin</th>
+                                        <th>Long Count</th>
+                                        <th>Short Count</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="yearlyTableBody">
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Quality checks -->
+                        <div class="quality-section" id="qualitySection">
+                            <h3>🎯 Quality Checks</h3>
+                            <div class="checks-grid" id="checksGrid"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="rtab-content" id="rtab-code">
+                    <div class="code-view-panel">
+                        <pre id="codePreview"
+                            class="code-preview">// Alpha expression will appear here after simulation</pre>
+                    </div>
+                </div>
+
+                <div class="rtab-content" id="rtab-data">
+                    <div class="data-info-panel">
+                        <h3>Data Info</h3>
+                        <div id="dataInfo" class="data-info-content">
+                            Loading data information...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom bar -->
+        <div class="bottom-bar">
+            <div class="bottom-left">
+                <select id="bottomExampleSelect" class="select-sm">
+                    <option value="">Example ▾</option>
+                    <option value="rank(ts_delta(close, 20))">Momentum</option>
+                    <option value="rank(ts_regression(close, volume, 60, lag=0, rettype=2))">Regression</option>
+                </select>
+            </div>
+            <div class="bottom-center">
+                <span class="bottom-link" id="bottomAddToList">Add Alpha to a List</span>
+                <span class="bottom-link" id="bottomClone">Clone this Alpha in a new tab</span>
+            </div>
+            <div class="bottom-right">
+                <button class="btn-check-sub" id="btnCheckSub">Check Submission</button>
+                <button class="btn-submit-alpha" id="btnSubmitAlpha">Submit Alpha</button>
+            </div>
+        </div>
+    </main>
+
+    <!-- ================================================================= -->
+    <!-- TAB: Alpha Library -->
+    <!-- ================================================================= -->
+    <main id="tab-library" class="tab-content">
+        <section class="library-panel">
+            <div class="library-header">
+                <h2>Alpha Library</h2>
+                <div class="library-controls">
+                    <select id="libSort" class="select-sm">
+                        <option value="sharpe">Sort by Sharpe</option>
+                        <option value="fitness">Sort by Fitness</option>
+                        <option value="turnover">Sort by Turnover</option>
+                    </select>
+                    <button id="btnRefreshLib" class="btn-secondary">Refresh</button>
+                </div>
+            </div>
+            <div class="alpha-table-wrap">
+                <table class="alpha-table" id="alphaTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Expression</th>
+                            <th>Sharpe</th>
+                            <th>Fitness</th>
+                            <th>Return</th>
+                            <th>Turnover</th>
+                            <th>Max DD</th>
+                            <th>Delay</th>
+                            <th>Neut</th>
+                            <th>Universe</th>
+                            <th>Source</th>
+                            <th>Checks</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="alphaTableBody"></tbody>
+                </table>
+            </div>
+            <div class="library-empty" id="libraryEmpty">
+                No alphas yet. Simulate some expressions or run a campaign.
+            </div>
+        </section>
+    </main>
+
+    <!-- ================================================================= -->
+    <!-- TAB: Campaigns -->
+    <!-- ================================================================= -->
+    <main id="tab-campaigns" class="tab-content">
+        <div class="campaigns-grid">
+            <!-- GP Campaign -->
+            <section class="campaign-card">
+                <div class="campaign-header">
+                    <h2>Genetic Programming</h2>
+                    <span class="campaign-badge">Evolution</span>
+                </div>
+                <p class="campaign-desc">Breed alpha expressions through crossover and mutation. Trees are evaluated via
+                    vectorized simulation.</p>
+                <div class="campaign-params">
+                    <label>Generations <input type="number" id="gpGenerations" value="50" min="1"
+                            class="input-sm"></label>
+                    <label>Population <input type="number" id="gpPopulation" value="200" min="10"
+                            class="input-sm"></label>
+                    <label>Max Depth <input type="number" id="gpDepth" value="6" min="2" max="10"
+                            class="input-sm"></label>
+                </div>
+                <button id="btnRunGP" class="btn-primary btn-wide">Run GP Campaign</button>
+                <div class="campaign-log" id="gpLog"></div>
+            </section>
+
+            <!-- LLM Campaign -->
+            <section class="campaign-card">
+                <div class="campaign-header">
+                    <h2>LLM Research Agent</h2>
+                    <span class="campaign-badge badge-llm">AI Agent</span>
+                </div>
+                <p class="campaign-desc">Use a large language model to generate novel alpha expressions based on
+                    financial intuition and prior results.</p>
+                <div class="campaign-params">
+                    <label>Trials <input type="number" id="llmTrials" value="20" min="1" class="input-sm"></label>
+                    <label>Strategy Hint <input type="text" id="llmStrategy" value="momentum+value"
+                            class="input-sm input-wide"></label>
+                    <label>Gemini Key <input type="password" id="llmApiKey" placeholder="optional"
+                            class="input-sm input-wide"></label>
+                </div>
+                <button id="btnRunLLM" class="btn-primary btn-wide btn-llm">Run LLM Campaign</button>
+                <div class="campaign-log" id="llmLog"></div>
+            </section>
+        </div>
+    </main>
+
+    <!-- ================================================================= -->
+    <!-- TAB: Portfolio Optimization -->
+    <!-- ================================================================= -->
+    <main id="tab-portfolio" class="tab-content">
+        <div class="portfolio-layout">
+            <!-- LEFT: Alpha Selector -->
+            <div class="portfolio-left">
+                <div class="portfolio-selector">
+                    <div class="portfolio-selector-header">
+                        <h3>📦 Select Alphas</h3>
+                        <div class="portfolio-select-actions">
+                            <button class="btn-sm" id="portSelectAll">All</button>
+                            <button class="btn-sm" id="portSelectNone">None</button>
+                            <button class="btn-sm" id="portRefreshAlphas">↻ Refresh</button>
+                        </div>
+                    </div>
+                    <div class="portfolio-alpha-list" id="portAlphaList">
+                        <div class="portfolio-empty">Load alphas from the library to begin optimization.</div>
+                    </div>
+                    <div class="portfolio-count">
+                        <span id="portSelectedCount">0</span> alphas selected
+                    </div>
+                </div>
+
+                <div class="portfolio-controls">
+                    <h3>⚙ Optimization Settings</h3>
+                    <div class="portfolio-params">
+                        <label>Method
+                            <select id="portMethod" class="select-sm">
+                                <option value="max_sharpe">Max Sharpe</option>
+                                <option value="risk_parity">Risk Parity</option>
+                                <option value="min_variance">Min Variance</option>
+                                <option value="equal_weight">Equal Weight</option>
+                                <option value="sharpe_weighted">Sharpe Weighted</option>
+                            </select>
+                        </label>
+                        <label>Booksize ($M)
+                            <select id="portBooksize" class="select-sm">
+                                <option value="10000000">$10M</option>
+                                <option value="20000000" selected>$20M</option>
+                                <option value="50000000">$50M</option>
+                                <option value="100000000">$100M</option>
+                            </select>
+                        </label>
+                        <label>Compare All
+                            <input type="checkbox" id="portCompareAll" checked>
+                        </label>
+                    </div>
+                    <button id="btnOptimize" class="btn-primary btn-wide">🚀 Optimize Portfolio</button>
+                </div>
+            </div>
+
+            <!-- RIGHT: Results -->
+            <div class="portfolio-right">
+                <div class="portfolio-results" id="portResults">
+                    <div class="portfolio-placeholder">
+                        <div class="placeholder-icon">📊</div>
+                        <div>Select alphas and run optimization to see results</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- ================================================================= -->
+    <!-- TAB: Data Fields -->
+    <!-- ================================================================= -->
+    <main id="tab-fields" class="tab-content">
+        <section class="fields-panel">
+            <div class="fields-header">
+                <h2>Available Data Fields</h2>
+                <input type="text" id="fieldSearch" placeholder="Search fields..." class="input-search">
+            </div>
+            <div class="fields-grid" id="fieldsGrid"></div>
+        </section>
+    </main>
+
+    <!-- Toast notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="/static/app.js"></script>
+    <script src="/static/portfolio.js"></script>
+</body>
+
+</html>

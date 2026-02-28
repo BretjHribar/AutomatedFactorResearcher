@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment & Credentials
+.env
+
+# Data (large files, vendor downloads)
+data/raw/
+data/processed/
+data/cache/
+data/quality_reports/
+
+# Keep test fixtures
+!tests/fixtures/sample_data/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Coverage
+htmlcov/
+.coverage
+coverage.xml
+
+# mypy
+.mypy_cache/
+
+# pytest
+.pytest_cache/
+
+# Docker
+*.log
