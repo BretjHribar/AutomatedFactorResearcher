@@ -137,8 +137,9 @@ def fixed_split_oos(
     alpha_df: pd.DataFrame,
     returns_df: pd.DataFrame,
     close_df: pd.DataFrame | None = None,
+    open_df: pd.DataFrame | None = None,
     universe_df: pd.DataFrame | None = None,
-    groups: pd.Series | None = None,
+    classifications: dict | None = None,
     split_date: str | pd.Timestamp | None = None,
     is_ratio: float = 0.7,
     booksize: float = 20_000_000.0,
@@ -173,8 +174,9 @@ def fixed_split_oos(
 
     sim_kwargs = dict(
         close_df=close_df,
+        open_df=open_df,
         universe_df=universe_df,
-        groups=groups,
+        classifications=classifications,
         booksize=booksize,
         max_stock_weight=max_stock_weight,
         decay=decay,
@@ -208,8 +210,9 @@ def walk_forward_oos(
     alpha_df: pd.DataFrame,
     returns_df: pd.DataFrame,
     close_df: pd.DataFrame | None = None,
+    open_df: pd.DataFrame | None = None,
     universe_df: pd.DataFrame | None = None,
-    groups: pd.Series | None = None,
+    classifications: dict | None = None,
     n_folds: int = 5,
     is_window_days: int = 504,  # 2 years
     oos_window_days: int = 252,  # 1 year
@@ -233,7 +236,7 @@ def walk_forward_oos(
     if total_days < min_required:
         # Fall back to fixed split
         return fixed_split_oos(
-            alpha_df, returns_df, close_df, universe_df, groups,
+            alpha_df, returns_df, close_df, open_df, universe_df, classifications,
             is_ratio=0.7, booksize=booksize, max_stock_weight=max_stock_weight,
             decay=decay, delay=delay, neutralization=neutralization,
             fees_bps=fees_bps,
@@ -241,8 +244,9 @@ def walk_forward_oos(
 
     sim_kwargs = dict(
         close_df=close_df,
+        open_df=open_df,
         universe_df=universe_df,
-        groups=groups,
+        classifications=classifications,
         booksize=booksize,
         max_stock_weight=max_stock_weight,
         decay=decay,

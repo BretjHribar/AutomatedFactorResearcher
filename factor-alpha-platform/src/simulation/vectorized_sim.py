@@ -44,50 +44,98 @@ class VectorizedSimResult:
     total_pnl: float = 0.0
 
 
+def _resolve_groups(classifications, level: str) -> pd.Series | None:
+    """Extract a group Series for the given GICS neutralization level.
+
+    Args:
+        classifications: Either a dict {"sector": Series, "industry": Series,
+                         "subindustry": Series} or a single pd.Series (backward compat).
+        level: One of "subindustry", "industry", "sector".
+
+    Returns:
+        pd.Series mapping ticker → group code, or None if unavailable.
+    """
+    if classifications is None:
+        return None
+
+    # Backward compat: if someone passes a raw pd.Series, use it directly
+    if isinstance(classifications, pd.Series):
+        return classifications
+
+    # Dict keyed by level name → pd.Series
+    if isinstance(classifications, dict):
+        return classifications.get(level)
+
+    return None
+
+
 def simulate_vectorized(
     alpha_df: pd.DataFrame,
     returns_df: pd.DataFrame,
     close_df: pd.DataFrame | None = None,
+    open_df: pd.DataFrame | None = None,
     universe_df: pd.DataFrame | None = None,
-    groups: pd.Series | None = None,
+    classifications: dict | None = None,
     booksize: float = 20_000_000.0,
     max_stock_weight: float = 0.01,
     decay: int = 0,
     delay: int = 1,
-    neutralization: str = "market",
+    neutralization: str = "subindustry",
     fees_bps: float = 0.0,
     min_price: float = -1.0,
     max_price: float = 1e7,
 ) -> VectorizedSimResult:
     """
-    Vectorized simulation matching AWSgenProgWorker.py logic.
+    Vectorized simulation matching AWSgenProgWorker.py / WorldQuant BRAIN logic.
 
     Pipeline:
     1. Clean alpha (replace inf → 0)
     2. Apply delay (shift alpha forward)
     3. Apply optional linear decay
     4. Apply universe / price filters
-    5. Apply neutralization (market demean or group demean)
-    6. Clip to max stock weight
-    7. Scale to booksize
-    8. Compute PnL = positions * forward_returns
-    9. Compute metrics
+    5. Apply neutralization (demean within classification group)
+    6. Normalize by abs sum
+    7. Clip to max stock weight
+    8. Scale to booksize
+    9. Compute PnL = positions * forward_returns
+    10. Compute metrics
+
+    Forward returns depend on delay (matching AWSgenProgWorker.py):
+        delay >= 1: open-to-open returns = (open[t+2] - open[t+1]) / open[t+1]
+                    (signal at close T → enter at open T+1 → exit at open T+2)
+        delay == 0: close-to-close returns = (close[t+1] - close[t]) / close[t]
+                    (signal at close T → enter at close T → exit at close T+1)
 
     Args:
         alpha_df: Raw alpha signal (dates × tickers)
-        returns_df: Forward returns matrix (dates × tickers)
+        returns_df: Forward returns matrix (dates × tickers).
         close_df: Close prices for price-based filtering
+        open_df: Open prices for computing open-to-open returns (delay >= 1)
         universe_df: Boolean DataFrame mask for universe membership
-        groups: Series (ticker → group) for industry neutralization
+        classifications: Dict with GICS classification Series, keyed by level:
+                         {"sector": Series, "industry": Series,
+                          "subindustry": Series}
+                         Each Series maps ticker → group code.
+                         Also accepts a single pd.Series for backward compat.
         booksize: Dollar amount to allocate
         max_stock_weight: Max position weight per stock
         decay: Linear decay period (0 = no decay)
         delay: Signal delay in trading days
-        neutralization: 'market', 'group', or 'none'
+        neutralization: WorldQuant BRAIN neutralization modes:
+                        'subindustry' — GICS sub-industry (106 groups)
+                        'industry'    — GICS industry (59 groups)
+                        'sector'      — GICS sector (11 groups)
+                        'market'      — global demean
+                        'none'        — no neutralization
         fees_bps: Transaction fees in basis points
         min_price: Minimum stock price filter
         max_price: Maximum stock price filter
     """
+    # Override returns with open-to-open when delay >= 1 and open prices available
+    if delay >= 1 and open_df is not None:
+        # (open[t+2] - open[t+1]) / open[t+1]  →  open.pct_change().shift(-1)
+        returns_df = open_df.pct_change().shift(-1)
+
     # Align columns
     common_cols = alpha_df.columns.intersection(returns_df.columns)
     common_idx = alpha_df.index.intersection(returns_df.index)
@@ -121,30 +169,40 @@ def simulate_vectorized(
         uni_aligned = universe_df.reindex(index=common_idx, columns=common_cols)
         alpha[~uni_aligned.fillna(False).astype(bool)] = np.nan
 
-    # Step 5: Neutralization
+    # Step 5: Neutralization + Normalize
+    # WorldQuant BRAIN modes: subindustry, industry, sector, market, none
+    # Demean within groups, then normalize by abs sum (matches hedgeSubIndustries)
     if neutralization == "market":
         row_mean = alpha.mean(axis=1)
         alpha = alpha.sub(row_mean, axis=0)
-    elif neutralization == "group" and groups is not None:
-        for grp in groups.unique():
-            tickers = groups[groups == grp].index.tolist()
-            cols = [t for t in tickers if t in alpha.columns]
-            if cols:
-                grp_mean = alpha[cols].mean(axis=1)
-                alpha[cols] = alpha[cols].sub(grp_mean, axis=0)
+    elif neutralization in ("subindustry", "industry", "sector"):
+        # Resolve the group Series from classifications
+        groups = _resolve_groups(classifications, neutralization)
+        if groups is not None:
+            for grp in groups.unique():
+                tickers = groups[groups == grp].index.tolist()
+                cols = [t for t in tickers if t in alpha.columns]
+                if cols:
+                    grp_mean = alpha[cols].mean(axis=1)
+                    alpha[cols] = alpha[cols].sub(grp_mean, axis=0)
+    # "none" → skip neutralization
 
-    # Step 6: Clip to max stock weight
+    # Normalize by abs sum (matches hedgeGlobal / hedgeSubIndustries)
+    abs_sum = alpha.abs().sum(axis=1).replace(0, np.nan)
+    alpha = alpha.div(abs_sum, axis=0)
+
+    # Step 6: Clip to max stock weight (AFTER normalization, matching original)
     alpha = alpha.clip(lower=-max_stock_weight, upper=max_stock_weight)
 
-    # Step 7: Scale to booksize
-    abs_sum = alpha.abs().sum(axis=1).replace(0, np.nan)
-    positions_normalized = alpha.div(abs_sum, axis=0)
-    positions_money = positions_normalized * booksize
+    # Step 7: Scale to booksize (no re-normalization — clip may break sum-to-1)
+    positions_money = alpha * booksize
 
     # Step 8: Compute PnL
     daily_pnl_df = positions_money * returns
     turnover_adj = positions_money.diff().abs().sum(axis=1)
 
+    # fees_bps is in basis points (1 bp = 0.0001)
+    # Original used feesBSP as raw decimal (e.g. 0.001 = 10 bps)
     daily_pnl = daily_pnl_df.sum(axis=1) - (turnover_adj * fees_bps / 10_000)
     daily_turnover = turnover_adj / booksize
 
@@ -201,7 +259,7 @@ def simulate_vectorized(
         daily_pnl=daily_pnl,
         daily_turnover=daily_turnover,
         daily_returns=daily_returns,
-        positions=positions_normalized,
+        positions=alpha,
         cumulative_pnl=cumulative_pnl,
         sharpe=sharpe,
         fitness=fitness,

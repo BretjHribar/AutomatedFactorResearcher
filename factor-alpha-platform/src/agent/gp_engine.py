@@ -37,6 +37,42 @@ from src.simulation.vectorized_sim import simulate_vectorized, VectorizedSimResu
 logger = logging.getLogger(__name__)
 
 
+def _build_classifications(raw_cls: dict) -> dict | None:
+    """Build GICS classification Series dict from raw classifications.
+
+    Args:
+        raw_cls: Dict of {ticker: {"sector": code, "industry": code,
+                 "subindustry": code, ...}}
+
+    Returns:
+        Dict of {"sector": pd.Series, "industry": pd.Series,
+                 "subindustry": pd.Series} or None.
+    """
+    if not raw_cls:
+        return None
+    try:
+        sector_dict = {}
+        industry_dict = {}
+        subindustry_dict = {}
+        for ticker, info in raw_cls.items():
+            if "sector" in info:
+                sector_dict[ticker] = info["sector"]
+            if "industry" in info:
+                industry_dict[ticker] = info["industry"]
+            if "subindustry" in info:
+                subindustry_dict[ticker] = info["subindustry"]
+        result = {}
+        if sector_dict:
+            result["sector"] = pd.Series(sector_dict)
+        if industry_dict:
+            result["industry"] = pd.Series(industry_dict)
+        if subindustry_dict:
+            result["subindustry"] = pd.Series(subindustry_dict)
+        return result if result else None
+    except Exception:
+        return None
+
+
 # ---------------------------------------------------------------------------
 # DEAP Type System
 # ---------------------------------------------------------------------------
@@ -173,7 +209,7 @@ class GPConfig:
     max_stock_weight: float = 0.01
     decay: int = 0
     delay: int = 1
-    neutralization: str = "market"
+    neutralization: str = "subindustry"
     fees_bps: float = 0.0
 
     # Fitness filters
@@ -204,7 +240,8 @@ class GPAlphaEngine:
         data: Dict[str, pd.DataFrame],
         returns_df: pd.DataFrame,
         close_df: pd.DataFrame | None = None,
-        groups: pd.Series | None = None,
+        open_df: pd.DataFrame | None = None,
+        classifications: dict | None = None,
         config: GPConfig | None = None,
         db: AlphaDatabase | None = None,
     ):
@@ -214,7 +251,10 @@ class GPAlphaEngine:
                   Must include the feature_names used in the primitive set.
             returns_df: Forward returns matrix for PnL computation.
             close_df: Close prices for price-based filtering.
-            groups: Industry classification Series for group neutralization.
+            open_df: Open prices for open-to-open returns (delay >= 1).
+            classifications: Dict of GICS classification Series keyed by level:
+                             {"sector": Series, "industry": Series,
+                              "subindustry": Series}
             config: GP configuration.
             db: Optional alpha database for persistence.
         """
@@ -222,7 +262,8 @@ class GPAlphaEngine:
         self.data = data
         self.returns_df = returns_df
         self.close_df = close_df
-        self.groups = groups
+        self.open_df = open_df
+        self.classifications = classifications
         self.db = db
 
         # Feature names = ordered keys of data dict
@@ -281,6 +322,7 @@ class GPAlphaEngine:
             data[field] = ctx._price_matrices[field]
 
         close = data["close"]
+        open_prices = data["open"]
         volume = data["volume"]
         data["dollars_traded"] = close * volume
         data["adv20"] = (close * volume).rolling(20).mean()
@@ -289,49 +331,69 @@ class GPAlphaEngine:
         for w in [10, 20, 30, 90]:
             data[f"hist_vol_{w}"] = close.pct_change().rolling(w).std() * (252 ** 0.5)
 
-        returns_df = close.pct_change().shift(-1)  # forward returns
+        returns_df = close.pct_change().shift(-1)  # fallback forward returns
         db = AlphaDatabase(db_path) if db_path else None
 
-        # Get industry groups if available
-        groups = None
-        try:
-            groups_dict = {}
-            for ticker, info in ctx._classifications.items():
-                if "subindustry" in info:
-                    groups_dict[ticker] = info["subindustry"]
-            if groups_dict:
-                groups = pd.Series(groups_dict)
-        except Exception:
-            pass
+        # Build GICS classification Series for each level
+        classifications = _build_classifications(ctx._classifications)
 
         return cls(
             data=data,
             returns_df=returns_df,
             close_df=close,
-            groups=groups,
+            open_df=open_prices,
+            classifications=classifications,
             config=config,
             db=db,
         )
 
-    # Curated feature set for GP — covers all data categories while keeping
-    # the primitive set manageable (too many features -> OOM with large universe)
+    # Full feature set for GP — all unique downloaded datasets.
+    # Aliases (e.g. 'sales'→'revenue', 'assets'→'total_assets') and
+    # internal classification matrices (_sector_groups, sector, etc.) are excluded.
     GP_FEATURE_SET = [
-        # Price & Volume (core 6)
+        # Price & Volume (6)
         "open", "high", "low", "close", "volume", "vwap",
-        # Liquidity (3)
-        "returns", "adv20", "cap",
-        # Income Statement (4)
-        "revenue", "net_income", "ebitda", "eps",
-        # Balance Sheet (4)
-        "total_assets", "total_debt", "cash", "shares_out",
-        # Cash Flow (2)
-        "free_cashflow", "cashflow_op",
-        # Valuation Ratios (4)
-        "pe_ratio", "pb_ratio", "ev_to_ebitda", "roe",
-        # Per-share (1)
-        "book_value_per_share",
-        # Derived (2)
-        "enterprise_value", "market_cap",
+        # Liquidity & Market (5)
+        "returns", "log_returns", "dollars_traded", "adv20", "adv60",
+        # Market Cap (2)
+        "cap", "market_cap",
+        # Income Statement (10)
+        "revenue", "cost_of_revenue", "gross_profit", "sga_expense",
+        "operating_income", "ebitda", "net_income", "eps", "eps_diluted",
+        "interest_expense",
+        # Tax & R&D (2)
+        "income_tax", "rd_expense",
+        # Balance Sheet (14)
+        "total_assets", "assets_curr", "total_liabilities", "liabilities_curr",
+        "total_equity", "total_debt", "cash", "inventory", "receivables",
+        "payables", "goodwill", "intangibles", "ppe_net", "retained_earnings",
+        # Derived Balance Sheet (4)
+        "net_debt", "working_capital", "invested_capital", "shares_out",
+        # Cash Flow (5)
+        "cashflow_op", "capex", "free_cashflow", "depreciation",
+        "dividends_paid",
+        # Corporate Actions (2)
+        "stock_repurchase", "debt_repayment",
+        # Valuation Ratios (7)
+        "pe_ratio", "pb_ratio", "ev_to_ebitda", "debt_to_equity",
+        "current_ratio", "roe", "roa",
+        # Yield (1)
+        "dividend_yield",
+        # Per-Share (4)
+        "book_value_per_share", "revenue_per_share",
+        "tangible_book_per_share", "fcf_per_share",
+        # Derived Valuation (2)
+        "enterprise_value", "inventory_turnover",
+        # Historical Volatility (8)
+        "historical_volatility_10", "historical_volatility_20",
+        "historical_volatility_30", "historical_volatility_60",
+        "historical_volatility_90", "historical_volatility_120",
+        "historical_volatility_150", "historical_volatility_180",
+        # Parkinson Volatility (8)
+        "parkinson_volatility_10", "parkinson_volatility_20",
+        "parkinson_volatility_30", "parkinson_volatility_60",
+        "parkinson_volatility_90", "parkinson_volatility_120",
+        "parkinson_volatility_150", "parkinson_volatility_180",
     ]
 
     @classmethod
@@ -358,25 +420,18 @@ class GPAlphaEngine:
                 data[field] = ctx._price_matrices[field]
 
         close = data.get("close", ctx._price_matrices["close"])
+        open_prices = data.get("open", ctx._price_matrices.get("open"))
         data.setdefault("returns", close.pct_change())
         data.setdefault("dollars_traded", close * data.get("volume", ctx._price_matrices["volume"]))
         data.setdefault("adv20", data["dollars_traded"].rolling(20).mean())
 
-        returns_df = close.pct_change().shift(-1)
+        returns_df = close.pct_change().shift(-1)  # fallback (close-to-close)
 
-        groups = None
-        try:
-            groups_dict = {}
-            for ticker, info in ctx._classifications.items():
-                if "subindustry" in info:
-                    groups_dict[ticker] = info["subindustry"]
-            if groups_dict:
-                groups = pd.Series(groups_dict)
-        except Exception:
-            pass
+        classifications = _build_classifications(ctx._classifications)
 
         return cls(data=data, returns_df=returns_df, close_df=close,
-                   groups=groups, config=config, db=db)
+                   open_df=open_prices, classifications=classifications,
+                   config=config, db=db)
 
     # ------------------------------------------------------------------
     # Evaluation
@@ -402,7 +457,8 @@ class GPAlphaEngine:
                 alpha_df=alpha_df,
                 returns_df=self.returns_df,
                 close_df=self.close_df,
-                groups=self.groups if self.config.neutralization == "group" else None,
+                open_df=self.open_df,
+                classifications=self.classifications,
                 booksize=self.config.booksize,
                 max_stock_weight=self.config.max_stock_weight,
                 decay=self.config.decay,
@@ -414,7 +470,7 @@ class GPAlphaEngine:
             logger.debug(f"Simulation error for '{expr_str[:60]}': {e}")
             return (0.0,)
 
-        fitness = result.sharpe  # Use Sharpe as primary fitness
+        fitness = result.fitness  # BRAIN fitness: sharpe * sqrt(|returns| / max(turnover, 0.125))
 
         # Filter: turnover bounds
         if result.turnover < self.config.min_turnover:
@@ -472,6 +528,8 @@ class GPAlphaEngine:
                     alpha_df=alpha_df,
                     returns_df=self.returns_df,
                     close_df=self.close_df,
+                    open_df=self.open_df,
+                    classifications=self.classifications,
                     booksize=self.config.booksize,
                     max_stock_weight=self.config.max_stock_weight,
                     decay=0,
@@ -654,6 +712,8 @@ class GPAlphaEngine:
                 alpha_df=alpha_df,
                 returns_df=self.returns_df,
                 close_df=self.close_df,
+                open_df=self.open_df,
+                classifications=self.classifications,
                 booksize=self.config.booksize,
                 max_stock_weight=self.config.max_stock_weight,
                 delay=self.config.delay,

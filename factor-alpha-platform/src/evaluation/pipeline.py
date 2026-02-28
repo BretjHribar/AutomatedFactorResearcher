@@ -26,6 +26,7 @@ from src.data.context_research import InMemoryDataContext
 from src.data.synthetic import SyntheticDataGenerator
 from src.operators.fastexpression import FastExpressionEngine, create_engine_from_context
 from src.simulation.vectorized_sim import simulate_vectorized, VectorizedSimResult
+from src.agent.gp_engine import _build_classifications
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +113,7 @@ class AlphaEvaluator:
             "booksize": 10_000_000,
             "decay": 0,
             "delay": 1,
-            "neutralization": "market",
+            "neutralization": "subindustry",
             "max_stock_weight": 0.01,
             "fees_bps": 0.0,
         }
@@ -120,8 +121,9 @@ class AlphaEvaluator:
         # Pre-build returns and close matrices (use _price_matrices for full DF)
         self._returns_df = ctx._price_matrices.get("returns")
         self._close_df = ctx._price_matrices.get("close")
+        self._open_df = ctx._price_matrices.get("open")
 
-        # Build forward returns: tomorrow's return
+        # Build forward returns: tomorrow's close-to-close return (fallback)
         if self._close_df is not None:
             self._forward_returns = self._close_df.pct_change().shift(-1)
         elif self._returns_df is not None:
@@ -129,17 +131,8 @@ class AlphaEvaluator:
         else:
             self._forward_returns = None
 
-        # Get industry groups
-        self._groups = None
-        try:
-            groups_dict = {}
-            for ticker, info in ctx._classifications.items():
-                if "subindustry" in info:
-                    groups_dict[ticker] = info["subindustry"]
-            if groups_dict:
-                self._groups = pd.Series(groups_dict)
-        except Exception:
-            pass
+        # Build GICS classifications dict
+        self._classifications = _build_classifications(ctx._classifications)
 
     @classmethod
     def from_synthetic(
@@ -209,12 +202,13 @@ class AlphaEvaluator:
                 alpha_df=alpha_df,
                 returns_df=self._forward_returns,
                 close_df=self._close_df,
-                groups=self._groups if merge_params.get("neutralization") == "group" else None,
+                open_df=self._open_df,
+                classifications=self._classifications,
                 booksize=merge_params.get("booksize", 10_000_000),
                 max_stock_weight=merge_params.get("max_stock_weight", 0.01),
                 decay=merge_params.get("decay", 0),
                 delay=merge_params.get("delay", 1),
-                neutralization=merge_params.get("neutralization", "market"),
+                neutralization=merge_params.get("neutralization", "subindustry"),
                 fees_bps=merge_params.get("fees_bps", 0.0),
             )
 

@@ -194,7 +194,7 @@ class EvalRequest(BaseModel):
     params: dict | None = None
     delay: int = 1
     decay: int = 0
-    neutralization: str = "market"
+    neutralization: str = "subindustry"
     booksize: float = 10_000_000
 
 class BatchEvalRequest(BaseModel):
@@ -210,7 +210,7 @@ class GPRunRequest(BaseModel):
     corr_cutoff: float = 0.7      # Maximum correlation allowed between alphas
     min_turnover: float = 0.01    # Minimum turnover filter
     max_turnover: float = 0.7     # Maximum turnover filter
-    neutralization: str = "market"
+    neutralization: str = "subindustry"
 
 class LLMRunRequest(BaseModel):
     trials: int = 20
@@ -299,7 +299,8 @@ async def api_evaluate(req: EvalRequest):
                     alpha_df=result.alpha_df,
                     returns_df=state.evaluator._forward_returns,
                     close_df=state.evaluator._close_df,
-                    groups=state.evaluator._groups if req.neutralization == "group" else None,
+                    open_df=state.evaluator._open_df,
+                    classifications=state.evaluator._classifications,
                     is_ratio=0.7,
                     booksize=req.booksize,
                     decay=req.decay,
