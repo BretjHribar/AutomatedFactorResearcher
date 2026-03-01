@@ -347,7 +347,7 @@ class GPAlphaEngine:
             db=db,
         )
 
-    # Full feature set for GP — all unique downloaded datasets.
+    # Full feature set for GP — curated, high-impact datasets.
     # Aliases (e.g. 'sales'→'revenue', 'assets'→'total_assets') and
     # internal classification matrices (_sector_groups, sector, etc.) are excluded.
     GP_FEATURE_SET = [
@@ -361,22 +361,37 @@ class GPAlphaEngine:
         "revenue", "cost_of_revenue", "gross_profit", "sga_expense",
         "operating_income", "ebitda", "net_income", "eps", "eps_diluted",
         "interest_expense",
+        # Income Statement — NEW (3)
+        "income_before_tax", "interest_income", "stock_based_compensation",
         # Tax & R&D (2)
         "income_tax", "rd_expense",
         # Balance Sheet (14)
         "total_assets", "assets_curr", "total_liabilities", "liabilities_curr",
         "total_equity", "total_debt", "cash", "inventory", "receivables",
         "payables", "goodwill", "intangibles", "ppe_net", "retained_earnings",
+        # Balance Sheet — NEW (6)
+        "short_term_debt", "long_term_debt", "deferred_revenue",
+        "accrued_expenses", "treasury_stock", "long_term_investments",
         # Derived Balance Sheet (4)
         "net_debt", "working_capital", "invested_capital", "shares_out",
         # Cash Flow (5)
         "cashflow_op", "capex", "free_cashflow", "depreciation",
         "dividends_paid",
+        # Cash Flow — NEW (5)
+        "change_in_working_capital", "acquisitions_net",
+        "net_debt_issuance", "net_stock_issuance", "deferred_income_tax",
         # Corporate Actions (2)
         "stock_repurchase", "debt_repayment",
         # Valuation Ratios (7)
         "pe_ratio", "pb_ratio", "ev_to_ebitda", "debt_to_equity",
         "current_ratio", "roe", "roa",
+        # Profitability & Quality — NEW (7)
+        "roic", "roce", "income_quality", "sbc_to_revenue",
+        "net_debt_to_ebitda", "capex_to_depreciation",
+        "gross_margin",
+        # Cash Cycle — NEW (5)
+        "days_sales_outstanding", "days_payables_outstanding",
+        "days_inventory_outstanding", "operating_cycle", "cash_conversion_cycle",
         # Yield (1)
         "dividend_yield",
         # Per-Share (4)
@@ -384,16 +399,11 @@ class GPAlphaEngine:
         "tangible_book_per_share", "fcf_per_share",
         # Derived Valuation (2)
         "enterprise_value", "inventory_turnover",
-        # Historical Volatility (8)
-        "historical_volatility_10", "historical_volatility_20",
-        "historical_volatility_30", "historical_volatility_60",
-        "historical_volatility_90", "historical_volatility_120",
-        "historical_volatility_150", "historical_volatility_180",
-        # Parkinson Volatility (8)
-        "parkinson_volatility_10", "parkinson_volatility_20",
-        "parkinson_volatility_30", "parkinson_volatility_60",
-        "parkinson_volatility_90", "parkinson_volatility_120",
-        "parkinson_volatility_150", "parkinson_volatility_180",
+        # Volatility — trimmed to key windows (6)
+        "historical_volatility_20", "historical_volatility_60",
+        "historical_volatility_120",
+        "parkinson_volatility_20", "parkinson_volatility_60",
+        "parkinson_volatility_120",
     ]
 
     @classmethod
