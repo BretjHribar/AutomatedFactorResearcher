@@ -1,0 +1,3488 @@
+{
+  "timestamp": "2026-03-01 13:06:25",
+  "total_fields": 234,
+  "fields": {
+    "accounts_receivables": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 0,
+      "ffilled": 120,
+      "nan_pct_after": 12.0,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "accrued_expenses": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 0,
+      "ffilled": 5,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "accumulated_oci": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 0,
+      "ffilled": 5,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "acquisitions_net": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 99,
+      "ffilled": 16,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 99
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "additional_paid_in_capital": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 0,
+      "ffilled": 5,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "adv20": {
+      "category": "volume",
+      "shape": [
+        2552,
+        7835
+      ],
+      "issues": 0,
+      "ffilled": 47864,
+      "nan_pct_after": 42.4,
+      "cleaning_stats": {
+        "replaced_neg": 0,
+        "replaced_extreme": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "adv60": {
+      "category": "volume",
+      "shape": [
+        2552,
+        7835
+      ],
+      "issues": 0,
+      "ffilled": 32964,
+      "nan_pct_after": 42.8,
+      "cleaning_stats": {
+        "replaced_neg": 0,
+        "replaced_extreme": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "asset_turnover": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 2629,
+      "ffilled": 884,
+      "nan_pct_after": 13.0,
+      "cleaning_stats": {
+        "winsorized": 2629
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "assets": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 14640,
+      "ffilled": 60,
+      "nan_pct_after": 12.3,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 14640
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "assets_curr": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 1478,
+      "ffilled": 37,
+      "nan_pct_after": 12.1,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 1478
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "avg_inventory": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 0,
+      "ffilled": 0,
+      "nan_pct_after": 12.8,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "avg_payables": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 0,
+      "ffilled": 0,
+      "nan_pct_after": 12.8,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "avg_receivables": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 0,
+      "ffilled": 0,
+      "nan_pct_after": 12.8,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "book_to_market": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 22782,
+      "ffilled": 260,
+      "nan_pct_after": 13.8,
+      "cleaning_stats": {
+        "winsorized": 22782
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "bookvalue_ps": {
+      "category": "per_share",
+      "shape": [
+        2552,
+        7835
+      ],
+      "issues": 115722,
+      "ffilled": 2518,
+      "nan_pct_after": 73.9,
+      "cleaning_stats": {
+        "winsorized": 106355,
+        "extreme_removed": 9367
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "bottom_line_net_income": {
+      "category": "general",
+      "shape": [
+        2552,
+        2508
+      ],
+      "issues": 0,
+      "ffilled": 10,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "cap": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 9131,
+      "ffilled": 90,
+      "nan_pct_after": 13.0,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 9131
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "capex": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 26,
+      "ffilled": 5,
+      "nan_pct_after": 11.3,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 26
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "capex_to_depreciation": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 373,
+      "ffilled": 0,
+      "nan_pct_after": 12.8,
+      "cleaning_stats": {
+        "winsorized": 373
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "capex_to_ocf": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 77,
+      "ffilled": 0,
+      "nan_pct_after": 12.8,
+      "cleaning_stats": {
+        "winsorized": 77
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "capex_to_revenue": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 2673,
+      "ffilled": 1229,
+      "nan_pct_after": 15.4,
+      "cleaning_stats": {
+        "winsorized": 2673
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "capital_lease_current": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 0,
+      "ffilled": 5,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "capital_lease_noncurrent": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 0,
+      "ffilled": 5,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "capital_lease_obligations": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 0,
+      "ffilled": 0,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "cash": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 0,
+      "ffilled": 5,
+      "nan_pct_after": 12.0,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "cash_and_st_investments": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 496,
+      "ffilled": 20,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 496
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "cash_at_beginning": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 63,
+      "ffilled": 5,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 63
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "cash_at_end": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 0,
+      "ffilled": 0,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "cash_conversion_cycle": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 137,
+      "ffilled": 0,
+      "nan_pct_after": 12.8,
+      "cleaning_stats": {
+        "winsorized": 137
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "cash_conversion_ratio": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 924,
+      "ffilled": 296,
+      "nan_pct_after": 11.6,
+      "cleaning_stats": {
+        "winsorized": 924
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "cash_ratio": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 2772,
+      "ffilled": 2827,
+      "nan_pct_after": 15.1,
+      "cleaning_stats": {
+        "winsorized": 2772
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "cashflow": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 26,
+      "ffilled": 5,
+      "nan_pct_after": 11.3,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 26
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "cashflow_invst": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 26,
+      "ffilled": 5,
+      "nan_pct_after": 11.3,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 26
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "cashflow_op": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 0,
+      "ffilled": 0,
+      "nan_pct_after": 11.3,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "cf_accounts_payables": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 50,
+      "ffilled": 15,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 50
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "cf_accounts_receivables": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 0,
+      "ffilled": 10,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "cf_inventory": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 0,
+      "ffilled": 10,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "change_in_working_capital": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 0,
+      "ffilled": 0,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "close": {
+      "category": "price",
+      "shape": [
+        2552,
+        7835
+      ],
+      "issues": 8907,
+      "ffilled": 190229,
+      "nan_pct_after": 41.9,
+      "cleaning_stats": {
+        "replaced_high": 8906,
+        "replaced_low": 1,
+        "replaced_neg": 0
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "cogs": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 1,
+      "ffilled": 1,
+      "nan_pct_after": 11.3,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 1
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "common_dividends_paid": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 35,
+      "ffilled": 15,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 35
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "common_stock": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 0,
+      "ffilled": 5,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "common_stock_issuance": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 229,
+      "ffilled": 15,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 229
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "cost_and_expenses": {
+      "category": "general",
+      "shape": [
+        2552,
+        2508
+      ],
+      "issues": 19,
+      "ffilled": 6,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 19
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "cost_of_revenue": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 1,
+      "ffilled": 1,
+      "nan_pct_after": 11.3,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 1
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "current_ratio": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 341,
+      "ffilled": 0,
+      "nan_pct_after": 12.9,
+      "cleaning_stats": {
+        "winsorized": 341
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "days_inventory_outstanding": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 119,
+      "ffilled": 0,
+      "nan_pct_after": 12.8,
+      "cleaning_stats": {
+        "winsorized": 119
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "days_payables_outstanding": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 221,
+      "ffilled": 0,
+      "nan_pct_after": 12.8,
+      "cleaning_stats": {
+        "winsorized": 221
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "days_sales_outstanding": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 212,
+      "ffilled": 0,
+      "nan_pct_after": 12.8,
+      "cleaning_stats": {
+        "winsorized": 212
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "debt": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 468,
+      "ffilled": 26,
+      "nan_pct_after": 12.0,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 468
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "debt_lt": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 468,
+      "ffilled": 26,
+      "nan_pct_after": 12.0,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 468
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "debt_to_assets": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 3324,
+      "ffilled": 969,
+      "nan_pct_after": 12.8,
+      "cleaning_stats": {
+        "winsorized": 3324
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "debt_to_equity": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 2720,
+      "ffilled": 171,
+      "nan_pct_after": 12.1,
+      "cleaning_stats": {
+        "winsorized": 2720
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "deferred_income_tax": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 150,
+      "ffilled": 30,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 150
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "deferred_revenue": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 82,
+      "ffilled": 15,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 82
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "deferred_revenue_noncurrent": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 296,
+      "ffilled": 20,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 296
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "deferred_tax_liabilities": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 486,
+      "ffilled": 25,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 486
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "depre_amort": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 196,
+      "ffilled": 10,
+      "nan_pct_after": 11.3,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 196
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "depre_amort_income": {
+      "category": "general",
+      "shape": [
+        2552,
+        2508
+      ],
+      "issues": 0,
+      "ffilled": 0,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "depreciation": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 196,
+      "ffilled": 10,
+      "nan_pct_after": 11.3,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 196
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "dollars_traded": {
+      "category": "volume",
+      "shape": [
+        2552,
+        7835
+      ],
+      "issues": 55,
+      "ffilled": 190195,
+      "nan_pct_after": 41.8,
+      "cleaning_stats": {
+        "replaced_neg": 0,
+        "replaced_extreme": 55
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "earnings_yield": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        7835
+      ],
+      "issues": 103368,
+      "ffilled": 2433,
+      "nan_pct_after": 73.5,
+      "cleaning_stats": {
+        "winsorized": 103368
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "ebit": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 0,
+      "ffilled": 0,
+      "nan_pct_after": 11.3,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "ebitda": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 0,
+      "ffilled": 0,
+      "nan_pct_after": 11.3,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "ebitda_margin": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 1954,
+      "ffilled": 1229,
+      "nan_pct_after": 15.3,
+      "cleaning_stats": {
+        "winsorized": 1954
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "enterprise_value": {
+      "category": "market_cap",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 56778,
+      "ffilled": 1350,
+      "nan_pct_after": 13.7,
+      "cleaning_stats": {
+        "replaced_neg": 56335,
+        "replaced_extreme": 443
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "eps": {
+      "category": "per_share",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 3184,
+      "ffilled": 15,
+      "nan_pct_after": 11.3,
+      "cleaning_stats": {
+        "winsorized": 2540,
+        "extreme_removed": 644
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "eps_diluted": {
+      "category": "per_share",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 3184,
+      "ffilled": 15,
+      "nan_pct_after": 11.3,
+      "cleaning_stats": {
+        "winsorized": 2540,
+        "extreme_removed": 644
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "equity": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 311,
+      "ffilled": 17,
+      "nan_pct_after": 12.0,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 311
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "ev_to_ebitda": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 14830,
+      "ffilled": 1056,
+      "nan_pct_after": 13.8,
+      "cleaning_stats": {
+        "winsorized": 14830
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "ev_to_fcf": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 5249,
+      "ffilled": 944,
+      "nan_pct_after": 13.5,
+      "cleaning_stats": {
+        "winsorized": 5249
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "ev_to_ocf": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 96,
+      "ffilled": 0,
+      "nan_pct_after": 12.8,
+      "cleaning_stats": {
+        "winsorized": 96
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "ev_to_revenue": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 22686,
+      "ffilled": 1214,
+      "nan_pct_after": 16.8,
+      "cleaning_stats": {
+        "winsorized": 22686
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "fcf_per_share": {
+      "category": "per_share",
+      "shape": [
+        2552,
+        7835
+      ],
+      "issues": 114613,
+      "ffilled": 2049,
+      "nan_pct_after": 73.9,
+      "cleaning_stats": {
+        "winsorized": 106303,
+        "extreme_removed": 8310
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "fcf_to_equity": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 252,
+      "ffilled": 15,
+      "nan_pct_after": 12.8,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 252
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "fcf_to_firm": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 314,
+      "ffilled": 25,
+      "nan_pct_after": 12.8,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 314
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "forex_effect_on_cash": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 39,
+      "ffilled": 5,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 39
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "free_cashflow": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 26,
+      "ffilled": 5,
+      "nan_pct_after": 11.3,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 26
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "free_cashflow_yield": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 22949,
+      "ffilled": 255,
+      "nan_pct_after": 13.3,
+      "cleaning_stats": {
+        "winsorized": 22949
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "ga_expense": {
+      "category": "general",
+      "shape": [
+        2552,
+        2508
+      ],
+      "issues": 0,
+      "ffilled": 2,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "goodwill": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 157,
+      "ffilled": 16,
+      "nan_pct_after": 12.0,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 157
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "goodwill_and_intangibles": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 315,
+      "ffilled": 26,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 315
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "graham_net_net": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 0,
+      "ffilled": 0,
+      "nan_pct_after": 12.8,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "graham_number": {
+      "category": "per_share",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 400,
+      "ffilled": 31039,
+      "nan_pct_after": 40.2,
+      "cleaning_stats": {
+        "winsorized": 400,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "gross_margin": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 3051,
+      "ffilled": 1229,
+      "nan_pct_after": 15.3,
+      "cleaning_stats": {
+        "winsorized": 3051
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "gross_profit": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 33,
+      "ffilled": 6,
+      "nan_pct_after": 11.3,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 33
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "gross_profit_field": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 33,
+      "ffilled": 6,
+      "nan_pct_after": 11.3,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 33
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "high": {
+      "category": "price",
+      "shape": [
+        2552,
+        7835
+      ],
+      "issues": 9059,
+      "ffilled": 190141,
+      "nan_pct_after": 41.9,
+      "cleaning_stats": {
+        "replaced_high": 9026,
+        "replaced_low": 33,
+        "replaced_neg": 0
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "historical_volatility_10": {
+      "category": "volatility",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 2708,
+      "ffilled": 0,
+      "nan_pct_after": 15.3,
+      "cleaning_stats": {
+        "replaced_neg": 0,
+        "capped": 2708
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "historical_volatility_120": {
+      "category": "volatility",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 3559,
+      "ffilled": 0,
+      "nan_pct_after": 19.6,
+      "cleaning_stats": {
+        "replaced_neg": 0,
+        "capped": 3559
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "historical_volatility_150": {
+      "category": "volatility",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 3775,
+      "ffilled": 0,
+      "nan_pct_after": 20.8,
+      "cleaning_stats": {
+        "replaced_neg": 0,
+        "capped": 3775
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "historical_volatility_180": {
+      "category": "volatility",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 3669,
+      "ffilled": 0,
+      "nan_pct_after": 22.0,
+      "cleaning_stats": {
+        "replaced_neg": 0,
+        "capped": 3669
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "historical_volatility_20": {
+      "category": "volatility",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 2593,
+      "ffilled": 0,
+      "nan_pct_after": 15.7,
+      "cleaning_stats": {
+        "replaced_neg": 0,
+        "capped": 2593
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "historical_volatility_30": {
+      "category": "volatility",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 2834,
+      "ffilled": 0,
+      "nan_pct_after": 16.1,
+      "cleaning_stats": {
+        "replaced_neg": 0,
+        "capped": 2834
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "historical_volatility_60": {
+      "category": "volatility",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 3224,
+      "ffilled": 0,
+      "nan_pct_after": 17.3,
+      "cleaning_stats": {
+        "replaced_neg": 0,
+        "capped": 3224
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "historical_volatility_90": {
+      "category": "volatility",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 3192,
+      "ffilled": 0,
+      "nan_pct_after": 18.5,
+      "cleaning_stats": {
+        "replaced_neg": 0,
+        "capped": 3192
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "income": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 0,
+      "ffilled": 0,
+      "nan_pct_after": 11.3,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "income_before_tax": {
+      "category": "general",
+      "shape": [
+        2552,
+        2508
+      ],
+      "issues": 54,
+      "ffilled": 5,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 54
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "income_quality": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 100,
+      "ffilled": 0,
+      "nan_pct_after": 12.8,
+      "cleaning_stats": {
+        "winsorized": 100
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "income_tax": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 92,
+      "ffilled": 10,
+      "nan_pct_after": 11.3,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 92
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "income_taxes_paid": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 0,
+      "ffilled": 90,
+      "nan_pct_after": 11.7,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "industry": {
+      "category": "classification",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 0,
+      "status": "skipped (non-numeric)"
+    },
+    "intangibles": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 1,
+      "ffilled": 6,
+      "nan_pct_after": 12.0,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 1
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "intangibles_to_assets": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 446,
+      "ffilled": 0,
+      "nan_pct_after": 12.8,
+      "cleaning_stats": {
+        "winsorized": 446
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "interest_burden": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 162,
+      "ffilled": 0,
+      "nan_pct_after": 12.8,
+      "cleaning_stats": {
+        "winsorized": 162
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "interest_coverage": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 1519,
+      "ffilled": 7286,
+      "nan_pct_after": 25.8,
+      "cleaning_stats": {
+        "winsorized": 1519
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "interest_expense": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 0,
+      "ffilled": 370,
+      "nan_pct_after": 11.5,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "interest_income": {
+      "category": "general",
+      "shape": [
+        2552,
+        2508
+      ],
+      "issues": 468,
+      "ffilled": 316,
+      "nan_pct_after": 11.3,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 468
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "interest_paid": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 0,
+      "ffilled": 75,
+      "nan_pct_after": 11.8,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "inventory": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 0,
+      "ffilled": 5,
+      "nan_pct_after": 12.0,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "inventory_turnover": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 1259,
+      "ffilled": 5848,
+      "nan_pct_after": 49.0,
+      "cleaning_stats": {
+        "winsorized": 1259
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "invested_capital": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 7664,
+      "ffilled": 50,
+      "nan_pct_after": 13.0,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 7664
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "liabilities": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 12911,
+      "ffilled": 37,
+      "nan_pct_after": 12.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 12911
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "liabilities_curr": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 10778,
+      "ffilled": 16,
+      "nan_pct_after": 12.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 10778
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "log_returns": {
+      "category": "return",
+      "shape": [
+        2552,
+        7835
+      ],
+      "issues": 9258,
+      "ffilled": 194363,
+      "nan_pct_after": 42.2,
+      "cleaning_stats": {
+        "clipped": 9257,
+        "inf_replaced": 1
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "long_term_debt": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 19,
+      "ffilled": 11,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 19
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "long_term_investments": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 6477,
+      "ffilled": 35,
+      "nan_pct_after": 12.0,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 6477
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "low": {
+      "category": "price",
+      "shape": [
+        2552,
+        7835
+      ],
+      "issues": 8857,
+      "ffilled": 189999,
+      "nan_pct_after": 41.9,
+      "cleaning_stats": {
+        "replaced_high": 8790,
+        "replaced_low": 67,
+        "replaced_neg": 0
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "lt_net_debt_issuance": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 0,
+      "ffilled": 5,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "market_cap": {
+      "category": "market_cap",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 254,
+      "ffilled": 0,
+      "nan_pct_after": 12.9,
+      "cleaning_stats": {
+        "replaced_neg": 0,
+        "replaced_extreme": 254
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "market_cap_metric": {
+      "category": "market_cap",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 254,
+      "ffilled": 0,
+      "nan_pct_after": 12.9,
+      "cleaning_stats": {
+        "replaced_neg": 0,
+        "replaced_extreme": 254
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "minority_interest": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 0,
+      "ffilled": 0,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "net_change_in_cash": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 63,
+      "ffilled": 0,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 63
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "net_common_stock_issuance": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 0,
+      "ffilled": 5,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "net_current_asset_value": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 10260,
+      "ffilled": 25,
+      "nan_pct_after": 12.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 10260
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "net_debt": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 191,
+      "ffilled": 11,
+      "nan_pct_after": 12.0,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 191
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "net_debt_calc": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 191,
+      "ffilled": 16,
+      "nan_pct_after": 12.0,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 191
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "net_debt_issuance": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 0,
+      "ffilled": 150,
+      "nan_pct_after": 11.5,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "net_debt_to_ebitda": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 243,
+      "ffilled": 0,
+      "nan_pct_after": 12.8,
+      "cleaning_stats": {
+        "winsorized": 243
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "net_dividends_paid": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 35,
+      "ffilled": 15,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 35
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "net_financing_cf": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 52,
+      "ffilled": 10,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 52
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "net_income": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 0,
+      "ffilled": 0,
+      "nan_pct_after": 11.3,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "net_income_cf": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 0,
+      "ffilled": 0,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "net_income_continuing": {
+      "category": "general",
+      "shape": [
+        2552,
+        2508
+      ],
+      "issues": 0,
+      "ffilled": 85,
+      "nan_pct_after": 11.3,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "net_income_deductions": {
+      "category": "general",
+      "shape": [
+        2552,
+        2508
+      ],
+      "issues": 0,
+      "ffilled": 135,
+      "nan_pct_after": 11.8,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "net_income_discontinued": {
+      "category": "general",
+      "shape": [
+        2552,
+        2508
+      ],
+      "issues": 0,
+      "ffilled": 0,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "net_interest_income": {
+      "category": "general",
+      "shape": [
+        2552,
+        2508
+      ],
+      "issues": 217,
+      "ffilled": 0,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 217
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "net_investing_cf": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 447,
+      "ffilled": 27,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 447
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "net_margin": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 1552,
+      "ffilled": 1229,
+      "nan_pct_after": 15.3,
+      "cleaning_stats": {
+        "winsorized": 1552
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "net_preferred_stock_issuance": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 0,
+      "ffilled": 10,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "net_stock_issuance": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 0,
+      "ffilled": 185,
+      "nan_pct_after": 11.6,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "non_operating_income": {
+      "category": "general",
+      "shape": [
+        2552,
+        2508
+      ],
+      "issues": 0,
+      "ffilled": 0,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "open": {
+      "category": "price",
+      "shape": [
+        2552,
+        7835
+      ],
+      "issues": 9016,
+      "ffilled": 189956,
+      "nan_pct_after": 41.9,
+      "cleaning_stats": {
+        "replaced_high": 8929,
+        "replaced_low": 87,
+        "replaced_neg": 0
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "operating_cycle": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 136,
+      "ffilled": 0,
+      "nan_pct_after": 12.8,
+      "cleaning_stats": {
+        "winsorized": 136
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "operating_expense": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 0,
+      "ffilled": 0,
+      "nan_pct_after": 11.3,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "operating_expenses_total": {
+      "category": "general",
+      "shape": [
+        2552,
+        2508
+      ],
+      "issues": 1,
+      "ffilled": 1,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 1
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "operating_income": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 0,
+      "ffilled": 0,
+      "nan_pct_after": 11.3,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "operating_margin": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 2210,
+      "ffilled": 1229,
+      "nan_pct_after": 15.3,
+      "cleaning_stats": {
+        "winsorized": 2210
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "operating_roa": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 258,
+      "ffilled": 0,
+      "nan_pct_after": 12.8,
+      "cleaning_stats": {
+        "winsorized": 258
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "other_adjustments_ni": {
+      "category": "general",
+      "shape": [
+        2552,
+        2508
+      ],
+      "issues": 0,
+      "ffilled": 120,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "other_assets": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 310,
+      "ffilled": 11,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 310
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "other_current_assets": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 1,
+      "ffilled": 1,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 1
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "other_current_liabilities": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 9868,
+      "ffilled": 1,
+      "nan_pct_after": 12.1,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 9868
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "other_expenses": {
+      "category": "general",
+      "shape": [
+        2552,
+        2508
+      ],
+      "issues": 518,
+      "ffilled": 16,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 518
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "other_financing": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 115,
+      "ffilled": 5,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 115
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "other_income_expense_net": {
+      "category": "general",
+      "shape": [
+        2552,
+        2508
+      ],
+      "issues": 92,
+      "ffilled": 10,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 92
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "other_investing": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 152,
+      "ffilled": 24,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 152
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "other_liabilities": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 1173,
+      "ffilled": 0,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 1173
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "other_non_cash_items": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 77,
+      "ffilled": 10,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 77
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "other_noncurrent_assets": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 1885,
+      "ffilled": 35,
+      "nan_pct_after": 12.0,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 1885
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "other_noncurrent_liabilities": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 12,
+      "ffilled": 8,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 12
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "other_payables": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 0,
+      "ffilled": 5,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "other_receivables": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 0,
+      "ffilled": 0,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "other_stockholders_equity": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 543,
+      "ffilled": 21,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 543
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "other_working_capital": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 0,
+      "ffilled": 0,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "parkinson_volatility_10": {
+      "category": "volatility",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 0,
+      "ffilled": 628,
+      "nan_pct_after": 15.4,
+      "cleaning_stats": {
+        "replaced_neg": 0,
+        "capped": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "parkinson_volatility_120": {
+      "category": "volatility",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 0,
+      "ffilled": 148,
+      "nan_pct_after": 19.8,
+      "cleaning_stats": {
+        "replaced_neg": 0,
+        "capped": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "parkinson_volatility_150": {
+      "category": "volatility",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 0,
+      "ffilled": 138,
+      "nan_pct_after": 21.0,
+      "cleaning_stats": {
+        "replaced_neg": 0,
+        "capped": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "parkinson_volatility_180": {
+      "category": "volatility",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 0,
+      "ffilled": 133,
+      "nan_pct_after": 22.2,
+      "cleaning_stats": {
+        "replaced_neg": 0,
+        "capped": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "parkinson_volatility_20": {
+      "category": "volatility",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 0,
+      "ffilled": 323,
+      "nan_pct_after": 15.8,
+      "cleaning_stats": {
+        "replaced_neg": 0,
+        "capped": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "parkinson_volatility_30": {
+      "category": "volatility",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 0,
+      "ffilled": 228,
+      "nan_pct_after": 16.2,
+      "cleaning_stats": {
+        "replaced_neg": 0,
+        "capped": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "parkinson_volatility_60": {
+      "category": "volatility",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 0,
+      "ffilled": 173,
+      "nan_pct_after": 17.4,
+      "cleaning_stats": {
+        "replaced_neg": 0,
+        "capped": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "parkinson_volatility_90": {
+      "category": "volatility",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 0,
+      "ffilled": 153,
+      "nan_pct_after": 18.6,
+      "cleaning_stats": {
+        "replaced_neg": 0,
+        "capped": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "payables": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 0,
+      "ffilled": 5,
+      "nan_pct_after": 12.0,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "pb_ratio": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 21739,
+      "ffilled": 166,
+      "nan_pct_after": 13.6,
+      "cleaning_stats": {
+        "winsorized": 21739
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "pe_ratio": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        7835
+      ],
+      "issues": 60115,
+      "ffilled": 2675,
+      "nan_pct_after": 73.6,
+      "cleaning_stats": {
+        "winsorized": 60115
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "ppe_net": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 0,
+      "ffilled": 5,
+      "nan_pct_after": 12.0,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "ppent": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 0,
+      "ffilled": 5,
+      "nan_pct_after": 12.0,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "preferred_dividends_paid": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 0,
+      "ffilled": 80,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "preferred_stock": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 0,
+      "ffilled": 0,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "prepaids": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 0,
+      "ffilled": 5,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "purchases_of_investments": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 567,
+      "ffilled": 50,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 567
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "quick_ratio": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 3392,
+      "ffilled": 2827,
+      "nan_pct_after": 15.1,
+      "cleaning_stats": {
+        "winsorized": 3392
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "rd_expense": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 0,
+      "ffilled": 0,
+      "nan_pct_after": 11.3,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "rd_to_revenue": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 767,
+      "ffilled": 1229,
+      "nan_pct_after": 15.3,
+      "cleaning_stats": {
+        "winsorized": 767
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "receivable": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 0,
+      "ffilled": 5,
+      "nan_pct_after": 12.0,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "receivables": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 0,
+      "ffilled": 5,
+      "nan_pct_after": 12.0,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "retained_earnings": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 291,
+      "ffilled": 20,
+      "nan_pct_after": 12.0,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 291
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "return_assets": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 1946,
+      "ffilled": 884,
+      "nan_pct_after": 13.0,
+      "cleaning_stats": {
+        "winsorized": 1946
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "return_equity": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 1773,
+      "ffilled": 166,
+      "nan_pct_after": 12.3,
+      "cleaning_stats": {
+        "winsorized": 1773
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "returns": {
+      "category": "return",
+      "shape": [
+        2552,
+        7835
+      ],
+      "issues": 6912,
+      "ffilled": 194368,
+      "nan_pct_after": 42.2,
+      "cleaning_stats": {
+        "clipped": 6912,
+        "inf_replaced": 0
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "revenue": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 94,
+      "ffilled": 16,
+      "nan_pct_after": 11.3,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 94
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "revenue_per_share": {
+      "category": "per_share",
+      "shape": [
+        2552,
+        7835
+      ],
+      "issues": 110578,
+      "ffilled": 2540,
+      "nan_pct_after": 73.9,
+      "cleaning_stats": {
+        "winsorized": 102141,
+        "extreme_removed": 8437
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "roa": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 1946,
+      "ffilled": 884,
+      "nan_pct_after": 13.0,
+      "cleaning_stats": {
+        "winsorized": 1946
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "roce": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 241,
+      "ffilled": 0,
+      "nan_pct_after": 12.8,
+      "cleaning_stats": {
+        "winsorized": 241
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "roe": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 1773,
+      "ffilled": 166,
+      "nan_pct_after": 12.3,
+      "cleaning_stats": {
+        "winsorized": 1773
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "roic": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 323,
+      "ffilled": 0,
+      "nan_pct_after": 12.8,
+      "cleaning_stats": {
+        "winsorized": 323
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "rota": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 214,
+      "ffilled": 0,
+      "nan_pct_after": 12.8,
+      "cleaning_stats": {
+        "winsorized": 214
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "sales": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 94,
+      "ffilled": 16,
+      "nan_pct_after": 11.3,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 94
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "sales_of_investments": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 489,
+      "ffilled": 40,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 489
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "sales_ps": {
+      "category": "per_share",
+      "shape": [
+        2552,
+        7835
+      ],
+      "issues": 110578,
+      "ffilled": 2540,
+      "nan_pct_after": 73.9,
+      "cleaning_stats": {
+        "winsorized": 102141,
+        "extreme_removed": 8437
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "sbc_to_revenue": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 341,
+      "ffilled": 0,
+      "nan_pct_after": 12.8,
+      "cleaning_stats": {
+        "winsorized": 341
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "sector": {
+      "category": "classification",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 0,
+      "status": "skipped (non-numeric)"
+    },
+    "selling_marketing_expense": {
+      "category": "general",
+      "shape": [
+        2552,
+        2508
+      ],
+      "issues": 0,
+      "ffilled": 2,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "sga_expense": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 0,
+      "ffilled": 0,
+      "nan_pct_after": 11.3,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "sga_to_revenue": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 2833,
+      "ffilled": 1229,
+      "nan_pct_after": 15.3,
+      "cleaning_stats": {
+        "winsorized": 2833
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "sharesout": {
+      "category": "general",
+      "shape": [
+        2552,
+        7835
+      ],
+      "issues": 0,
+      "ffilled": 2427,
+      "nan_pct_after": 73.8,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "short_term_debt": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 0,
+      "ffilled": 5,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "short_term_investments": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 322,
+      "ffilled": 10,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 322
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "st_net_debt_issuance": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 0,
+      "ffilled": 0,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "stock_based_compensation": {
+      "category": "general",
+      "shape": [
+        2552,
+        2507
+      ],
+      "issues": 172,
+      "ffilled": 25,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 172
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "stock_repurchase": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 47,
+      "ffilled": 10,
+      "nan_pct_after": 11.3,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 47
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "subindustry": {
+      "category": "classification",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 0,
+      "status": "skipped (non-numeric)"
+    },
+    "tangible_asset_value": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 942,
+      "ffilled": 20,
+      "nan_pct_after": 12.8,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 942
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "tangible_book_per_share": {
+      "category": "per_share",
+      "shape": [
+        2552,
+        7835
+      ],
+      "issues": 116860,
+      "ffilled": 2518,
+      "nan_pct_after": 73.9,
+      "cleaning_stats": {
+        "winsorized": 106468,
+        "extreme_removed": 10392
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "tax_assets": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 513,
+      "ffilled": 25,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 513
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "tax_burden": {
+      "category": "ratio",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 178,
+      "ffilled": 0,
+      "nan_pct_after": 12.8,
+      "cleaning_stats": {
+        "winsorized": 178
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "tax_payables": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 455,
+      "ffilled": 25,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 455
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "total_assets": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 14640,
+      "ffilled": 60,
+      "nan_pct_after": 12.3,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 14640
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "total_debt": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 468,
+      "ffilled": 26,
+      "nan_pct_after": 12.0,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 468
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "total_equity": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 311,
+      "ffilled": 17,
+      "nan_pct_after": 12.0,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 311
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "total_equity_incl_minority": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 308,
+      "ffilled": 14,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 308
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "total_investments": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 10286,
+      "ffilled": 25,
+      "nan_pct_after": 12.1,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 10286
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "total_liab_and_equity": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 14640,
+      "ffilled": 60,
+      "nan_pct_after": 12.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 14640
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "total_liabilities": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 12911,
+      "ffilled": 37,
+      "nan_pct_after": 12.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 12911
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "total_noncurrent_assets": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 10590,
+      "ffilled": 33,
+      "nan_pct_after": 12.1,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 10590
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "total_noncurrent_liabilities": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 1557,
+      "ffilled": 32,
+      "nan_pct_after": 12.0,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 1557
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "total_payables": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 0,
+      "ffilled": 0,
+      "nan_pct_after": 11.9,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "treasury_stock": {
+      "category": "general",
+      "shape": [
+        2552,
+        2509
+      ],
+      "issues": 0,
+      "ffilled": 60,
+      "nan_pct_after": 12.4,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 0
+      },
+      "status": "\ud83d\udfe2 CLEAN"
+    },
+    "volume": {
+      "category": "volume",
+      "shape": [
+        2552,
+        7835
+      ],
+      "issues": 70,
+      "ffilled": 190207,
+      "nan_pct_after": 41.8,
+      "cleaning_stats": {
+        "replaced_neg": 0,
+        "replaced_extreme": 70
+      },
+      "status": "\ud83d\udfe1 MINOR"
+    },
+    "vwap": {
+      "category": "price",
+      "shape": [
+        2552,
+        7835
+      ],
+      "issues": 8965,
+      "ffilled": 190256,
+      "nan_pct_after": 41.9,
+      "cleaning_stats": {
+        "replaced_high": 8936,
+        "replaced_low": 29,
+        "replaced_neg": 0
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "weighted_avg_shares": {
+      "category": "general",
+      "shape": [
+        2552,
+        2508
+      ],
+      "issues": 252,
+      "ffilled": 0,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 252
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "weighted_avg_shares_diluted": {
+      "category": "general",
+      "shape": [
+        2552,
+        2508
+      ],
+      "issues": 352,
+      "ffilled": 5,
+      "nan_pct_after": 11.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 352
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    },
+    "working_capital": {
+      "category": "general",
+      "shape": [
+        2552,
+        2512
+      ],
+      "issues": 8195,
+      "ffilled": 46,
+      "nan_pct_after": 12.2,
+      "cleaning_stats": {
+        "inf_replaced": 0,
+        "extreme_removed": 8195
+      },
+      "status": "\ud83d\udd34 MAJOR"
+    }
+  },
+  "summary": {
+    "total_fields": 234,
+    "major_issues": 124,
+    "minor_issues": 35,
+    "clean_fields": 72,
+    "total_data_points_fixed": 1211316,
+    "total_ffilled": 1893819,
+    "issue_breakdown": {
+      "extreme_removed": 219536,
+      "winsorized": 847841,
+      "replaced_high": 44587,
+      "replaced_low": 217,
+      "replaced_extreme": 1076,
+      "replaced_neg": 56335,
+      "capped": 25554,
+      "clipped": 16169,
+      "inf_replaced": 1
+    },
+    "category_counts": {
+      "general": 147,
+      "volume": 4,
+      "ratio": 46,
+      "per_share": 8,
+      "price": 5,
+      "market_cap": 3,
+      "volatility": 16,
+      "classification": 3,
+      "return": 2
+    },
+    "runtime_seconds": 542.0
+  }
+}
