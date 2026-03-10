@@ -1,0 +1,16 @@
+PosSmooth(mw=0.03,phl=72): Sharpe 2.166, TO 0.023, DD -0.073
+PosSmooth(mw=0.03,phl=90): Sharpe 2.128, TO 0.021, DD -0.070
+PosSmooth(mw=0.03,phl=120): Sharpe 2.060, TO 0.018, DD -0.066
+PosSmooth(mw=0.03,phl=160): Sharpe 1.980, TO 0.016, DD -0.062
+PosSmooth(mw=0.04,phl=72): Sharpe 1.711, TO 0.029, DD -0.088
+PosSmooth(mw=0.04,phl=90): Sharpe 1.700, TO 0.026, DD -0.086
+PosSmooth(mw=0.04,phl=120): Sharpe 1.666, TO 0.023, DD -0.083
+PosSmooth(mw=0.04,phl=160): Sharpe 1.607, TO 0.021, DD -0.080
+PosSmooth(mw=0.05,phl=72): Sharpe 1.458, TO 0.034, DD -0.092
+PosSmooth(mw=0.05,phl=90): Sharpe 1.512, TO 0.030, DD -0.090
+PosSmooth(mw=0.05,phl=120): Sharpe 1.506, TO 0.027, DD -0.087
+PosSmooth(mw=0.05,phl=160): Sharpe 1.423, TO 0.024, DD -0.085
+PosSmooth(mw=0.06,phl=72): Sharpe 1.378, TO 0.038, DD -0.092
+PosSmooth(mw=0.06,phl=90): Sharpe 1.421, TO 0.034, DD -0.088
+PosSmooth(mw=0.06,phl=120): Sharpe 1.413, TO 0.029, DD -0.084
+PosSmooth(mw=0.06,phl=160): Sharpe 1.261, TO 0.026, DD -0.084

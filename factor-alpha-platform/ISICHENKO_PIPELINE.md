@@ -7,419 +7,386 @@
 
 ## Table of Contents
 
-1. [Overview & Architecture](#1-overview--architecture)
-2. [Configuration](#2-configuration)
-3. [Data Loading & Preparation](#3-data-loading--preparation)
-4. [Stage 1: Alpha Scaling (Isichenko Eq 2.32)](#4-stage-1-alpha-scaling)
-5. [Stage 2: Factor Risk Model (Isichenko Ch 4)](#5-stage-2-factor-risk-model)
-6. [Stage 3: QP Optimizer (Isichenko Eq 6.6)](#6-stage-3-qp-optimizer)
-7. [Stage 4: Sequential Backtester](#7-stage-4-sequential-backtester)
-8. [Fee Structure & Transaction Costs](#8-fee-structure--transaction-costs)
-9. [Daily Loop Step-by-Step](#9-daily-loop-step-by-step)
-10. [Statistics & Output](#10-statistics--output)
-11. [Current Performance](#11-current-performance)
-12. [Known Issues & Future Work](#12-known-issues--future-work)
+1. [Overview & Two-Stage Architecture](#1-overview--two-stage-architecture)
+2. [What The Book Actually Says](#2-what-the-book-actually-says)
+3. [Stage 1: Alpha Combination via Ridge Regression](#3-stage-1-alpha-combination-via-ridge-regression)
+4. [Stage 2: Portfolio Optimization via QP](#4-stage-2-portfolio-optimization-via-qp)
+5. [Complete Daily Loop](#5-complete-daily-loop)
+6. [Risk Model](#6-risk-model)
+7. [Fee & Transaction Cost Model](#7-fee--transaction-cost-model)
+8. [Configuration Reference](#8-configuration-reference)
+9. [Current Implementation vs Book](#9-current-implementation-vs-book)
+10. [Known Issues & Future Work](#10-known-issues--future-work)
 
 ---
 
-## 1. Overview & Architecture
+## 1. Overview & Two-Stage Architecture
 
-The pipeline is a **sequential day-by-day walk-forward backtester** that operates on a universe of ~500 US equities. It takes GP-discovered alpha signals, scales them into return forecasts, manages risk through a factor model, and computes optimal dollar-neutral long/short portfolios via quadratic programming.
+The pipeline is a **two-stage optimization** that separates alpha combination from portfolio construction:
 
-```mermaid
-graph LR
-    A[GP Alpha Signals] --> B[Alpha Scaler<br/>OLS Scale: k = Cov/Var]
-    B --> C[Combined Forecast<br/>Σ k_a × f_a]
-    C --> D[QP Optimizer<br/>CVXPY + OSQP]
-    E[Factor Risk Model<br/>C = BFB' + diag σ²] --> D
-    F[ADV / TCost Model] --> D
-    D --> G[Optimal Holdings h*]
-    G --> H[PnL = h' × r - tcost]
-    H --> I[Statistics & Graphs]
+```
+                    STAGE 1: Alpha Combination                STAGE 2: Portfolio Optimization
+                    ─────────────────────────                 ──────────────────────────────
+                                                              
+  α₁(t) ──┐                                                  
+  α₂(t) ──┤    Rolling Ridge           Combined               QP Optimizer        Optimal
+  α₃(t) ──┼──▶ Regression     ──▶  Return Forecast  ──▶  min(risk - α'w + tcost) ──▶ Weights w*
+  ...     ─┤    on fwd returns         μ̂(t)                  s.t. constraints  
+  αₖ(t) ──┘    (Eq 2.32-2.38)                                (Eq 6.6)
+                                                              ▲
+                                                              │
+                                                    Factor Risk Model C = BFB' + Dσ²
+                                                         (Ch 4)
 ```
 
-### File Map
+**Key principle**: Stage 1 finds the BEST LINEAR COMBINATION of alpha signals to predict forward 
+returns (minimizing MSE). Stage 2 takes that combined forecast and finds optimal portfolio 
+weights subject to risk, costs, and constraints. These are fundamentally different problems 
+with different objectives.
 
-| File | Purpose |
-|------|---------|
-| [isichenko.py](file:///c:/Users/breth/PycharmProjects/AutomatedFactorResearcher/factor-alpha-platform/src/pipeline/isichenko.py) | Core pipeline: `PipelineConfig`, `AlphaScaler`, `FactorRiskModel`, `PortfolioOptimizerQP`, `IsichenkoPipeline` |
-| [run_isichenko_pipeline.py](file:///c:/Users/breth/PycharmProjects/AutomatedFactorResearcher/factor-alpha-platform/run_isichenko_pipeline.py) | Runner: loads data, loads GP alphas from DB, runs pipeline, prints stats, generates graphs |
-| [run_data_cleaner.py](file:///c:/Users/breth/PycharmProjects/AutomatedFactorResearcher/factor-alpha-platform/run_data_cleaner.py) | Cleans raw FMP data → `matrices_clean/` |
-| [run_gp_top2000.py](file:///c:/Users/breth/PycharmProjects/AutomatedFactorResearcher/factor-alpha-platform/run_gp_top2000.py) | GP alpha discovery on TOP1000 universe |
+### What Goes Wrong If You Skip Stage 1
+
+If you skip the ridge regression and just rank-average the signals, you must manually scale 
+the combined signal into return units. This introduces arbitrary scaling that breaks the 
+QP's risk-return tradeoff:
+- Too large → QP concentrates into max-weight positions (all positions hit caps)
+- Too small → QP gives near-zero positions (everything subsumed by risk)
+- No scaling works well because the proper scaling IS the ridge regression
 
 ---
 
-## 2. Configuration
+## 2. What The Book Actually Says
 
-All parameters are in the `PipelineConfig` dataclass ([isichenko.py:29-63](file:///c:/Users/breth/PycharmProjects/AutomatedFactorResearcher/factor-alpha-platform/src/pipeline/isichenko.py#L29-L63)):
+### Isichenko Eq 2.32: Single Alpha OLS Scaling
 
-### Periods
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `is_start` | `2020-01-01` | In-sample training start |
-| `oos_start` | `2024-01-01` | Out-of-sample start |
-| `warmup_days` | `120` | Days to warm up risk model & alpha scalers before IS |
+For a single alpha signal f, the optimal linear predictor of forward return R is:
 
-### Universe
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `universe_name` | `TOP3000` | Universe file to load |
-| `min_coverage` | `0.3` | Min fraction of days ticker must be in universe |
-| `min_adv` | `$1M` | Min 20-day ADV |
-| Actual universe | **500 tickers** | Runner filters to top 500 by ADV for QP performance |
+```
+R̂ = k × f    where    k = Cov(f, R) / Var(f)
+```
 
-### Optimizer
-| Parameter | Default | Isichenko Ref |
-|-----------|---------|---------------|
-| `risk_aversion` (κ) | `1e-6` | Eq 6.6 |
-| `booksize` | `$20M` | GMV target |
-| `max_position_pct_gmv` | `2%` | Max position = 2% of booksize = $400K |
-| `max_position_pct_adv` | `5%` | Max position = 5% of ADV |
-| `dollar_neutral` | `True` | Σh = 0 constraint |
-| `sector_neutral` | `True` | Soft penalty on sector exposure |
+This is just the OLS slope coefficient. k is estimated with an EMA (halflife ~120 days).
+The resulting R̂ is in **return units** (e.g., daily bps) — not rank units.
 
-### Transaction Costs
-| Parameter | Default | Isichenko Ref |
-|-----------|---------|---------------|
-| `slippage_bps` | `1.0` | Ch 5 — linear cost per $ traded |
-| `impact_coeff` | `0.1` | Ch 5 — market impact: `0.1 × σ / √ADV × trade²` |
-| `borrow_cost_bps` | `1.0` | Ch 5.3 — daily cost on short notional (~2.5% ann) |
+### Isichenko Eq 2.38: Multiple Alpha Combination 
+
+For K alpha signals f₁...fₖ, the optimal linear combination is:
+
+```
+R̂ = Σᵢ wᵢ × fᵢ    where    w = (F'F + λI)⁻¹ F'R
+```
+
+This is **ridge regression** (OLS with L2 regularization):
+- **F**: (T × K) matrix of alpha signal values across time (cross-sectionally stacked)
+- **R**: (T,) vector of forward returns
+- **λ**: ridge penalty controlling overfitting (set via cross-validation or the textbook recommendation)
+- **w**: (K,) combination weights in return units
+
+The output R̂ᵢ is automatically in return units — no manual Grinold scaling needed.
+
+### Why Ridge, Not OLS?
+
+With many correlated alpha signals:
+- OLS gives unstable weights (near-singular F'F, large ±weights)
+- Ridge shrinks all weights toward zero, preventing blowup
+- Ridge penalty λ controls bias-variance tradeoff
+- Cross-validate λ, or use λ ≈ trace(F'F) / K as starting point
+
+### Isichenko Eq 6.6: Portfolio Optimization
+
+Given combined forecast μ̂ (from Stage 1) and risk model C = BFB' + Dσ²:
+
+```
+minimize   ½κ w'Cw  - μ̂'w  + tcost(w - w_prev)
+subject to Σ|wᵢ| ≤ 1           (GMV constraint in weight space)
+           Σwᵢ = 0              (dollar neutrality)
+           |wᵢ| ≤ w_max         (position limits)
+```
+
+Where:
+- **κ**: risk aversion (how much you penalize variance relative to expected return)
+- **w'Cw**: portfolio variance (factor risk + idiosyncratic risk)
+- **μ̂'w**: expected portfolio return (from Stage 1)
+- **tcost**: linear (slippage) + non-linear (market impact) trading costs
+
+> **Critical**: μ̂ must be in the SAME UNITS as the diagonal of C (daily return variance).
+> The ridge regression ensures this automatically because it regresses signals on actual returns.
 
 ---
 
-## 3. Data Loading & Preparation
+## 3. Stage 1: Alpha Combination via Ridge Regression
 
-### Step 3.1: Load Universe
-```python
-universe_df = pd.read_parquet("data/fmp_cache/universes/TOP3000.parquet")
+### Rolling Ridge Regression (Walk-Forward)
+
+On each day t, we have:
+- K alpha signals: fₐ(t) for a = 1..K, each an N-vector across stocks
+- Forward returns: R(t+1), an N-vector of next-day returns
+
+We pool cross-sectional observations over a rolling window (e.g., 252 trading days):
+
 ```
-Boolean DataFrame: `(dates × tickers)` — True if ticker is in TOP3000 on that date.
-
-### Step 3.2: Filter Tickers
-1. Require ≥30% coverage across IS period
-2. Further filter to **top 500 by 20-day ADV** (for QP solver speed)
-
-### Step 3.3: Load Clean Matrices
-```python
-mdir = "data/fmp_cache/matrices_clean"  # cleaned data
+For each day t:
+  1. Collect training data from [t-window, t-1]:
+     X[i,a] = fₐ at stock i on day d          (shape: window×N × K)
+     y[i]   = R at stock i on day d+1          (shape: window×N)
+     
+  2. Solve ridge:  w* = (X'X + λI)⁻¹ X'y       (shape: K)
+     
+  3. Predict: μ̂(t) = Σₐ wₐ* × fₐ(t)           (shape: N — one per stock)
 ```
-- 234 parquet files, each `(dates × tickers)` — one per field
-- **Clean data** has been processed by `run_data_cleaner.py`:
-  - Prices: removed > $1M (reverse split artifacts)
-  - Returns: clipped to ±100%
-  - Ratios: winsorized 1st/99th percentile
-  - Per-share: removed > $1M, winsorized
-  - All fields: forward-filled NaN ≤ 5 days
 
-### Step 3.4: Load GP Alphas
-```python
-SELECT expression, sharpe FROM alphas JOIN evaluations 
-WHERE sharpe >= 0.5 ORDER BY sharpe DESC
-```
-Currently: **30 alphas** with Sharpe ≥ 0.5 from GP discovery.
+### Key Implementation Details
 
-### Step 3.5: Pre-compute Alpha Signals
-Each alpha expression is evaluated via `FastExpressionEngine` to produce a DataFrame `(dates × tickers)`. This is done once upfront — the daily loop just indexes into these pre-computed signals.
+1. **Cross-sectional stacking**: Each day contributes N observations (one per stock in universe).
+   Over a 252-day window with N=50 stocks, we have 12,500 training samples for K~30 signals.
+
+2. **Ridge penalty λ**: 
+   - Start with λ = trace(X'X) / K (auto-calibrated)
+   - Or cross-validate with rolling train/validate split
+
+3. **Rank-normalize signals first**: Before regression, rank-normalize each signal cross-sectionally 
+   to [-0.5, +0.5]. This makes all signals comparable and avoids scale issues in the regression.
+
+4. **The regression output is already in return units**: No Grinold scaling hack needed.
+
+5. **Negative weights are fine**: Ridge can assign negative weights to signals if they're 
+   anti-predictive after controlling for correlations with other signals.
+
+### What Stage 1 Gives You
+
+- A single N-vector μ̂(t) of expected returns per stock per day
+- Typical magnitude: a few basis points (e.g., [-30 bps, +30 bps])
+- Automatically decorrelated: correlated signals don't double-count
+- Noise-robust: ridge shrinks zero-IC signals to zero weight
 
 ---
 
-## 4. Stage 1: Alpha Scaling
+## 4. Stage 2: Portfolio Optimization via QP
 
-> **Isichenko Eq 2.32**: *"The optimal linear combination of signal and return uses the OLS regression slope: k = Cov(f, R) / Var(f)"*
+### The QP Problem (Isichenko Eq 6.6)
 
-### Class: `AlphaScaler` ([isichenko.py:69-121](file:///c:/Users/breth/PycharmProjects/AutomatedFactorResearcher/factor-alpha-platform/src/pipeline/isichenko.py#L69-L121))
-
-Each alpha gets its own `AlphaScaler` instance that maintains a rolling OLS estimate:
-
-### Step 4.1: Update (daily)
-```
-On each day t:
-  1. Get yesterday's signal f_a(t-1) and today's realized return R(t)
-  2. Compute cross-sectional: Cov(f, R) and Var(f)
-  3. EMA update (halflife=120 days):
-     running_cov = α × Cov + (1-α) × running_cov
-     running_var = α × Var + (1-α) × running_var
-  4. Scale factor: k_a = running_cov / running_var
-```
-
-### Step 4.2: Scale (produce forecast)
-```
-forecast_a(t) = k_a × f_a(t)
-```
-
-### Step 4.3: Alpha Shutoff (Isichenko Eq 2.32 discussion)
-```
-If k_a ≤ 0:  → alpha is anti-predictive → forecast = 0
-```
-This prevents using signals that predict returns in the wrong direction.
-
-### Step 4.4: Combine
-```
-combined_alpha(t) = Σ_a forecast_a(t)
-```
-Simply summed — no weighting by MSE yet (future work).
-
-> [!NOTE]
-> The initial scale is set to `1e-5` (not 0) so signals contribute during warmup. After ~120 days of data, the OLS calibration takes over.
-
----
-
-## 5. Stage 2: Factor Risk Model
-
-> **Isichenko Ch 4**: *"The covariance matrix C = B'FB + diag(σ²) where B is the factor loading matrix, F is the factor covariance, and σ² is the idiosyncratic variance."*
-
-### Class: `FactorRiskModel` ([isichenko.py:126-261](file:///c:/Users/breth/PycharmProjects/AutomatedFactorResearcher/factor-alpha-platform/src/pipeline/isichenko.py#L126-L261))
-
-### Step 5.1: Build Factor Loadings B (N × K)
-
-**16 factors total:**
-
-| Factor Type | Count | Construction |
-|-------------|-------|-------------|
-| Sector dummies | 11 | GICS sector one-hot encoding |
-| Size | 1 | z-score of log(market_cap) |
-| Value | 1 | z-score of book_to_market |
-| Momentum | 1 | z-score of 12-month return |
-| Volatility | 1 | z-score of 60-day vol |
-| Leverage | 1 | z-score of debt_to_equity |
-
-Style factors are cross-sectionally z-scored each time loadings are rebuilt.
-
-### Step 5.2: Dynamic Rebuilding
-Factor loadings are **rebuilt every 20 trading days** with fresh data (momentum, vol, leverage change over time). This was static before — now dynamic per Isichenko's recommendation.
-
-### Step 5.3: Update Factor Covariance (daily)
-```
-On each day:
-  1. Regress returns on factors: ρ = (B'B)⁻¹ B'r  → factor returns
-  2. Residuals: ε = r - Bρ
-  3. EMA update (halflife=60 days):
-     F = α × ρρ' + (1-α) × F       (factor covariance, K×K)
-     σ² = α × ε² + (1-α) × σ²      (specific variance, N)
-```
-
-### Step 5.4: Compute Q Matrix
-For efficient QP formulation, compute `Q = chol(F) × B'` such that `Q'Q = B'FB`:
-```
-1. Eigendecompose F to ensure PSD: F = V diag(max(λ, 1e-10)) V'
-2. Cholesky: L = chol(F_psd)
-3. Q = L × B'   (shape: K × N)
-```
-
----
-
-## 6. Stage 3: QP Optimizer
-
-> **Isichenko Eq 6.6**: *"The portfolio optimization problem minimizes risk minus alpha plus transaction costs."*
-
-### Class: `PortfolioOptimizerQP` ([isichenko.py:264-385](file:///c:/Users/breth/PycharmProjects/AutomatedFactorResearcher/factor-alpha-platform/src/pipeline/isichenko.py#L264-L385))
-
-### Objective Function
+Given μ̂(t) from Stage 1, solve:
 
 ```
-minimize:
-    ½κ ||Q h||²           # Factor risk (= ½κ h'BFB'h)
-  + ½κ h' diag(σ²) h      # Specific risk
-  - α' h                   # Alpha signal (return forecast)
-  + λ_trade ||h - h_prev||²  # Quadratic trading penalty
-  + c |h - h_prev|         # Linear trading cost (slippage)
-  + λ_impact × Σ (σ/√ADV × (h-h_prev)²)  # Market impact
-  + penalty × Σ (sector_exposure)²  # Soft sector neutrality
+minimize   ½κ ||Qw||²                    # Factor risk
+         + ½κ Σᵢ σᵢ² wᵢ²                # Idiosyncratic risk  
+         - μ̂'w                           # Expected return
+         + c_linear |Δw|₁               # Linear trading cost (slippage)
+         + c_impact Σᵢ (σᵢ/√ADVᵢ) Δwᵢ²  # Market impact (Almgren-Chriss)
+         + λ_trade ||Δw||²              # Turnover aversion
+
+subject to  |wᵢ| ≤ w_max_i             # Per-stock position limit
+            ||w||₁ ≤ 1                   # GMV ≤ booksize
+            Σw = 0                       # Dollar neutral
 ```
 
-### Constraints
+Where:
+- w: (N,) weight vector (fraction of booksize)
+- Q: (K×N) factor risk sqrt matrix (Q'Q = BFB')
+- σ²: (N,) idiosyncratic variance
+- Δw = w - w_prev
+- κ: risk aversion parameter
 
-| Constraint | Formula | Purpose |
-|-----------|---------|---------|
-| Position limits | `-max_pos ≤ h_i ≤ max_pos` | Max position = min(2% GMV, 5% ADV) |
-| GMV bound | `||h||₁ ≤ booksize` | Gross market value ≤ $20M |
-| Dollar neutral | `Σh = 0` | Long = Short |
+### Risk Aversion Calibration
 
-### Step 6.1: Compute Position Limits
-```python
-max_pos = min(
-    cfg.max_position_pct_gmv * cfg.booksize,  # 2% × $20M = $400K
-    cfg.max_position_pct_adv * adv             # 5% of ADV
-)
-```
+κ controls the risk-return tradeoff. The optimal κ depends on:
+- Signal quality (higher IC → lower κ to capture more alpha)
+- Universe size (more stocks → lower κ because diversification helps)  
+- Position limits (tighter limits → κ matters less)
 
-### Step 6.2: Solve QP
-```
-Solver chain:
-  1. OSQP (fastest, warm-started)  →  if fails:
-  2. SCS (more robust)             →  if fails:
-  3. Analytical fallback: h* = α / (κσ²) clipped
-```
+**Calibration method**: Set κ such that the optimal portfolio has target volatility ~15-20% 
+annualized, or equivalently, the average position size matches your target (e.g., ~2%).
 
-> [!IMPORTANT]
-> OSQP runs with `warm_start=True`, reusing the previous solution. This makes consecutive solves ~3× faster.
-
----
-
-## 7. Stage 4: Sequential Backtester
-
-### Class: `IsichenkoPipeline` ([isichenko.py:399-677](file:///c:/Users/breth/PycharmProjects/AutomatedFactorResearcher/factor-alpha-platform/src/pipeline/isichenko.py#L399-L677))
-
-### Warmup Phase
-Before the IS period starts, the pipeline runs through `warmup_days` (120) of historical data to:
-1. Calibrate the risk model (factor covariance + specific variance)
-2. Calibrate the alpha scalers (OLS regression slopes)
-3. No positions are taken during warmup
-
-### Main Loop
-For each trading day from IS start to present, see [Section 9](#9-daily-loop-step-by-step).
-
----
-
-## 8. Fee Structure & Transaction Costs
-
-### Current Fee Model
-
-| Cost | Formula | Typical Magnitude |
-|------|---------|-------------------|
-| **Linear slippage** | `1 bps × |trade|` | ~$200-600/day |
-| **Quadratic impact** | `0.1 × σ / √ADV × trade²` | ~$100-300/day |
-| **Short borrow** | `1 bps/day × |short notional|` | ~$1,000/day at full book |
-| Management fee | *Not modeled* | — |
-| Performance fee | *Not modeled* | — |
-| Financing cost | *Not modeled* | — |
-
-### How Costs Enter the Pipeline
-
-**In the optimizer** (ex-ante): slippage + impact are part of the objective function, so the optimizer sees the cost of trading and naturally reduces turnover.
-
-**In the backtester** (ex-post): all three costs are computed on realized trades and deducted from gross PnL:
-```python
-net_pnl = gross_pnl - slippage_cost - impact_cost - borrow_cost
-```
-
-> [!WARNING]
-> The OOS turnover (6.5%) is higher than IS (1.9%), resulting in OOS tcost eating 67% of gross PnL. The optimizer's turnover penalty may need tuning.
-
----
-
-## 9. Daily Loop Step-by-Step
-
-This is the core of the pipeline — what happens on **each trading day t**:
+### Solver Chain
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│ DAY t                                                   │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│  1. REALIZE PnL                                         │
-│     gross_pnl = h(t-1) · r(t)                          │
-│     (yesterday's positions × today's returns)           │
-│                                                         │
-│  2. UPDATE RISK MODEL                                   │
-│     Feed r(t) into EMA update of F and σ²              │
-│                                                         │
-│  3. REBUILD FACTOR LOADINGS (every 20 days)            │
-│     Recompute B with fresh momentum, vol, leverage     │
-│                                                         │
-│  4. UPDATE ALPHA SCALERS                                │
-│     For each alpha a:                                   │
-│       Feed (f_a(t-1), r(t)) into OLS EMA               │
-│       If k_a < 0: shut off alpha                       │
-│                                                         │
-│  5. COMPUTE COMBINED ALPHA FORECAST                     │
-│     For each active alpha a:                            │
-│       forecast_a = k_a × f_a(t)  (OLS-scaled)         │
-│     combined = Σ forecast_a                             │
-│     Apply universe mask (zero out non-members)          │
-│     Clip to [-5%, +5%]                                  │
-│                                                         │
-│  6. GET RISK MATRICES                                   │
-│     Q = chol(F) × B'  (K × N)                         │
-│     σ² = specific variance (N,)                        │
-│                                                         │
-│  7. GET ADV                                             │
-│     adv = 20-day average dollar volume per ticker      │
-│                                                         │
-│  8. RUN QP OPTIMIZER                                    │
-│     h*(t) = argmin [risk - alpha + tcost]              │
-│     s.t. ||h||₁ ≤ $20M, Σh = 0, |h_i| ≤ max_pos     │
-│                                                         │
-│  9. COMPUTE TRANSACTION COSTS                           │
-│     trades = h*(t) - h(t-1)                            │
-│     slippage = 1 bps × Σ|trades|                       │
-│     impact = 0.1 × Σ (σ/√ADV × trades²)               │
-│     borrow = 1 bps × Σ|short positions|                │
-│                                                         │
-│  10. RECORD RESULTS                                     │
-│      net_pnl = gross_pnl - slippage - impact - borrow  │
-│      Record: pnl, gmv, turnover, n_long, n_short       │
-│                                                         │
-│  11. UPDATE POSITIONS                                   │
-│      h(t-1) ← h*(t)  for next day                     │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
+1. OSQP (fastest, warm-started from previous solution)
+2. SCS (robust fallback if OSQP fails)  
+3. Analytical fallback: w* = μ̂ / (κσ²) clipped to constraints
 ```
 
 ---
 
-## 10. Statistics & Output
+## 5. Complete Daily Loop
 
-### Computed Metrics
-
-| Metric | Formula |
-|--------|---------|
-| Net Sharpe | `mean(daily_pnl) / std(daily_pnl) × √252` |
-| Gross Sharpe | `mean(daily_gross) / std(daily_gross) × √252` |
-| Ann Return | `mean(daily_pnl) × 252 / booksize` |
-| Max Drawdown | `max(peak_pnl - trough_pnl) / booksize` |
-| Calmar | `ann_return / max_drawdown` |
-| Win Rate | `count(pnl > 0) / count(pnl)` |
-| Profit Factor | `sum(winning_days) / sum(losing_days)` |
-| Avg Turnover | `mean(Σ|trades| / GMV)` |
-
-### Output Files
-
-| File | Contents |
-|------|----------|
-| `data/isichenko_pipeline_performance.png` | 4-panel chart: cum PnL, drawdown, rolling Sharpe, daily PnL |
-| `data/isichenko_pipeline_results.json` | Full stats as JSON |
-| `data/data_integrity_report.json` | Data cleaning report |
-| `data/fmp_cache/matrices_clean/` | Cleaned data matrices |
-
----
-
-## 11. Current Performance
-
-*Run: 2026-03-01 | 30 GP alphas (Sharpe ≥ 0.5) | 500 tickers | $20M book*
-
-| Metric | IS (2020-2024) | OOS (2024-2026) | Full |
-|--------|---------------|-----------------|------|
-| **Net Sharpe** | **+0.53** | **+0.36** | **+0.44** |
-| Gross Sharpe | +0.78 | +1.11 | +0.91 |
-| Ann Return (net) | +4.2% | +4.5% | +4.3% |
-| Ann Return (gross) | +6.1% | +13.7% | +8.8% |
-| Max Drawdown | -17.5% | -17.5% | -17.5% |
-| Calmar | 0.24 | 0.26 | 0.25 |
-| Win Rate | 51.2% | 52.0% | 51.5% |
-| Cum PnL | $3.36M | $1.93M | $5.28M |
-| Avg Turnover | 1.9% | 6.5% | 3.5% |
-| Avg GMV | $20.0M | $20.0M | $20.0M |
-
-> [!TIP]
-> **Sharpe decay IS→OOS is only 32%** — a healthy sign. OOS gross Sharpe of 1.11 is excellent; 
-> the net is dragged down by high OOS turnover (6.5% vs 1.9% IS).
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ DAY t                                                                   │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  1. REALIZE PnL                                                         │
+│     gross_pnl = w(t-1) · r(t) × booksize                              │
+│     (yesterday's weights × today's returns)                             │
+│                                                                         │
+│  2. UPDATE RISK MODEL                                                   │
+│     Feed r(t) into EMA update of factor covariance F and spec var σ²   │
+│                                                                         │
+│  3. REBUILD FACTOR LOADINGS (every 20 days)                             │
+│     Recompute B with fresh market cap, momentum, etc.                   │
+│                                                                         │
+│  4. STAGE 1: COMBINE ALPHAS (Ridge Regression)                          │
+│     a. Get each alpha signal fₐ(t-1) (delay=1: yesterday's signal)    │
+│     b. Update rolling X,y matrices with (fₐ(t-1), r(t)) observation   │
+│     c. Solve ridge: w* = (X'X + λI)⁻¹ X'y                            │
+│     d. Predict: μ̂(t) = Σₐ wₐ* × fₐ(t)                               │
+│     e. Apply universe mask: μ̂ᵢ = 0 for stocks not in universe          │
+│                                                                         │
+│  5. STAGE 2: OPTIMIZE PORTFOLIO (QP)                                    │
+│     a. Get risk matrices: Q, σ² from risk model                        │
+│     b. Get ADV for position limits                                      │
+│     c. Solve QP: w*(t) = argmin [risk - μ̂'w + tcost]                  │
+│        s.t. ||w||₁ ≤ 1, Σw = 0, |wᵢ| ≤ w_max                        │
+│                                                                         │
+│  6. COMPUTE TRANSACTION COSTS                                           │
+│     trades = w*(t) - w(t-1)                                            │
+│     tcost = slippage + impact + borrow                                  │
+│                                                                         │
+│  7. RECORD & ADVANCE                                                    │
+│     net_pnl = gross_pnl - tcost                                        │
+│     w(t-1) ← w*(t)                                                     │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## 12. Known Issues & Future Work
+## 6. Risk Model
 
-### Issues
-- **High OOS turnover**: 6.5% vs 1.9% IS — optimizer turnover penalty may need tuning
-- **Transaction costs eat 67% of OOS gross**: consider reducing `slippage_bps` if real execution is better
-- **Some alpha expressions fail**: alphas using functions not in FastExpressionEngine are silently dropped
-- **Static alpha weights**: currently simple sum; should use MSE-based weighting (Isichenko Eq 2.38)
+### For Equities (Isichenko Ch 4)
 
-### Planned Improvements
-1. **MSE-weighted alpha combination** — weight each alpha by 1/MSE of its OLS fit (Eq 2.38)
-2. **Turnover penalty tuning** — increase `lambda_trade` to reduce OOS turnover
-3. **PCA statistical factors** — add PCA factors beyond sectors (currently `n_pca_factors=5` unused)
-4. **Financing costs** — add long margin interest and overnight financing
-5. **Decay sweep** — automatically decay high-turnover alphas
-6. **Alpha correlation management** — decorrelate alphas before combining
-7. **Intraday execution model** — model partial fills and VWAP execution
+Factor model: C = BFB' + diag(σ²)
+
+16 factors:
+- 11 GICS sector dummies
+- Size: z-score of log(market_cap)
+- Value: z-score of book_to_market
+- Momentum: z-score of 12-month return
+- Volatility: z-score of 60-day historical vol  
+- Leverage: z-score of debt_to_equity
+
+Factor covariance F and specific variance σ² updated via EMA (halflife=60 days).
+
+### For Crypto (Simplified)
+
+No GICS sectors. Two options:
+1. **Rolling PCA**: Extract K statistical factors from returns covariance (e.g., K=5)
+2. **L2 regularization**: Skip the factor model entirely, use ½κ||w||² as risk (equivalent to 
+   assuming all stocks have equal variance and zero correlation → forces diversification)
+
+Dollar neutrality constraint substitutes for sector neutrality.
+
+---
+
+## 7. Fee & Transaction Cost Model
+
+| Cost | Formula | In Optimizer? | In Backtest? |
+|------|---------|:---:|:---:|
+| Linear slippage | c × |Δw|₁ | ✅ | ✅ |
+| Market impact (Almgren-Chriss) | η × σ × √(|Δw|/ADV) × |Δw| | ✅ | ✅ |
+| Short borrow | β × |w_short|₁ | ❌ | ✅ |
+| Turnover penalty | λ × ||Δw||² | ✅ | ❌ (implicit) |
+
+For crypto: use linear fee only (e.g., 5 bps taker fee including slippage). No borrow cost 
+for perpetual futures. Impact negligible for TOP50 at $2M book.
+
+---
+
+## 8. Configuration Reference
+
+| Parameter | Equities Default | Crypto Default | Description |
+|-----------|:---:|:---:|---|
+| booksize | $20M | $2M | Gross market value |
+| max_position_pct_gmv | 1-2% | 5% | Max single position as % of book |
+| max_position_pct_adv | 5% | N/A | Max single position as % of ADV |
+| risk_aversion (κ) | 500 (wt space) | TBD | Risk penalty coefficient |
+| dollar_neutral | True | True | Σw = 0 |
+| sector_neutral | True (soft) | False | Crypto has no sectors |
+| slippage_bps | 3 | 5 | Linear cost per trade |
+| ridge_window | 252 | 252 | Rolling window for ridge regression |
+| ridge_lambda | auto | auto | Ridge penalty (cross-validated or auto) |
+| ema_halflife_risk | 60 | 60 | Risk model EMA decay |
+| warmup_days | 120 | 120 | Days to calibrate before trading |
+
+---
+
+## 9. Current Implementation vs Book
+
+### What's Correct ✅
+
+| Component | Status |
+|-----------|--------|
+| QP formulation (weight space) | ✅ Matches Eq 6.6 |
+| Factor risk model (equities) | ✅ BFB' + diag(σ²) with EMA |
+| Dollar neutrality constraint | ✅ Hard constraint in QP |
+| Position limits | ✅ Min of GMV% and ADV% |
+| Linear transaction cost in QP | ✅ Correct |
+| OSQP solver with warm start | ✅ Fast sequential solves |
+
+### What's Wrong ❌
+
+| Component | Current (Broken) | Should Be (Book) |
+|-----------|-----------------|-------------------|
+| **Alpha combination** | Rank-average + Grinold scaling hack | **Ridge regression on forward returns** |
+| **Alpha scaling** | rank × cs_vol (arbitrary, ~20x too large) | **Regression coefficients (return units)** |
+| **Risk aversion (crypto)** | κ=2 (arbitrary) | **Calibrate to target vol or grid search** |
+| **Alpha decorrelation** | None (signals double-count) | **Ridge naturally decorrelates** |
+| **MSE weighting** | Not implemented | **Ridge 1/MSE weighting (Eq 2.38)** |
+
+### Root Cause of QP Failure
+
+**The entire problem traces to Stage 1 being wrong.** Without proper ridge regression:
+1. The combined signal scale is arbitrary → κ can't be calibrated
+2. Correlated signals double-count → concentrated positions on popular themes
+3. Anti-predictive signals aren't removed → noise added to forecast
+4. The QP can't balance risk and return because the return forecast is meaningless
+
+**Fix**: Implement rolling ridge regression. The output will be a proper return forecast,
+and the QP will work as designed.
+
+---
+
+## 10. Known Issues & Future Work
+
+### Critical (Blocking QP Performance)
+1. **Implement rolling ridge regression** — Stage 1 alpha combination (Eq 2.38)
+2. **Calibrate κ for crypto** — after ridge is correct, sweep κ to find optimal
+3. **Auto-calibrate ridge λ** — cross-validation or trace heuristic
+
+### Important (Production Readiness)
+4. **PCA risk model for crypto** — statistical factors from returns covariance
+5. **Decay sweep** — auto-wrap high-turnover alphas in EMA
+6. **Turnover penalty tuning** — match IS and OOS turnover levels
+
+### Nice to Have
+7. **Bayesian shrinkage** (Black-Litterman) instead of ridge
+8. **Alpha correlation management** — DCC or LASSO for sparse combination
+9. **Intraday execution model** — partial fills, VWAP/TWAP
+
+---
+
+## 11. Empirical Results: Crypto (N=50, $2M Book)
+
+> Tested on 209 GP-discovered alphas, Binance TOP50 universe, 5 bps fees.
+> Train: 2020-2024, OOS: 2024-present.
+
+### Method Comparison (OOS, delay=1)
+
+| Method | OOS Sharpe | OOS PnL | Turnover |
+|:---|:---:|:---:|:---:|
+| **Equal-Weight Rank Avg** | **+0.92** | **+$1.81M** | 19.7% |
+| Ridge Forecast → Simple Sim | +0.31 | +$620K | 62.5% |
+| Ridge → QP+PCA (κ=1) | +0.01 | +$17K | — |
+| Ridge → QP+PCA (κ=5) | -0.10 | -$207K | — |
+| Ridge → QP+PCA (κ=10-100) | -0.12 to -0.30 | -$233K to -$449K | — |
+
+### Key Finding
+
+**For N=50 crypto, equal-weight rank averaging is the correct approach.**
+The QP optimizer destroys value at every kappa level because:
+1. N=50 with 5% max weight → only 10 positions per side → no diversification room
+2. Ridge adds 3× turnover without proportional forecast improvement
+3. The PCA risk model doesn't capture crypto's BTC-dominated structure well enough
+
+This aligns with Isichenko Sec 6.1: "hedged allocation" (`P = A·f`) is sufficient
+for small universes where the QP can't diversify beyond the position limits.
+

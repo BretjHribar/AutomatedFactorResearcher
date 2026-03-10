@@ -1,0 +1,131 @@
+  [10:32:55] Loading 4h data...
+  [10:33:07]   42 matrices loaded
+  [10:33:10]   Train: 9469 bars
+  [10:33:10]   Test:  4065 bars
+  [10:33:10] 
+  9 unique alphas from DB
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:150: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+
+  # | IS Sharpe | OOS Sharpe |  IS TO | OOS TO |    OOS PnL | Expression
+--------------------------------------------------------------------------------------------------------------
+  1 |    +1.597 |     +0.345 |  100% |   59% | $  767,533 | negative(vwap_deviation)
+  2 |    +1.587 |     +0.344 |  100% |   59% | $  760,964 | true_divide(vwap, close)
+  3 |    +1.548 |     +0.563 |  100% |   59% | $1,228,090 | multiply(negative(vwap_deviation), Inverse(volume_
+  4 |    +1.295 |     +0.483 |   82% |   49% | $1,079,914 | true_divide(high, close)
+  5 |    +1.211 |     +0.359 |  105% |   61% | $  849,291 | npfmul(npfsub(close_position_in_range, 0.533305854
+  6 |    +1.211 |     +0.359 |  105% |   61% | $  849,291 | npfmul(close_position_in_range, -0.436789782261429
+  7 |    +1.135 |     +0.128 |   98% |   58% | $  275,932 | negative(log_returns)
+  8 |    +1.070 |     +0.272 |  101% |   59% | $  641,864 | npfmul(log10(close_position_in_range), extend(-8.5
+  9 |    +0.998 |     +0.372 |  102% |   60% | $  809,509 | ts_rank(upper_shadow, 30)
+
+================================================================================
+INDIVIDUAL ALPHA SUMMARY (9 alphas)
+================================================================================
+  IS Sharpe:  mean=+1.295  max=+1.597
+  OOS Sharpe: mean=+0.358  max=+0.563
+  OOS Sharpe > 0: 9/9 (100%)
+  IS vs OOS rank correlation: +0.159
+
+================================================================================
+COMBINATION: EQUAL-WEIGHT RANK AVERAGE (9 signals)
+================================================================================
+  TRAIN [   0bps]: Sharpe=+1.650 PnL=$10,095,147 TO=110% DD=-22.0%
+  TRAIN [   3bps]: Sharpe=+0.633 PnL=$ 3,871,042 TO=110% DD=-27.8%
+  TRAIN [   5bps]: Sharpe=-0.045 PnL=$  -278,361 TO=110% DD=-69.1%
+  TRAIN [  10bps]: Sharpe=-1.739 PnL=$-10,651,869 TO=110% DD=-533.1%
+  TEST  [   0bps]: Sharpe=+0.301 PnL=$   616,866 TO=63% DD=-19.3%
+  TEST  [   3bps]: Sharpe=-0.450 PnL=$  -923,476 TO=63% DD=-62.8%
+  TEST  [   5bps]: Sharpe=-0.950 PnL=$-1,950,372 TO=63% DD=-100.1%
+  TEST  [  10bps]: Sharpe=-2.189 PnL=$-4,517,610 TO=63% DD=-225.9%
+  FULL  [   0bps]: Sharpe=+1.302 PnL=$10,707,498 TO=96% DD=-22.0%
+  FULL  [   3bps]: Sharpe=+0.358 PnL=$ 2,943,097 TO=96% DD=-84.8%
+  FULL  [   5bps]: Sharpe=-0.272 PnL=$-2,233,171 TO=96% DD=-168.6%
+  FULL  [  10bps]: Sharpe=-1.843 PnL=$-15,173,840 TO=96% DD=-758.7%
+
+================================================================================
+COMBINATION: QP MEAN-VARIANCE OPTIMIZATION
+================================================================================
+  QP weights: ['0.132', '0.132', '0.156', '0.228', '0.021', '0.021', '0.122', '0.021', '0.166']
+  TRAIN [   0bps]: Sharpe=+1.785 PnL=$10,989,084 TO=108% DD=-22.0%
+  TRAIN [   3bps]: Sharpe=+0.788 PnL=$ 4,847,431 TO=108% DD=-29.8%
+  TRAIN [   5bps]: Sharpe=+0.122 PnL=$   752,996 TO=108% DD=-65.5%
+  TRAIN [  10bps]: Sharpe=-1.539 PnL=$-9,483,092 TO=108% DD=-474.3%
+  TEST  [   0bps]: Sharpe=+0.391 PnL=$   813,176 TO=62% DD=-20.5%
+  TEST  [   3bps]: Sharpe=-0.341 PnL=$  -708,911 TO=62% DD=-62.8%
+  TEST  [   5bps]: Sharpe=-0.827 PnL=$-1,723,636 TO=62% DD=-96.3%
+  TEST  [  10bps]: Sharpe=-2.035 PnL=$-4,260,448 TO=62% DD=-213.0%
+  FULL  [   0bps]: Sharpe=+1.423 PnL=$11,795,001 TO=94% DD=-22.0%
+  FULL  [   3bps]: Sharpe=+0.499 PnL=$ 4,131,331 TO=94% DD=-83.0%
+  FULL  [   5bps]: Sharpe=-0.118 PnL=$  -977,782 TO=94% DD=-160.1%
+  FULL  [  10bps]: Sharpe=-1.657 PnL=$-13,750,564 TO=94% DD=-687.6%
+
+Done.

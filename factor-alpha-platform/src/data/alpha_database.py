@@ -5,9 +5,9 @@ Stores every alpha that has been generated, tested, and evaluated so the
 LLM agent can learn from prior attempts and avoid duplicates.
 
 Tables:
-  alphas      — one row per unique alpha expression + parameters
-  evaluations — per-alpha performance metrics (from local backtest or WQ)
-  runs        — metadata for each research campaign / batch run
+    runs         — research sessions
+    alphas       — generated alpha expressions
+    evaluations  — simulation results for each alpha
 """
 
 from __future__ import annotations
@@ -20,6 +20,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import numpy as np
+
 logger = logging.getLogger(__name__)
 
 
@@ -31,8 +33,10 @@ class AlphaDatabase:
             db_path = Path(__file__).parent.parent.parent / "data" / "alpha_research.db"
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+        self._conn = sqlite3.connect(str(self.db_path), check_same_thread=False, timeout=60)
         self._conn.row_factory = sqlite3.Row
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA busy_timeout=60000")
         self._create_tables()
         logger.info(f"AlphaDatabase initialized: {self.db_path}")
 
@@ -60,6 +64,7 @@ class AlphaDatabase:
             source         TEXT DEFAULT 'llm',
             status         TEXT DEFAULT 'created',
             wq_alpha_id    TEXT,
+            pnl_blob       BLOB,
             UNIQUE(expression, params_json)
         );
 
@@ -87,6 +92,13 @@ class AlphaDatabase:
         CREATE INDEX IF NOT EXISTS idx_evaluations_fitness ON evaluations(fitness);
         """)
         self._conn.commit()
+
+        # Add pnl_blob column if it doesn't exist (migration)
+        try:
+            c.execute("ALTER TABLE alphas ADD COLUMN pnl_blob BLOB")
+            self._conn.commit()
+        except sqlite3.OperationalError:
+            pass  # Column already exists
 
     # ------------------------------------------------------------------
     # Runs
@@ -132,6 +144,41 @@ class AlphaDatabase:
         """, (run_id, trial_index, expression, params_json, reasoning, source, wq_alpha_id))
         self._conn.commit()
         return c.lastrowid
+
+    def store_pnl(self, alpha_id: int, pnl_vec: np.ndarray) -> None:
+        """Store PnL vector as blob for cross-process correlation checking."""
+        blob = pnl_vec.astype(np.float64).tobytes()
+        c = self._conn.cursor()
+        c.execute("UPDATE alphas SET pnl_blob = ? WHERE alpha_id = ?", (blob, alpha_id))
+        self._conn.commit()
+
+    def get_all_pnl_vectors(self) -> list[np.ndarray]:
+        """Retrieve all stored PnL vectors from the DB (for correlation check)."""
+        c = self._conn.cursor()
+        c.execute("SELECT pnl_blob FROM alphas WHERE pnl_blob IS NOT NULL")
+        results = []
+        for row in c.fetchall():
+            blob = row[0]
+            if blob:
+                results.append(np.frombuffer(blob, dtype=np.float64))
+        return results
+
+    def check_diversity_against_db(self, pnl_vec: np.ndarray, corr_cutoff: float = 0.7) -> bool:
+        """Check if new PnL vector is sufficiently uncorrelated with ALL DB alphas."""
+        existing_vectors = self.get_all_pnl_vectors()
+        if not existing_vectors:
+            return True
+        for existing_pnl in existing_vectors:
+            try:
+                min_len = min(len(pnl_vec), len(existing_pnl))
+                if min_len < 20:
+                    continue
+                corr = np.corrcoef(pnl_vec[:min_len], existing_pnl[:min_len])[0, 1]
+                if not np.isnan(corr) and abs(corr) > corr_cutoff:
+                    return False
+            except Exception:
+                continue
+        return True
 
     def update_alpha_status(self, alpha_id: int, status: str,
                             wq_alpha_id: str | None = None) -> None:

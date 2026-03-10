@@ -1,0 +1,20 @@
+
+======================================================================
+  ALPHA RESEARCH SCOREBOARD (Agent 1)
+  Total alphas in DB: 64 | Agent 1 alphas: 64 | Trials: 5784
+  Train: 2022-09-01 to 2024-09-01 (no fees)
+======================================================================
+  Avg IS Sharpe: +1.678
+  Avg IC:        +0.0084
+
+  Agent 1 alphas (top 10):
+    1. SR=+2.09 Fit=3.46 IC=+0.004 DSR=0.00 | multiply(ts_delta(close, 6), true_divide(high_low_
+    2. SR=+1.99 Fit=3.30 IC=+0.007 DSR=0.00 | multiply(ts_delta(close, 6), true_divide(high_low_
+    3. SR=+1.91 Fit=2.74 IC=+0.005 DSR=0.00 | multiply(ts_delta(close, 6), close_position_in_ran
+    4. SR=+1.91 Fit=2.73 IC=+0.005 DSR=0.00 | Decay_exp(multiply(ts_delta(close, 6), close_posit
+    5. SR=+1.78 Fit=2.71 IC=+0.006 DSR=0.00 | Decay_exp(multiply(ts_delta(close, 6), close_posit
+    6. SR=+1.88 Fit=2.70 IC=+0.004 DSR=0.00 | multiply(ts_delta(close, 6), parkinson_volatility_
+    7. SR=+1.82 Fit=2.68 IC=+0.005 DSR=0.00 | Decay_exp(multiply(ts_delta(close, 6), close_posit
+    8. SR=+1.86 Fit=2.65 IC=+0.005 DSR=0.00 | Decay_exp(multiply(ts_delta(close, 6), close_posit
+    9. SR=+1.82 Fit=2.64 IC=+0.005 DSR=0.00 | multiply(ts_delta(close, 6), taker_buy_ratio)
+    10. SR=+1.67 Fit=2.64 IC=+0.004 DSR=0.00 | sma(multiply(ts_delta(close, 6), taker_buy_ratio),

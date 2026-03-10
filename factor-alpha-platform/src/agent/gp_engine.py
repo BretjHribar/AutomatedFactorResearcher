@@ -32,7 +32,7 @@ from src.operators import vectorized as ops
 from src.data.alpha_database import AlphaDatabase
 from src.data.context_research import InMemoryDataContext
 from src.data.synthetic import SyntheticDataGenerator
-from src.simulation.vectorized_sim import simulate_vectorized, VectorizedSimResult
+from src.simulation.vectorized_sim_polars import simulate_vectorized_polars as simulate_vectorized, VectorizedSimResult
 
 logger = logging.getLogger(__name__)
 
@@ -216,11 +216,13 @@ class GPConfig:
     min_turnover: float = 0.001
     max_turnover: float = 1.0
     fitness_cutoff: float = 0.0
+    min_sharpe_cutoff: float = 0.0  # Minimum Sharpe to save alpha
     corr_cutoff: float = 0.7
 
     # Feature configuration
     lookback_range: int = 40
     include_advanced: bool = True
+    bars_per_day: int = 1  # 1 for daily, 6 for 4h, 24 for 1h
 
 
 # ---------------------------------------------------------------------------
@@ -475,12 +477,18 @@ class GPAlphaEngine:
                 delay=self.config.delay,
                 neutralization=self.config.neutralization,
                 fees_bps=self.config.fees_bps,
+                bars_per_day=self.config.bars_per_day,
             )
         except Exception as e:
             logger.debug(f"Simulation error for '{expr_str[:60]}': {e}")
             return (0.0,)
 
         fitness = result.fitness  # BRAIN fitness: sharpe * sqrt(|returns| / max(turnover, 0.125))
+
+        # Debug: print every 10th eval so we can see what values are produced
+        if self.trial_counter % 10 == 0:
+            print(f"  [eval {self.trial_counter}] sharpe={result.sharpe:.3f} fitness={fitness:.3f} "
+                  f"t/o={result.turnover:.3f} | {expr_str[:60]}", flush=True)
 
         # Filter: turnover bounds
         if result.turnover < self.config.min_turnover:
@@ -492,18 +500,27 @@ class GPAlphaEngine:
         if math.isnan(fitness):
             fitness = 0.0
 
-        # Store good alphas (with correlation check)
-        if fitness > self.config.fitness_cutoff and result.turnover > self.config.min_turnover:
-            # Check correlation against existing recorded alphas
+        # Store good alphas (with correlation check against DB)
+        if (fitness > self.config.fitness_cutoff 
+            and result.sharpe >= self.config.min_sharpe_cutoff
+            and result.turnover > self.config.min_turnover):
             pnl_vec = result.daily_pnl.values if hasattr(result.daily_pnl, 'values') else np.array(result.daily_pnl)
-            is_diverse = self._check_diversity(pnl_vec)
+            
+            # Check against DB first (cross-process), then in-memory
+            is_diverse = True
+            if self.db:
+                is_diverse = self.db.check_diversity_against_db(
+                    pnl_vec, self.config.corr_cutoff)
+            if is_diverse:
+                is_diverse = self._check_diversity(pnl_vec)
+            
             if is_diverse:
                 self._record_alpha(expr_str, result, fitness, pnl_vec)
 
         return (fitness,)
 
     def _check_diversity(self, pnl_vec: np.ndarray) -> bool:
-        """Check if new alpha PnL is sufficiently uncorrelated with stored alphas."""
+        """Check if new alpha PnL is sufficiently uncorrelated with stored alphas (in-memory)."""
         if not hasattr(self, '_stored_pnl_vectors') or len(self._stored_pnl_vectors) == 0:
             return True
 
@@ -546,6 +563,7 @@ class GPAlphaEngine:
                     delay=self.config.delay,
                     neutralization=self.config.neutralization,
                     fees_bps=self.config.fees_bps,
+                    bars_per_day=self.config.bars_per_day,
                 )
 
                 if (result.turnover < self.config.max_turnover and
@@ -577,7 +595,7 @@ class GPAlphaEngine:
         }
         self.best_alphas.append(record)
 
-        # Store PnL vector for correlation checking
+        # Store PnL vector for in-memory correlation checking
         if pnl_vec is not None:
             if not hasattr(self, '_stored_pnl_vectors'):
                 self._stored_pnl_vectors = []
@@ -611,6 +629,9 @@ class GPAlphaEngine:
                     margin_bps=result.margin_bps,
                     passed_checks=0,
                 )
+                # Store PnL blob for cross-process correlation checking
+                if pnl_vec is not None:
+                    self.db.store_pnl(alpha_id, pnl_vec)
             except Exception as e:
                 logger.debug(f"DB store error: {e}")
 
@@ -690,7 +711,7 @@ class GPAlphaEngine:
         best_fitness = hof[0].fitness.values[0] if len(hof) > 0 else 0.0
 
         print(f"\n{'='*60}")
-        print(f"🎯 GP Complete in {elapsed:.1f}s")
+        print(f"GP Complete in {elapsed:.1f}s")
         print(f"   Trials evaluated: {self.trial_counter}")
         print(f"   Best fitness: {best_fitness:.4f}")
         if best_expr:
@@ -728,6 +749,7 @@ class GPAlphaEngine:
                 max_stock_weight=self.config.max_stock_weight,
                 delay=self.config.delay,
                 neutralization=self.config.neutralization,
+                bars_per_day=self.config.bars_per_day,
             )
         except Exception as e:
             logger.error(f"Failed to evaluate '{expression[:60]}': {e}")
