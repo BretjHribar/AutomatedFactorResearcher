@@ -1,0 +1,2 @@
+time,coin,direction,expected_price,actual_price,size,fee,result,pnl,tob_ask,spread,depth_3c,latency_ms,pm_outcome
+2026-03-10T16:00:20.609978+00:00,sol,DOWN,0.570,0.550,1.00,0.005,WIN,0.81,0.570,0.010,327.2,788,DOWN
