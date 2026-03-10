@@ -1,5 +1,5 @@
 {
-  "capital": 194.813279,
+  "capital": 192.803443,
   "trades": [
     {
       "id": "SOLUSDT_5m_1773158399999",
@@ -97,10 +97,214 @@
       "pnl": 0.8132789999999999,
       "pm_outcome": "DOWN",
       "closed_at": "2026-03-10T16:05:00.558573+00:00"
+    },
+    {
+      "id": "BTCUSDT_5m_1773160799999",
+      "version": "REAL_V2",
+      "symbol": "BTCUSDT",
+      "coin": "btc",
+      "direction": "DOWN",
+      "signal": -0.4095266452875955,
+      "top_weights": {
+        "obv_20": 0.19028815956215883,
+        "vwap_mr_30": 0.13886389098055055,
+        "logrev_12": 0.13151756689746363,
+        "dstd_12": 0.13151756689746363,
+        "ema_mr_20": 0.13151756689746363
+      },
+      "size_usd": 1.0,
+      "expected_price": 0.51,
+      "actual_price": 0.5290048351090281,
+      "shares_received": 1.89034,
+      "fee_rate": 0.004998,
+      "fee_usd": 0.004998,
+      "token_side": "no",
+      "token_id_short": "46404179801177813671...",
+      "full_token_id": "46404179801177813671635214334086546307454404904291750443377675581662034649389",
+      "order_accepted": true,
+      "fill_response": "{'errorMsg': '', 'orderID': '0x37a663e2cec82f6eff152763b7b6d5b9b400c8d3d314297167eb7b42c40d1088', 'takingAmount': '1.89034', 'makingAmount': '0.999999', 'status': 'matched', 'transactionsHashes': ['0xa9f256d2f0d9042619c102d4069e24b29ca8065576080722f868e16f63d16828'], 'success': True}",
+      "api_latency_ms": 965.2652740478516,
+      "fill_error": null,
+      "pre_book": {
+        "side": "no",
+        "tob_ask": 0.51,
+        "tob_ask_size": 75.66,
+        "tob_bid": 0.5,
+        "tob_bid_size": 54.8,
+        "spread": 0.010000000000000009,
+        "depth_3c_usd": 200.2288,
+        "levels": [
+          [
+            0.51,
+            75.66
+          ],
+          [
+            0.52,
+            21.0
+          ],
+          [
+            0.53,
+            233.0
+          ],
+          [
+            0.54,
+            50.43
+          ],
+          [
+            0.55,
+            50.0
+          ]
+        ]
+      },
+      "post_book": {
+        "side": "no",
+        "tob_ask": 0.53,
+        "tob_ask_size": 52.93,
+        "tob_bid": 0.52,
+        "tob_bid_size": 100.31,
+        "spread": 0.010000000000000009,
+        "depth_3c_usd": 251.20010000000002,
+        "levels": [
+          [
+            0.53,
+            52.93
+          ],
+          [
+            0.54,
+            82.78
+          ],
+          [
+            0.55,
+            165.0
+          ],
+          [
+            0.56,
+            156.6
+          ],
+          [
+            0.57,
+            154.01
+          ]
+        ]
+      },
+      "slug": "btc-updown-5m-1773160800",
+      "question": "Bitcoin Up or Down - March 10, 12:40PM-12:45PM ET",
+      "condition_id": "0x8d273d714b0f6f466fe5d90dfe762cd686b5572bd426956347f4129974750fee",
+      "time_remaining_s": 0,
+      "time_since_roll_s": 300,
+      "status": "CLOSED",
+      "opened_at": "2026-03-10T16:40:00.085720+00:00",
+      "result": "LOSS",
+      "pnl": -1.004998,
+      "pm_outcome": "UP",
+      "closed_at": "2026-03-10T16:45:00.365319+00:00"
+    },
+    {
+      "id": "SOLUSDT_5m_1773160799999",
+      "version": "REAL_V2",
+      "symbol": "SOLUSDT",
+      "coin": "sol",
+      "direction": "DOWN",
+      "signal": -1.3588194494688226,
+      "top_weights": {
+        "dstd_15": 0.10572036550256599,
+        "dstd_12": 0.09999821182697634,
+        "logrev_20": 0.09427605815138669,
+        "ema_mr_10": 0.09284551973248929,
+        "vp_div_20": 0.08140121238131
+      },
+      "size_usd": 1.0,
+      "expected_price": 0.59,
+      "actual_price": 0.6,
+      "shares_received": 1.666665,
+      "fee_rate": 0.004838,
+      "fee_usd": 0.004838,
+      "token_side": "no",
+      "token_id_short": "20057424484025744659...",
+      "full_token_id": "20057424484025744659564932181991221336956292486513164213273594184528855930429",
+      "order_accepted": true,
+      "fill_response": "{'errorMsg': '', 'orderID': '0x787782a20fce2247c9af9a02c6704ada6ac7d83ea19dd8c095ade21051aa65cf', 'takingAmount': '1.666665', 'makingAmount': '0.999999', 'status': 'matched', 'transactionsHashes': ['0x464983f4e3f97809ca68a054edd3cec135d813f9a1c6a0bcc31a99b002934252'], 'success': True}",
+      "api_latency_ms": 753.4282207489014,
+      "fill_error": null,
+      "pre_book": {
+        "side": "no",
+        "tob_ask": 0.59,
+        "tob_ask_size": 21.0,
+        "tob_bid": 0.58,
+        "tob_bid_size": 28.0,
+        "spread": 0.010000000000000009,
+        "depth_3c_usd": 55.19,
+        "levels": [
+          [
+            0.59,
+            21.0
+          ],
+          [
+            0.6,
+            20.0
+          ],
+          [
+            0.61,
+            20.0
+          ],
+          [
+            0.62,
+            30.0
+          ],
+          [
+            0.63,
+            20.0
+          ]
+        ]
+      },
+      "post_book": {
+        "side": "no",
+        "tob_ask": 0.62,
+        "tob_ask_size": 7.0,
+        "tob_bid": 0.61,
+        "tob_bid_size": 66.47,
+        "spread": 0.010000000000000009,
+        "depth_3c_usd": 75.84,
+        "levels": [
+          [
+            0.62,
+            7.0
+          ],
+          [
+            0.63,
+            48.0
+          ],
+          [
+            0.64,
+            34.0
+          ],
+          [
+            0.65,
+            30.0
+          ],
+          [
+            0.66,
+            20.0
+          ]
+        ]
+      },
+      "slug": "sol-updown-5m-1773160800",
+      "question": "Solana Up or Down - March 10, 12:40PM-12:45PM ET",
+      "condition_id": "0x72cbec9f483913a8d43e328a9a6645b90cf89facf1dd3844304ea220ae297426",
+      "time_remaining_s": 0,
+      "time_since_roll_s": 300,
+      "status": "CLOSED",
+      "opened_at": "2026-03-10T16:40:04.522123+00:00",
+      "result": "LOSS",
+      "pnl": -1.004838,
+      "pm_outcome": "UP",
+      "closed_at": "2026-03-10T16:45:04.804285+00:00"
     }
   ],
-  "total_real_pnl": 0.8132789999999999,
+  "total_real_pnl": -1.196557,
   "redeemed_conditions": [
-    "0x9a144d0c1a28c5cc363d9f96b13e437f028efe8fad1cadbdacd589928fbb8593"
+    "0x9a144d0c1a28c5cc363d9f96b13e437f028efe8fad1cadbdacd589928fbb8593",
+    "0x72cbec9f483913a8d43e328a9a6645b90cf89facf1dd3844304ea220ae297426",
+    "0x8d273d714b0f6f466fe5d90dfe762cd686b5572bd426956347f4129974750fee"
   ]
 }

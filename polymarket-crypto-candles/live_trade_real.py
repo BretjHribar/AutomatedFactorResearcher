@@ -12,11 +12,32 @@ FIXES from V1:
 Trade size: $5/trade (~1x Kelly at 52% WR with $194 bankroll)
 """
 import sys, os, time, json, asyncio, traceback
+import logging
 import numpy as np
 import pandas as pd
 from datetime import datetime, timezone
 from pathlib import Path
 from collections import deque
+
+# Set up dual logging: console + file
+LOG_FILE = Path(__file__).parent / "real_trader.log"
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[
+        logging.FileHandler(LOG_FILE, mode="a", encoding="utf-8"),
+        logging.StreamHandler(sys.stdout),
+    ],
+)
+logger = logging.getLogger("real_trader")
+
+# Redirect print to also log
+_orig_print = print
+def print(*args, **kwargs):
+    msg = " ".join(str(a) for a in args)
+    logger.info(msg)
+
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import SYMBOLS, SYMBOL_NAMES, DATA_DIR
@@ -638,33 +659,29 @@ class RealTrader:
                     f"{pre.get('depth_3c_usd',0):.1f},{trade.get('api_latency_ms',0):.0f},"
                     f"{pm_outcome}\n")
 
-        # Auto-redeem if WIN
-        if won and trade.get("condition_id"):
+        # Auto-redeem ALL closed positions (wins get USDC back, losses clear tokens)
+        if trade.get("condition_id"):
             cond = trade["condition_id"]
             if cond not in self.redeemed_conditions:
                 print(f"    Redeeming {cond[:16]}...")
                 gained = try_redeem_position(cond)
                 if gained > 0:
                     print(f"    Redeemed +${gained:.2f} USDC")
-                    self.redeemed_conditions.add(cond)
-                    self.save_state()
-                else:
-                    print(f"    Redeem pending (not yet settled on-chain)")
+                self.redeemed_conditions.add(cond)
+                self.save_state()
 
         return trade
 
     def try_redeem_all_pending(self):
-        """Try to redeem any previously unresolved winning positions."""
+        """Try to redeem ALL previously closed positions (not just wins)."""
         for trade in self.trades:
-            if trade.get("result") != "WIN":
-                continue
             cond = trade.get("condition_id", "")
             if not cond or cond in self.redeemed_conditions:
                 continue
             gained = try_redeem_position(cond)
             if gained > 0:
                 print(f"    [REDEEM] {trade['slug']}: +${gained:.2f} USDC")
-                self.redeemed_conditions.add(cond)
+            self.redeemed_conditions.add(cond)
         self.save_state()
 
     def get_stats(self):
