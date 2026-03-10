@@ -1,0 +1,106 @@
+{
+  "capital": 194.813279,
+  "trades": [
+    {
+      "id": "SOLUSDT_5m_1773158399999",
+      "version": "REAL_V2",
+      "symbol": "SOLUSDT",
+      "coin": "sol",
+      "direction": "DOWN",
+      "signal": -0.08293378420327581,
+      "top_weights": {
+        "logrev_20": 1.0
+      },
+      "size_usd": 1.0,
+      "expected_price": 0.57,
+      "actual_price": 0.55,
+      "shares_received": 1.81818,
+      "fee_rate": 0.004902,
+      "fee_usd": 0.004902,
+      "token_side": "no",
+      "token_id_short": "56913414898528009058...",
+      "full_token_id": "56913414898528009058903226937513105102123457490307127200345120131566361540482",
+      "order_accepted": true,
+      "fill_response": "{'errorMsg': '', 'orderID': '0xc8b168dea05a90326bfa7b10a24a80e4a95ee449d050e2e29a8b899cd98c5509', 'takingAmount': '1.81818', 'makingAmount': '0.999999', 'status': 'matched', 'transactionsHashes': ['0xddaa505cf51b3afd0d9b62c313fff6c439d4470368f2b6741248f663743f4d31'], 'success': True}",
+      "api_latency_ms": 788.2165908813477,
+      "fill_error": null,
+      "pre_book": {
+        "side": "no",
+        "tob_ask": 0.57,
+        "tob_ask_size": 361.0,
+        "tob_bid": 0.56,
+        "tob_bid_size": 77.0,
+        "spread": 0.009999999999999898,
+        "depth_3c_usd": 327.21,
+        "levels": [
+          [
+            0.57,
+            361.0
+          ],
+          [
+            0.58,
+            45.0
+          ],
+          [
+            0.59,
+            66.0
+          ],
+          [
+            0.6,
+            94.0
+          ],
+          [
+            0.61,
+            66.0
+          ]
+        ]
+      },
+      "post_book": {
+        "side": "no",
+        "tob_ask": 0.51,
+        "tob_ask_size": 113.35,
+        "tob_bid": 0.5,
+        "tob_bid_size": 65.0,
+        "spread": 0.010000000000000009,
+        "depth_3c_usd": 298.8485,
+        "levels": [
+          [
+            0.51,
+            113.35
+          ],
+          [
+            0.52,
+            321.0
+          ],
+          [
+            0.53,
+            94.0
+          ],
+          [
+            0.54,
+            45.0
+          ],
+          [
+            0.55,
+            127.0
+          ]
+        ]
+      },
+      "slug": "sol-updown-5m-1773158400",
+      "question": "Solana Up or Down - March 10, 12:00PM-12:05PM ET",
+      "condition_id": "0x9a144d0c1a28c5cc363d9f96b13e437f028efe8fad1cadbdacd589928fbb8593",
+      "time_remaining_s": 0,
+      "time_since_roll_s": 300,
+      "status": "CLOSED",
+      "opened_at": "2026-03-10T16:00:20.609978+00:00",
+      "result": "WIN",
+      "pnl": 0.8132789999999999,
+      "pm_outcome": "DOWN",
+      "closed_at": "2026-03-10T16:05:00.558573+00:00"
+    }
+  ],
+  "total_real_pnl": 0.8132789999999999,
+  "redeemed_conditions": [
+    "0x9a144d0c1a28c5cc363d9f96b13e437f028efe8fad1cadbdacd589928fbb8593"
+  ]
+}
