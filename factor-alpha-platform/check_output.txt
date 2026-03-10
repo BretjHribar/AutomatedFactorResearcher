@@ -1,0 +1,13 @@
+Total: 10 alphas
+  # |   Sharpe |  Fitness |      TO | Expression
+------------------------------------------------------------------------------------------------------------------------
+  1 |   +1.615 |    0.866 |  100.0% | negative(vwap_deviation)
+  3 |   +1.605 |    0.856 |  100.1% | true_divide(vwap, close)
+  5 |   +1.574 |    0.823 |   99.9% | multiply(negative(vwap_deviation), Inverse(volume_momentum_1))
+  4 |   +1.322 |    0.719 |   81.4% | true_divide(high, close)
+  9 |   +1.210 |    0.547 |  105.8% | npfmul(npfsub(close_position_in_range, 0.5333058544169196), extend(-9.765813590228822))
+  6 |   +1.210 |    0.547 |  105.8% | npfmul(close_position_in_range, -0.4367897822614297)
+  2 |   +1.149 |    0.535 |   98.4% | negative(log_returns)
+  2 |   +1.149 |    0.535 |   98.4% | negative(log_returns)
+  7 |   +1.070 |    0.457 |  101.3% | npfmul(log10(close_position_in_range), extend(-8.575142575595148))
+  8 |   +1.009 |    0.403 |  102.7% | ts_rank(upper_shadow, 30)

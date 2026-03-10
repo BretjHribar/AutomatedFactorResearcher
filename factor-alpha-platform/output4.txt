@@ -1,0 +1,87 @@
+
+Comparing strategies on 18 rank-norm / 18 raw alphas
+Validation (2024-09-01 to 2025-03-01), 5.0bps fees
+
+Individual Alpha Performance (Validation):
+  ID      Sharpe  Fitness     TO       DD
+  ---------------------------------------------
+  #97     -0.728   -0.708  0.233   -0.162
+  #98     -2.580   -3.083  0.243   -0.163
+  #99     -5.596   -6.341  0.575   -0.280
+  #100    -0.195   -0.078  0.077   -0.039
+  #101    -6.227   -7.288  0.592   -0.296
+  #102    -2.801   -3.454  0.250   -0.156
+  #103    -2.272   -2.542  0.245   -0.140
+  #104    -2.892   -2.833  0.397   -0.163
+  #105    -2.988   -3.763  0.247   -0.174
+  #106    -5.046   -5.484  0.600   -0.257
+  #107    -4.321   -4.526  0.605   -0.243
+  #108    -4.905   -5.339  0.602   -0.261
+  #109    -2.847   -3.562  0.243   -0.163
+  #110    +0.010    0.001  0.077   -0.032
+  #111    -6.771   -8.237  0.590   -0.315
+  #112    -2.471   -3.900  0.119   -0.122
+  #113    +0.337    0.180  0.076   -0.035
+  #114    -0.276   -0.131  0.077   -0.039
+
+================================================================================
+  SelectSharpe: 1/18 alphas selected (min_sr=0.5, d=2)
+  Selected IDs: [97]
+  SelectSharpe: 1/18 alphas selected (min_sr=0.0, d=1)
+  Selected IDs: [97]
+  SelectSharpe: 1/18 alphas selected (min_sr=0.3, d=1)
+  Selected IDs: [97]
+  SelectSharpe: 1/18 alphas selected (min_sr=0.5, d=1)
+  Selected IDs: [97]
+  SelectSharpe: 1/18 alphas selected (min_sr=0.0, d=2)
+  Selected IDs: [97]
+  SelectSharpe: 1/18 alphas selected (min_sr=0.3, d=2)
+  Selected IDs: [97]
+  SelectSharpe: 1/18 alphas selected (min_sr=0.5, d=2)
+  Selected IDs: [97]
+  SelectSharpe: 2/18 alphas selected (min_sr=0.0, d=3)
+  Selected IDs: [101, 111]
+  SelectSharpe: 1/18 alphas selected (min_sr=0.3, d=3)
+  Selected IDs: [101]
+  SelectSharpe: 1/18 alphas selected (min_sr=0.5, d=3)
+  Selected IDs: [101]
+  CorrSelect: 4/18 alphas selected (max_corr=0.3)
+  Selected IDs: [101, 113, 109, 106]
+  CorrSelect: 5/18 alphas selected (max_corr=0.4)
+  Selected IDs: [101, 113, 109, 106, 97]
+  CorrSelect: 5/18 alphas selected (max_corr=0.5)
+  Selected IDs: [101, 113, 109, 106, 97]
+  CorrSelect: 7/18 alphas selected (max_corr=0.6)
+  Selected IDs: [101, 113, 109, 107, 106, 97, 108]
+  CorrSelect: 8/18 alphas selected (max_corr=0.7)
+  Selected IDs: [101, 113, 104, 109, 107, 106, 97, 108]
+  CorrSelect: 3/18 alphas selected (max_corr=0.3)
+  Selected IDs: [101, 113, 109]
+  CorrSelect: 5/18 alphas selected (max_corr=0.4)
+  Selected IDs: [101, 113, 109, 106, 97]
+  CorrSelect: 5/18 alphas selected (max_corr=0.5)
+  Selected IDs: [101, 113, 109, 106, 97]
+  CorrSelect: 6/18 alphas selected (max_corr=0.6)
+  Selected IDs: [101, 113, 109, 106, 97, 108]
+  CorrSelect: 8/18 alphas selected (max_corr=0.7)
+  Selected IDs: [101, 113, 104, 109, 106, 107, 97, 108]
+  CorrSelect: 4/18 alphas selected (max_corr=0.3)
+  Selected IDs: [101, 109, 110, 97]
+  CorrSelect: 5/18 alphas selected (max_corr=0.4)
+  Selected IDs: [101, 109, 110, 97, 99]
+  CorrSelect: 6/18 alphas selected (max_corr=0.5)
+  Selected IDs: [101, 109, 110, 97, 108, 99]
+  CorrSelect: 7/18 alphas selected (max_corr=0.6)
+  Selected IDs: [101, 109, 110, 106, 97, 108, 99]
+  CorrSelect: 8/18 alphas selected (max_corr=0.7)
+  Selected IDs: [101, 104, 109, 110, 106, 97, 108, 99]
+  CorrSelect: 4/18 alphas selected (max_corr=0.3)
+  Selected IDs: [101, 109, 97, 110]
+  CorrSelect: 5/18 alphas selected (max_corr=0.4)
+  Selected IDs: [101, 109, 97, 110, 99]
+  CorrSelect: 6/18 alphas selected (max_corr=0.5)
+  Selected IDs: [101, 109, 97, 110, 99, 108]
+  CorrSelect: 6/18 alphas selected (max_corr=0.6)
+  Selected IDs: [101, 109, 97, 110, 106, 99]
+  CorrSelect: 8/18 alphas selected (max_corr=0.7)
+  Selected IDs: [101, 104, 109, 97, 110, 106, 99, 108]

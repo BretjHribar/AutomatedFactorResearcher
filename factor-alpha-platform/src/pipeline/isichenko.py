@@ -46,25 +46,28 @@ class PipelineConfig:
     min_adv: float = 1e6               # $1M min ADV
     
     # Optimizer
-    risk_aversion: float = 1e-6        # κ in Isichenko Eq 6.6
+    risk_aversion: float = 1.0         # κ — risk aversion (now in weight-space, ~1.0 is standard)
     booksize: float = 20_000_000.0     # $20M
-    max_position_pct_gmv: float = 0.02 # 2% of booksize per name
+    max_position_pct_gmv: float = 0.01 # 1% of booksize per name (matches vectorized sim max_stock_weight)
     max_position_pct_adv: float = 0.05 # 5% of ADV per name  
     max_trade_pct_adv: float = 0.10    # 10% of ADV max trade
     
-    # Transaction costs (Isichenko Ch 5)
-    slippage_bps: float = 1.0          # ~1 bps slippage per trade
-    impact_coeff: float = 0.1          # Impact ∝ coeff * σ / √ADV
-    borrow_cost_bps: float = 1.0       # ~1 bps/day short borrow (≈2.5% annualized)
-    trade_aversion: float = 1e-6       # Turnover penalty (optimal from sweep)
+    # Transaction costs (calibrated to industry benchmarks)
+    # Large-cap effective spread: 1-3 bps (SEC Rule 605), IBKR Pro: 0.1-0.7 bps commission
+    # Realistic for TOP1000 via DMA/algo: ~3 bps total one-way
+    slippage_bps: float = 1.5          # half-spread: ~1.5 bps for large/mid cap
+    commission_bps: float = 1.5        # DMA/algo institutional rate (IBKR tiered)
+    impact_coeff: float = 0.1          # Almgren-Chriss: Impact ∝ coeff * σ * √(trade/ADV)
+    borrow_cost_bps: float = 0.12      # ~30 bps/yr ÷ 252 for general collateral
+    trade_aversion: float = 0.0        # Extra turnover penalty in QP objective
     holding_bonus: float = 0.0         # Reward for holding existing positions
     
     # Alpha combination mode
-    raw_signal_mode: bool = False      # True = skip OLS/MSE, just average raw signals
+    raw_signal_mode: bool = False      # True = skip IC-weighting, just equal-weight
     
     # Risk model
     ema_halflife_risk: int = 60        # days for risk estimation
-    ema_halflife_alpha: int = 120      # days for alpha scaling
+    ema_halflife_alpha: int = 120      # days for alpha IC tracking
     n_pca_factors: int = 5             # statistical factors beyond sectors
     
     # Neutralization
@@ -76,82 +79,79 @@ class PipelineConfig:
 
 
 # ═══════════════════════════════════════════════════════════════
-# STAGE 1: ALPHA SCALER
+# STAGE 1: ALPHA IC TRACKER
 # ═══════════════════════════════════════════════════════════════
-class AlphaScaler:
-    """Scale raw alpha signals to return forecasts via rolling OLS.
+class AlphaICTracker:
+    """Track rolling Information Coefficient (rank correlation) for each alpha.
     
-    Also tracks MSE (mean squared error) of the OLS prediction for use
-    in Isichenko Eq 2.38: optimal alpha combination weights = 1/MSE.
+    IC = Spearman rank correlation between cross-sectional alpha ranks 
+    and forward returns. This is the standard measure of alpha quality
+    (Grinold & Kahn, Active Portfolio Management).
+    
+    The IC is used to weight alphas in combination: higher IC = more weight.
+    This avoids the pitfalls of OLS scaling on rank-based signals.
     """
     
     def __init__(self, halflife: int = 120):
         self.halflife = halflife
-        self.ema_decay = np.log(2) / halflife
-        self._running_cov = None   # Cov(signal, return)
-        self._running_var = None   # Var(signal)
-        self._running_mse = None   # MSE of forecast vs realized
-        self._scale = 1e-5  # small non-zero initial so signal isn't killed before warmup
+        self._ema_decay = np.log(2) / halflife
+        self._running_ic = None
+        self._running_ic_sq = None   # For IC variance (stability)
+        self._n_updates = 0
         
-    def update(self, signal: pd.Series, returns: pd.Series):
-        """Update the scaling factor with new cross-sectional observation."""
-        # Only use non-NaN overlapping data
-        common = signal.dropna().index.intersection(returns.dropna().index)
-        if len(common) < 50:
-            return
-        s = signal.loc[common].values
-        r = returns.loc[common].values
+    def update(self, ranked_signal: np.ndarray, returns: np.ndarray):
+        """Update IC estimate with today's cross-sectional observation.
         
-        # Demean
-        s = s - np.nanmean(s)
-        r = r - np.nanmean(r)
-        
-        # Cross-sectional Cov and Var
-        cov_sr = np.nanmean(s * r)
-        var_s = np.nanmean(s * s)
-        
-        alpha = 1 - np.exp(-self.ema_decay)
-        if self._running_cov is None:
-            self._running_cov = cov_sr
-            self._running_var = var_s
-        else:
-            self._running_cov = alpha * cov_sr + (1 - alpha) * self._running_cov
-            self._running_var = alpha * var_s + (1 - alpha) * self._running_var
-        
-        if self._running_var > 1e-20:
-            self._scale = self._running_cov / self._running_var
-        
-        # Track MSE: E[(r - k*s)^2] for Isichenko Eq 2.38 weighting
-        residual = r - self._scale * s
-        mse = np.nanmean(residual ** 2)
-        if self._running_mse is None:
-            self._running_mse = mse
-        else:
-            self._running_mse = alpha * mse + (1 - alpha) * self._running_mse
-    
-    def scale(self, signal: pd.Series) -> pd.Series:
-        """Apply the current scale factor to a signal to produce a forecast.
-        
-        Per Isichenko Eq 2.32: if k_a < 0, the alpha is anti-predictive
-        and should be zeroed out (not flipped).
+        Args:
+            ranked_signal: (N,) cross-sectional rank-normalized signal
+            returns: (N,) realized forward returns
         """
-        if self._scale <= 0:
-            return signal * 0.0  # shut off anti-predictive alphas
-        return signal * self._scale
+        mask = np.isfinite(ranked_signal) & np.isfinite(returns) & (ranked_signal != 0)
+        if mask.sum() < 30:
+            return
+        s = ranked_signal[mask]
+        r = returns[mask]
+        
+        # Rank correlation (Spearman IC)
+        from scipy.stats import spearmanr
+        ic, _ = spearmanr(s, r)
+        if not np.isfinite(ic):
+            return
+        
+        alpha = 1 - np.exp(-self._ema_decay)
+        if self._running_ic is None:
+            self._running_ic = ic
+            self._running_ic_sq = ic ** 2
+        else:
+            self._running_ic = alpha * ic + (1 - alpha) * self._running_ic
+            self._running_ic_sq = alpha * ic**2 + (1 - alpha) * self._running_ic_sq
+        self._n_updates += 1
+    
+    @property
+    def ic(self) -> float:
+        """Current smoothed IC estimate."""
+        if self._running_ic is None:
+            return 0.0
+        return self._running_ic
+    
+    @property
+    def ic_ir(self) -> float:
+        """IC Information Ratio: IC / std(IC). Higher = more stable."""
+        if self._running_ic is None or self._running_ic_sq is None:
+            return 0.0
+        var = self._running_ic_sq - self._running_ic ** 2
+        if var <= 1e-10:
+            return 0.0
+        return self._running_ic / np.sqrt(var)
+    
+    @property
+    def weight(self) -> float:
+        """Combination weight: max(IC, 0). Anti-predictive alphas get zero."""
+        return max(self._running_ic, 0.0) if self._running_ic is not None else 0.0
     
     @property
     def is_active(self) -> bool:
-        """Whether this scaler has a positive (predictive) scale factor."""
-        return self._scale > 0
-    
-    @property
-    def precision_weight(self) -> float:
-        """Precision weight = 1/MSE for Isichenko Eq 2.38 combination.
-        
-        Returns 0 if alpha is anti-predictive or MSE is not yet estimated.
-        """
-        if self._scale <= 0 or self._running_mse is None or self._running_mse <= 1e-20:
-            return 0.0
+        return self._n_updates >= 20 and self.ic > 0.0
         return 1.0 / self._running_mse
 
 
@@ -301,125 +301,120 @@ class FactorRiskModel:
 # ═══════════════════════════════════════════════════════════════
 class PortfolioOptimizerQP:
     """
-    Minimize: ½κ h'(BFB')h + ½κ h'Sh - α'h + (h-h₀)'Λ(h-h₀) + c'|h-h₀|
-             + sector_penalty * Σ (sector_exposure)²
-    Subject to: dollar neutral, position limits, GMV limit
+    Weight-space formulation (standard Mosek / Boyd style):
     
-    Based on Isichenko Eq. 6.6 / 6.63 and Udacity Barra reference.
-    Uses soft sector neutrality (penalty) instead of hard constraint.
+    Maximize: α'w - ½κ w'Σw - tcost(w - w_prev)
+    Subject to: sum(w) = 0 (dollar neutral), |w_i| <= w_max, sum(|w_i|) <= 1
+    
+    Variables are portfolio WEIGHTS (fractions of booksize), not dollar holdings.
+    This gives better numerical conditioning and makes κ interpretable.
+    
+    α should be in units of expected return (e.g., IC * σ_cs ≈ 1e-3 to 1e-2).
     """
     
     def __init__(self, config: PipelineConfig):
         self.config = config
-        self._prob = None
-        self._h_param = None
     
     def optimize(self, 
-                 alpha_vec: np.ndarray,        # (N,) combined forecast
+                 alpha_vec: np.ndarray,        # (N,) return forecast (expected return units)
                  Q: np.ndarray,                # (K, N) factor risk sqrt
                  spec_var: np.ndarray,          # (N,) specific variance
-                 h_prev: np.ndarray,            # (N,) previous holdings
+                 w_prev: np.ndarray,            # (N,) previous weights (fractions of booksize)
                  adv: np.ndarray,               # (N,) dollar volume
                  sector_masks: List[np.ndarray], # list of boolean masks
                  ) -> np.ndarray:
-        """Solve the QP and return optimal holdings h*."""
+        """Solve the QP and return optimal weights w*."""
         
         N = len(alpha_vec)
         cfg = self.config
         kappa = cfg.risk_aversion
         booksize = cfg.booksize
         
-        # Position limits
-        max_pos_gmv = cfg.max_position_pct_gmv * booksize
-        max_pos_adv = cfg.max_position_pct_adv * adv
-        max_pos = np.minimum(max_pos_gmv, max_pos_adv)
-        max_pos = np.maximum(max_pos, 100.0)
+        # Position limits in weight space
+        w_max_gmv = cfg.max_position_pct_gmv  # e.g., 0.02 = 2%
+        w_max_adv = cfg.max_position_pct_adv * adv / booksize
+        w_max = np.minimum(w_max_gmv, w_max_adv)
+        w_max = np.maximum(w_max, 1e-6)
         
-        # Transaction cost parameters (Isichenko Eq 5.4)
-        sigma = np.sqrt(np.maximum(spec_var, 1e-10))
-        safe_adv = np.maximum(adv, 1e4)
-        lambda_impact = cfg.impact_coeff * sigma / np.sqrt(safe_adv)
-        slippage_cost = cfg.slippage_bps * 1e-4
+        # Transaction cost in weight space
+        linear_cost_bps = cfg.slippage_bps + getattr(cfg, 'commission_bps', 0.0)
+        linear_cost = linear_cost_bps * 1e-4  # cost per unit of weight traded
         
         # --- Build & solve CVXPY Problem ---
-        h = cp.Variable(N)
-        T = h - h_prev
+        w = cp.Variable(N)
+        T = w - w_prev
         
-        # 1. Factor risk: ½κ ||Qh||²
-        factor_risk = 0.5 * kappa * cp.sum_squares(Q @ h)
+        # 1. Factor risk: ½κ ||Qw||² (Q operates on weights)
+        factor_risk = 0.5 * kappa * cp.sum_squares(Q @ w)
         
-        # 2. Specific risk: ½κ h'Sh
-        specific_risk = 0.5 * kappa * cp.sum(cp.multiply(spec_var, cp.square(h)))
+        # 2. Specific risk: ½κ w'Sw
+        specific_risk = 0.5 * kappa * cp.sum(cp.multiply(spec_var, cp.square(w)))
         
-        # 3. Expected return
-        expected_return = alpha_vec @ h
+        # 3. Expected return: α'w
+        expected_return = alpha_vec @ w
         
-        # 4. Impact cost (quadratic)
-        impact_cost = cp.sum(cp.multiply(lambda_impact, cp.square(T)))
+        # 4. Linear transaction costs: c * |T|_1
+        tcost = linear_cost * cp.norm(T, 1)
         
-        # 5. Slippage (linear)
-        slippage = slippage_cost * cp.norm(T, 1)
-        
-        # 6. SOFT sector neutrality penalty (instead of hard constraint)
+        # 5. SOFT sector neutrality penalty
         sector_penalty = 0.0
-        sector_pen_coeff = kappa * 10  # strong penalty
+        sector_pen_coeff = kappa * 10
         if cfg.sector_neutral and sector_masks:
             for mask in sector_masks:
                 if mask.sum() > 1:
-                    sector_penalty += sector_pen_coeff * cp.square(cp.sum(h[mask]))
+                    sector_penalty += sector_pen_coeff * cp.square(cp.sum(w[mask]))
         
-        # 7. Extra turnover aversion (tunable knob)
-        trade_penalty = cfg.trade_aversion * cp.sum_squares(T)
+        # 6. Extra turnover aversion
+        trade_penalty = cfg.trade_aversion * cp.sum_squares(T) if cfg.trade_aversion > 0 else 0.0
         
         objective = cp.Minimize(
             factor_risk + specific_risk - expected_return 
-            + impact_cost + slippage + sector_penalty + trade_penalty
+            + tcost + sector_penalty + trade_penalty
         )
         
         # Constraints
         constraints = [
-            h >= -max_pos,
-            h <= max_pos,
-            cp.norm(h, 1) <= booksize,  # GMV constraint (Isichenko Eq 6.6)
+            w >= -w_max,
+            w <= w_max,
+            cp.norm(w, 1) <= 1.0,  # GMV <= booksize (in weight space, sum |w| <= 1)
         ]
         if cfg.dollar_neutral:
-            constraints.append(cp.sum(h) == 0)
+            constraints.append(cp.sum(w) == 0)
         
         prob = cp.Problem(objective, constraints)
         
         # Try OSQP first (fastest), fall back to SCS
         for solver, kwargs in [
-            (cp.OSQP, {"max_iter": 10000, "eps_abs": 1e-3, "eps_rel": 1e-3, "verbose": False, "warm_start": True, "time_limit": 30.0}),
-            (cp.SCS, {"max_iters": 5000, "verbose": False}),
+            (cp.OSQP, {"max_iter": 20000, "eps_abs": 1e-5, "eps_rel": 1e-5, "verbose": False, "warm_start": True, "time_limit": 30.0}),
+            (cp.SCS, {"max_iters": 10000, "verbose": False}),
         ]:
             try:
                 prob.solve(solver=solver, **kwargs)
-                if prob.status in ["optimal", "optimal_inaccurate"] and h.value is not None:
-                    return h.value
+                if prob.status in ["optimal", "optimal_inaccurate"] and w.value is not None:
+                    return w.value
             except Exception:
                 continue
         
-        # Final fallback: simple mean-variance without CVXPY
-        return self._fallback_optimize(alpha_vec, spec_var, h_prev, max_pos, kappa, booksize)
+        # Final fallback: simple analytical solution
+        return self._fallback_optimize(alpha_vec, spec_var, w_prev, w_max, kappa)
     
-    def _fallback_optimize(self, alpha_vec, spec_var, h_prev, max_pos, kappa, booksize):
+    def _fallback_optimize(self, alpha_vec, spec_var, w_prev, w_max, kappa):
         """Simple analytical mean-variance solution as fallback."""
-        # h* = alpha / (kappa * sigma^2) — unconstrained Markowitz
         safe_var = np.maximum(spec_var, 1e-8)
-        h = alpha_vec / (kappa * safe_var + 1e-12)
+        w = alpha_vec / (kappa * safe_var + 1e-12)
         
         # Clip to position limits
-        h = np.clip(h, -max_pos, max_pos)
+        w = np.clip(w, -w_max, w_max)
         
         # Dollar neutralize
-        h = h - np.mean(h)
+        w = w - np.mean(w)
         
-        # Scale to booksize
-        gmv = np.sum(np.abs(h))
-        if gmv > booksize:
-            h = h * booksize / gmv
+        # Scale so GMV <= 1
+        gmv = np.sum(np.abs(w))
+        if gmv > 1.0:
+            w = w / gmv
         
-        return h
+        return w
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -513,9 +508,9 @@ class IsichenkoPipeline:
         # Compute 12-month momentum
         momentum_12m = close.pct_change(252)
         
-        # Initialize scalers
+        # Initialize IC trackers
         for expr in alpha_signals:
-            self.alpha_scalers[expr] = AlphaScaler(halflife=cfg.ema_halflife_alpha)
+            self.alpha_scalers[expr] = AlphaICTracker(halflife=cfg.ema_halflife_alpha)
         
         # Build risk model loadings using data from first available date
         ref_date_idx = min(start_idx, len(all_dates) - 1)
@@ -559,7 +554,7 @@ class IsichenkoPipeline:
                     sector_masks.append(mask)
         
         # ── Main Loop ──
-        h_prev = np.zeros(N)  # Start flat
+        w_prev = np.zeros(N)  # Start flat (weight space)
         daily_results = []
         
         # Warmup: train risk model and alpha scalers
@@ -572,14 +567,16 @@ class IsichenkoPipeline:
             r = returns.iloc[t].reindex(tickers).fillna(0.0).values
             self.risk_model.update(r)
             
-            # Update alpha scalers
+            # Update IC trackers with RANK-normalized signals
             if t > 0:
                 prev_date = all_dates[t - 1]
-                fwd_ret = returns.iloc[t].reindex(tickers)
+                fwd_ret = returns.iloc[t].reindex(tickers).fillna(0).values
                 for expr, sig_df in alpha_signals.items():
                     if prev_date in sig_df.index:
-                        sig = sig_df.loc[prev_date]
-                        self.alpha_scalers[expr].update(sig, fwd_ret)
+                        raw = sig_df.loc[prev_date].reindex(tickers)
+                        # Rank-normalize
+                        ranked = raw.rank(pct=True).fillna(0.5).values - 0.5
+                        self.alpha_scalers[expr].update(ranked, fwd_ret)
         
         print(f"  Running backtest from {all_dates[start_idx]} to {all_dates[-1]}...\n")
         
@@ -593,8 +590,9 @@ class IsichenkoPipeline:
             # 1. Get today's returns (realized)
             r_today = returns.iloc[t_idx].reindex(tickers).fillna(0.0).values
             
-            # 2. PnL from yesterday's positions (delay=1 means we entered yesterday)
-            gross_pnl = np.dot(h_prev, r_today)
+            # 2. PnL from yesterday's positions (weights × booksize × returns)
+            h_prev_dollars = w_prev * cfg.booksize
+            gross_pnl = np.dot(h_prev_dollars, r_today)
             
             # 3. Update risk model with today's returns
             self.risk_model.update(r_today)
@@ -612,66 +610,64 @@ class IsichenkoPipeline:
                 )
                 last_loadings_rebuild = t_idx
             
-            # 4. Update alpha scalers with (yesterday's signal, today's return)
+            # 4. Update IC trackers with (yesterday's ranked signal, today's return)
             if t_idx > 0:
                 prev_date = all_dates[t_idx - 1]
-                fwd_ret = returns.iloc[t_idx].reindex(tickers)
+                fwd_ret = returns.iloc[t_idx].reindex(tickers).fillna(0).values
                 for expr, sig_df in alpha_signals.items():
                     if prev_date in sig_df.index:
-                        sig = sig_df.loc[prev_date]
-                        self.alpha_scalers[expr].update(sig, fwd_ret)
+                        raw = sig_df.loc[prev_date].reindex(tickers)
+                        ranked = raw.rank(pct=True).fillna(0.5).values - 0.5
+                        self.alpha_scalers[expr].update(ranked, fwd_ret)
             
-            # 5. Construct combined alpha forecast for tomorrow
+            # 5. RANK-NORMALIZE each alpha, then combine
+            # This is the key fix: rank normalization makes all alphas comparable
+            # regardless of their raw signal scale (from 0-1 to billions).
             combined_alpha = np.zeros(N)
             n_active = 0
             
-            if self.config.raw_signal_mode:
-                # RAW MODE: skip OLS scaling, cross-sectionally demean & scale
-                for expr, sig_df in alpha_signals.items():
-                    if date in sig_df.index:
-                        raw_signal = sig_df.loc[date].reindex(tickers).fillna(0.0)
-                        sv = raw_signal.values if isinstance(raw_signal, pd.Series) else raw_signal
-                        sv = np.nan_to_num(sv, nan=0.0, posinf=0.0, neginf=0.0)
-                        if np.any(sv != 0):
-                            # Demean cross-sectionally (dollar neutral)
-                            sv = sv - np.mean(sv[sv != 0]) if np.any(sv != 0) else sv
-                            # Scale to bps-level returns (rank-based signals are O(1))
-                            std = np.std(sv[sv != 0]) if np.any(sv != 0) else 1.0
-                            if std > 0:
-                                sv = sv / std * 0.001  # ~10 bps cross-sectional spread
-                            combined_alpha += sv
-                            n_active += 1
-                # Average
-                if n_active > 0:
-                    combined_alpha /= n_active
-            else:
-                # OLS + MSE MODE: Isichenko Eq 2.32 + 2.38
-                forecasts_and_weights = []
-                for expr, sig_df in alpha_signals.items():
-                    if date in sig_df.index:
-                        raw_signal = sig_df.loc[date].reindex(tickers).fillna(0.0)
-                        scaled = self.alpha_scalers[expr].scale(raw_signal)
-                        sv = scaled.values if isinstance(scaled, pd.Series) else scaled
-                        sv = np.nan_to_num(sv, nan=0.0, posinf=0.0, neginf=0.0)
-                        w = self.alpha_scalers[expr].precision_weight
-                        if w > 0 and np.any(sv != 0):
-                            forecasts_and_weights.append((sv, w))
-                            n_active += 1
-                # Combine: scale by relative precision (w / mean_w)
-                if forecasts_and_weights:
-                    weights = np.array([w for _, w in forecasts_and_weights])
-                    mean_w = np.mean(weights)
-                    for sv, w in forecasts_and_weights:
-                        combined_alpha += (w / mean_w) * sv
+            for expr, sig_df in alpha_signals.items():
+                if date not in sig_df.index:
+                    continue
+                raw = sig_df.loc[date].reindex(tickers)
+                # Cross-sectional rank normalize to [-0.5, +0.5]
+                ranked = raw.rank(pct=True).fillna(0.5).values - 0.5
+                ranked = np.nan_to_num(ranked, nan=0.0)
+                
+                if not np.any(ranked != 0):
+                    continue
+                
+                if self.config.raw_signal_mode:
+                    # Equal weight
+                    w_alpha = 1.0
+                else:
+                    # IC-weighted: weight by trailing IC (higher IC = more weight)
+                    w_alpha = self.alpha_scalers[expr].weight
+                    if w_alpha <= 0:
+                        continue
+                
+                combined_alpha += w_alpha * ranked
+                n_active += 1
+            
+            # Average and scale to return forecast units
+            if n_active > 0:
+                combined_alpha /= n_active
+                # Scale: multiply by cross-sectional return vol
+                # This converts rank signal (O(0.1)) to expected return units (O(1e-3))
+                # Grinold fundamental law: E[r] ≈ IC × vol × score
+                cs_ret_vol = np.nanstd(r_today[r_today != 0]) if np.any(r_today != 0) else 0.01
+                combined_alpha *= cs_ret_vol  # now in daily return units
             
             # Apply universe mask
             if date in universe_mask_df.index:
                 umask = universe_mask_df.loc[date].reindex(tickers).fillna(False).values
                 combined_alpha[~umask] = 0.0
             
-            # Sanitize & clip (Isichenko: forecasts should be small, bps-level)
+            # Sanitize alpha forecast
             combined_alpha = np.nan_to_num(combined_alpha, nan=0.0, posinf=0.0, neginf=0.0)
-            combined_alpha = np.clip(combined_alpha, -0.05, 0.05)
+            # NOTE: Do NOT normalize alpha to sum-to-1 or clip — it's a return forecast,
+            # not a weight vector. The QP optimizer will determine weights subject to 
+            # its own constraints (including max_position_pct_gmv = 0.01).
             
             # 6. Get risk model matrices
             Q = self.risk_model.get_Q_matrix()
@@ -684,29 +680,39 @@ class IsichenkoPipeline:
             else:
                 adv = np.full(N, 1e6)
             
-            # 8. Run optimizer
+            # 8. Run optimizer (in weight space)
             if Q is not None and spec_var is not None and n_active > 0:
-                h_new = self.optimizer.optimize(
+                w_new = self.optimizer.optimize(
                     alpha_vec=combined_alpha,
                     Q=Q,
                     spec_var=np.maximum(spec_var, 1e-10),
-                    h_prev=h_prev,
+                    w_prev=w_prev,
                     adv=adv,
                     sector_masks=sector_masks,
                 )
             else:
-                h_new = h_prev
+                w_new = w_prev
             
-            # 9. Compute trading costs
-            trades = h_new - h_prev
-            slippage_cost = self.config.slippage_bps * 1e-4 * np.sum(np.abs(trades))
+            # Convert weights to dollar holdings for cost computation
+            h_new = w_new * cfg.booksize
+            h_prev_dollars = w_prev * cfg.booksize
+            
+            # 9. Compute trading costs (in dollar space)
+            trades = h_new - h_prev_dollars
+            trade_notional = np.sum(np.abs(trades))
+            slippage_cost = self.config.slippage_bps * 1e-4 * trade_notional
+            commission_cost = getattr(self.config, 'commission_bps', 0.0) * 1e-4 * trade_notional
+            # Market impact: Almgren-Chriss temporary impact = η * σ * √(|trade|/ADV) * |trade|
+            # This gives impact proportional to participation rate^0.5, standard in industry
             sigma = np.sqrt(np.maximum(spec_var if spec_var is not None else np.zeros(N), 1e-10))
             safe_adv = np.maximum(adv, 1e3)
-            impact_cost = np.sum(self.config.impact_coeff * sigma / np.sqrt(safe_adv) * trades**2)
-            total_tcost = slippage_cost + impact_cost
+            abs_trades = np.abs(trades)
+            participation = abs_trades / safe_adv  # fraction of ADV traded
+            impact_cost = np.sum(self.config.impact_coeff * sigma * np.sqrt(participation) * abs_trades)
+            total_tcost = slippage_cost + commission_cost + impact_cost
             
-            # Borrow cost: charge on short positions held overnight (Isichenko Ch 5.3)
-            short_notional = np.sum(np.abs(h_prev[h_prev < 0]))
+            # Borrow cost: charge on short positions held overnight
+            short_notional = np.sum(np.abs(h_prev_dollars[h_prev_dollars < 0]))
             borrow_cost = cfg.borrow_cost_bps * 1e-4 * short_notional
             total_tcost += borrow_cost
             
@@ -714,7 +720,7 @@ class IsichenkoPipeline:
             
             # 10. Record
             gmv = np.sum(np.abs(h_new))
-            turnover = np.sum(np.abs(trades)) / max(gmv, 1)
+            turnover = trade_notional / max(gmv, 1)
             
             daily_results.append(DailyResult(
                 date=date_str,
@@ -723,21 +729,20 @@ class IsichenkoPipeline:
                 tcost=total_tcost,
                 turnover=turnover,
                 gmv=gmv,
-                n_long=int(np.sum(h_new > 100)),
-                n_short=int(np.sum(h_new < -100)),
-                factor_risk=0.5 * self.config.risk_aversion * np.sum((Q @ h_new)**2) if Q is not None else 0,
-                specific_risk=0.5 * self.config.risk_aversion * np.sum(spec_var * h_new**2) if spec_var is not None else 0,
+                n_long=int(np.sum(w_new > 1e-6)),
+                n_short=int(np.sum(w_new < -1e-6)),
+                factor_risk=0.5 * self.config.risk_aversion * np.sum((Q @ w_new)**2) if Q is not None else 0,
+                specific_risk=0.5 * self.config.risk_aversion * np.sum(spec_var * w_new**2) if spec_var is not None else 0,
             ))
             
-            h_prev = h_new
+            w_prev = w_new
             
             # Progress
             progress = t_idx - start_idx
             if progress % report_every == 0 or t_idx == len(all_dates) - 1:
                 cum_pnl = sum(r.pnl for r in daily_results)
-                avg_gmv = np.mean([r.gmv for r in daily_results[-20:]]) if daily_results else 0
                 print(f"    [{date_str}] day {progress+1}/{n_days} | "
-                      f"cum PnL: ${cum_pnl:+,.0f} | GMV: ${avg_gmv:,.0f} | "
+                      f"cum PnL: ${cum_pnl:+,.0f} | GMV: ${gmv:,.0f} | TO: {turnover:.1%} | "
                       f"longs: {daily_results[-1].n_long} shorts: {daily_results[-1].n_short}")
         
         return self._compute_statistics(daily_results)

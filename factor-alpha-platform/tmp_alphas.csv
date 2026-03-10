@@ -1,0 +1,62 @@
+expression,sharpe_is,ic_mean
+"multiply(ts_delta(close, 6), true_divide(high_low_range, upper_shadow))",2.0930923666272174,0.0035395373328256717
+"multiply(ts_delta(close, 6), true_divide(high_low_range, open_close_range))",1.9935230467064176,0.006730582497934616
+"multiply(ts_delta(close, 6), close_position_in_range)",1.9133000585426725,0.0053347337314065945
+"Decay_exp(multiply(ts_delta(close, 6), close_position_in_range), 0.999)",1.908105383357527,0.005154542416060366
+"multiply(ts_delta(close, 6), parkinson_volatility_60)",1.8801310694557283,0.0035732379017389994
+"Decay_exp(multiply(ts_delta(close, 6), close_position_in_range), 0.98)",1.8561291561998723,0.004926221622759691
+"multiply(ts_delta(close, 6), high_low_range)",1.8479754057284272,0.00226801402139454
+"multiply(ts_delta(close, 6), true_divide(trades_count, sma(trades_count, 30)))",1.833301243223024,0.004397151708900866
+"multiply(ts_delta(close, 6), true_divide(volume, sma(volume, 60)))",1.8330386701076276,0.004350023258011994
+"multiply(ts_delta(close, 6), taker_buy_ratio)",1.8234662891612095,0.005420135202461854
+"Decay_exp(multiply(ts_delta(close, 6), close_position_in_range), 0.9)",1.821793119935868,0.005152774639709364
+"multiply(ts_std_dev(close, 20), Sign(returns))",1.816553090425148,0.00029693187327364866
+"Decay_exp(multiply(ts_delta(close, 6), taker_buy_ratio), 0.98)",1.8116976588539149,0.005265681340808656
+"multiply(ts_delta(close, 6), volume_ratio_20d)",1.7808226853885876,0.004235834433237749
+"multiply(subtract(negative(vwap_deviation), funding_rate), parkinson_volatility_60)",1.7795644076758554,0.04161538119711836
+"Decay_exp(multiply(ts_delta(close, 6), close_position_in_range), 0.8)",1.7784245378208687,0.005742415654249098
+"Decay_exp(multiply(ts_delta(close, 6), volume_ratio_20d), 0.999)",1.7763417236054608,0.004104775755558715
+"multiply(ts_delta(close, 6), true_divide(volume_ratio_20d, taker_buy_ratio))",1.7673532339125226,0.004250251093005848
+"Decay_exp(multiply(ts_delta(close, 6), volume_ratio_20d), 0.98)",1.7565771974776114,0.004173459382153939
+"sma(multiply(ts_delta(close, 6), true_divide(high_low_range, open_close_range)), 2)",1.7554332618651696,0.0044651709191220156
+"negative(ts_delta(vwap_deviation, 10))",1.7377163866348504,0.03079363351557335
+"multiply(subtract(negative(vwap_deviation), funding_rate), historical_volatility_60)",1.7375454626948013,0.04105320215473545
+"multiply(negative(vwap_deviation), historical_volatility_20)",1.722767694551336,0.03669238466039793
+"Decay_exp(multiply(ts_delta(close, 6), volume_ratio_20d), 0.95)",1.7150294001854365,0.004024585372281519
+"true_divide(upper_shadow, lower_shadow)",1.6995535309520238,0.008560525641709124
+"Decay_exp(multiply(ts_delta(close, 6), taker_buy_ratio), 0.9)",1.6921779003183328,0.004804484201190806
+"multiply(subtract(negative(vwap_deviation), funding_rate), historical_volatility_120)",1.6912790367190218,0.04127476996488843
+"sma(multiply(ts_delta(close, 6), parkinson_volatility_60), 2)",1.6849702006305483,0.0038630397904507296
+"multiply(Sign(sma(returns, 60)), true_divide(volume_ratio_20d, historical_volatility_60))",1.6754916748321218,-0.004677387209543803
+"sma(multiply(ts_delta(close, 6), taker_buy_ratio), 2)",1.6697109914130703,0.004356978498277366
+"Decay_exp(multiply(negative(vwap_deviation), historical_volatility_20), 0.9)",1.666943360590124,0.037833492059796366
+"negative(ts_delta(vwap_deviation, 5))",1.6625675872367838,0.02853343088322253
+"negative(multiply(ts_delta(vwap_deviation, 5), Sign(volume_momentum_1)))",1.6625675872367838,0.02853343088322253
+"Decay_exp(multiply(ts_delta(close, 6), true_divide(high_low_range, open_close_range)), 0.9)",1.659108170401437,0.004318819503597718
+"negative(multiply(vwap_deviation, add(historical_volatility_20, parkinson_volatility_60)))",1.6548062902655694,0.03757988487559906
+"sma(multiply(ts_delta(close, 6), high_low_range), 2)",1.640164247829408,0.002304061941488019
+"Decay_exp(multiply(ts_delta(close, 6), volume_ratio_20d), 0.9)",1.6333852946396772,0.004271065083009115
+"multiply(ts_delta(close, 6), ts_kurtosis(volume, 60))",1.6300583136000344,0.004294679472786284
+"multiply(subtract(negative(vwap_deviation), funding_rate), taker_buy_ratio)",1.62565015955834,0.03961986415950161
+"subtract(negative(vwap_deviation), funding_rate)",1.6239162303890877,0.04033559068863726
+"Decay_exp(ts_delta(close, 1), 0.5)",1.6110496454943826,0.0013335692189484223
+"ts_delta(close, 1)",1.59747544818057,-0.0017282377733141665
+"multiply(subtract(negative(vwap_deviation), funding_rate), true_divide(trades_count, sma(trades_count, 30)))",1.5810538636814402,0.03800880339051944
+"Decay_exp(multiply(ts_delta(close, 6), volume_ratio_20d), 0.8)",1.5794993407226723,0.003998568866234419
+"multiply(Sign(sma(returns, 120)), true_divide(volume_momentum_5_20, historical_volatility_60))",1.5658943328977042,-0.0008734021934733166
+"multiply(Sign(sma(returns, 120)), true_divide(sma(volume_ratio_20d, 120), parkinson_volatility_60))",1.5578389708096854,0.0007616462535604414
+"Decay_exp(multiply(ts_delta(close, 6), ts_kurtosis(volume, 60)), 0.8)",1.5549965786756204,0.00454581261433757
+"multiply(Sign(momentum_60d), true_divide(volume_momentum_5_20, historical_volatility_60))",1.5428654159566846,-0.00369305883965633
+"multiply(Sign(sma(returns, 120)), true_divide(sma(volume_ratio_20d, 60), historical_volatility_60))",1.5412024294121163,-0.0012544385849821529
+"Decay_exp(ts_zscore(vwap, 50), 0.97)",1.5389218319369609,-0.01744680309792467
+"Decay_exp(ts_zscore(vwap, 40), 0.96)",1.5302063748242611,-0.015794790324152812
+"multiply(Sign(sma(returns, 120)), true_divide(sma(taker_buy_ratio, 120), historical_volatility_120))",1.5277193872224535,6.18386002379734e-05
+"multiply(Sign(momentum_60d), true_divide(volume_momentum_5_20, parkinson_volatility_60))",1.5274615815727253,-0.0029264148800596337
+"sma(multiply(ts_delta(close, 6), true_divide(trades_count, sma(trades_count, 30))), 2)",1.5267093022739644,0.002953007383846628
+"multiply(ts_delta(close, 6), trades_per_volume)",1.5217662826933234,0.005141817924241269
+"multiply(Sign(sma(returns, 120)), true_divide(sma(volume_momentum_5_20, 120), historical_volatility_120))",1.5216460493335167,-0.0007807124946237933
+"ts_corr(returns, vwap_deviation, 20)",1.5213850401092697,0.0021863646327426973
+"multiply(Sign(sma(returns, 120)), true_divide(sma(volume_momentum_1, 120), historical_volatility_60))",1.5149137924223526,0.0006860384575460789
+"multiply(Sign(sma(returns, 120)), true_divide(sma(volume_ratio_20d, 120), historical_volatility_120))",1.5085327833525901,-0.0008785985784262322
+"ts_rank(close, 30)",1.5060904162303237,-0.02019658150023806
+"Decay_exp(multiply(ts_zscore(vwap, 60), taker_buy_ratio), 0.98)",1.5048624733313178,-0.01807224119648717

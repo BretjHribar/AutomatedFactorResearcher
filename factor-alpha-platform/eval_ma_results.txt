@@ -1,0 +1,45 @@
+Data loaded in 2s
+Top 30 alphas by fitness (range: 2.64 to 4.36)
+30 valid alphas evaluated
+Computing daily factor returns...
+Computing rolling 20-day MA...
+  Alpha 0: ON 53% train / 49% OOS, avg ret 4.0 / 6.2 bps
+  Alpha 1: ON 65% train / 45% OOS, avg ret 18.6 / -3.1 bps
+  Alpha 2: ON 49% train / 48% OOS, avg ret 3.3 / 6.5 bps
+  Alpha 3: ON 56% train / 57% OOS, avg ret 6.6 / 8.1 bps
+  Alpha 4: ON 67% train / 45% OOS, avg ret 19.7 / -3.6 bps
+
+Building combined signals...
+
+RESULTS (top 30 alphas, 20-day MA shutoff)
+=====================================================================================
+                   Method d   Per   Sharpe            PnL      Ann     TO   MaxDD
+---------------------------------------------------------------------------------
+          Top30 always-on 0 TRAIN    +2.00 $    6,164,888   142.5% 17.7% -25.8%
+          Top30 always-on 0   OOS    -0.07 $     -126,294    -6.8% 19.6% -42.5%
+          Top30 always-on 1 TRAIN    +2.42 $    7,675,601   177.4% 17.8% -18.7%
+          Top30 always-on 1   OOS    +0.53 $    1,022,496    55.1% 19.6% -29.8%
+
+       Top30 MA20 shutoff 0 TRAIN    +1.81 $    5,534,877   127.9% 26.2% -32.3%
+       Top30 MA20 shutoff 0   OOS    -0.02 $      -41,001    -2.2% 31.6% -57.3%
+       Top30 MA20 shutoff 1 TRAIN    +2.09 $    6,665,336   154.1% 26.3% -26.2%
+       Top30 MA20 shutoff 1   OOS    +0.42 $      844,196    45.5% 31.5% -44.1%
+
+
+--- Now testing ALL 209 alphas with shutoff ---
+209 valid alphas
+
+                   Method d   Per   Sharpe            PnL      Ann     TO   MaxDD
+-------------------------------------------------------------------------------------
+         All209 always-on 0 TRAIN    +1.88 $    6,286,494   145.3% 18.8% -30.3%
+         All209 always-on 0   OOS    +0.24 $      439,702    23.7% 19.6% -38.9%
+         All209 always-on 1 TRAIN    +2.38 $    8,239,034   190.5% 18.9% -22.9%
+         All209 always-on 1   OOS    +0.92 $    1,810,120    97.6% 19.7% -33.1%
+
+      All209 MA20 shutoff 0 TRAIN    +1.83 $    6,095,733   140.9% 23.9% -33.5%
+      All209 MA20 shutoff 0   OOS    +0.30 $      559,202    30.1% 26.6% -40.6%
+      All209 MA20 shutoff 1 TRAIN    +2.19 $    7,633,095   176.4% 23.9% -24.9%
+      All209 MA20 shutoff 1   OOS    +0.87 $    1,860,266   100.3% 26.5% -32.1%
+
+
+Done in 353s

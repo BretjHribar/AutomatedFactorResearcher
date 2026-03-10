@@ -1,0 +1,26 @@
+==========================================================================================
+PROPER OOS EVALUATION — NO LOOK-AHEAD BIAS
+Started: 2026-03-04 09:13:47
+==========================================================================================
+
+Rules:
+  1. Alpha selection: IS Sharpe >= 1.0 AND IS Fitness >= 1.0 (training set only)
+  2. ALL qualifying alphas combined — no cherry-picking from OOS
+  3. Delisted coins zeroed out with -100% return
+  4. Fees: 5.0 bps | Book: $2,000,000 | Max wt: 5%
+
+[1/5] Loading data...
+  36 matrices loaded
+  88 delisted symbols found
+  492 tickers ever in universe
+  59 delisted symbols were in our ticker universe
+  Train: 1579 days (2020-01-01 to 2024-04-27)
+  Test:  677 days (2024-04-27 to 2026-03-04)
+  Load time: 1s
+
+[2/5] Selecting alphas by TRAINING-SET criteria only...
+  209 alphas with IS Sharpe >= 1.0 AND IS Fitness >= 1.0
+  These were ALL selected BEFORE seeing any OOS data
+
+[3/5] Combining ALL qualifying alphas (equal-weight rank-average)...
+  Train signal: 209 alphas combined, 0 failed

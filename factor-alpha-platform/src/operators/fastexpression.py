@@ -142,6 +142,13 @@ class FastExpressionLexer:
                 self.pos += 1
             else:
                 break
+        # Handle scientific notation: e.g. 1e-10, 1e10, 1E+5
+        if self.pos < len(self.text) and self.text[self.pos] in ('e', 'E'):
+            self.pos += 1  # consume 'e'/'E'
+            if self.pos < len(self.text) and self.text[self.pos] in ('+', '-'):
+                self.pos += 1  # consume sign
+            while self.pos < len(self.text) and self.text[self.pos].isdigit():
+                self.pos += 1
         return _Token(_TT.NUMBER, float(self.text[start:self.pos]))
 
     def _read_ident(self) -> _Token:
@@ -411,7 +418,9 @@ _register("truncate",       ops.truncate,       ["df", "max_weight"])
 _register("add",            ops.add,            ["left", "right"])
 _register("subtract",       ops.subtract,       ["left", "right"])
 _register("multiply",       ops.multiply,       ["left", "right"])
+_register("mul",            ops.multiply,       ["left", "right"])
 _register("divide",         ops.divide,         ["left", "right"])
+_register("div",            ops.divide,         ["left", "right"])
 _register("true_divide",    ops.true_divide,    ["left", "right"])
 _register("protectedDiv",   ops.protectedDiv,   ["left", "right"])
 _register("negative",       ops.negative,       ["df"])
@@ -478,6 +487,7 @@ _register("ts_arg_max",       ops.ts_arg_max,       ["df", "window"])
 _register("ts_arg_min",       ops.ts_arg_min,       ["df", "window"])
 _register("ts_covariance",    ops.ts_covariance,    ["y", "x", "window"])
 _register("not",              ops.reverse,          ["df"])  # logical not ≈ negate for numeric
+_register("extend",           ops.extend,           ["i"])   # identity / type coercion from GP
 
 
 # Group level identifiers (not data fields)
