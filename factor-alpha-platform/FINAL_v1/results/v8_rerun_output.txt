@@ -1,0 +1,68 @@
+======================================================================
+V8 RE-RUN: FRESH BINANCE FUTURES 15m DATA
+Source: fapi.binance.com (downloaded 2026-03-11)
+Fee: 3 bps on position changes
+======================================================================
+BTCUSDT: Overall=+5.31  Total=+16608bps  Neg=0/10  (56s)
+  2024-06: SR=+6.7 WR=51.3% PnL=+1433bps
+  2024-07: SR=+6.9 WR=50.9% PnL=+1993bps
+  2024-08: SR=+8.1 WR=51.9% PnL=+3052bps
+  2024-09: SR=+5.5 WR=48.7% PnL=+1446bps
+  2024-10: SR=+1.0 WR=49.4% PnL=+275bps
+  2024-11: SR=+6.3 WR=53.8% PnL=+2358bps
+  2024-12: SR=+6.3 WR=55.6% PnL=+2330bps
+  2025-01: SR=+4.8 WR=50.4% PnL=+1610bps
+  2025-02: SR=+5.4 WR=53.8% PnL=+1313bps
+  2025-03: SR=+2.2 WR=51.0% PnL=+798bps
+ETHUSDT: Overall=+6.06  Total=+23548bps  Neg=0/10  (58s)
+  2024-06: SR=+7.4 WR=50.9% PnL=+1856bps
+  2024-07: SR=+2.2 WR=48.9% PnL=+834bps
+  2024-08: SR=+1.8 WR=53.5% PnL=+848bps
+  2024-09: SR=+10.5 WR=53.1% PnL=+2845bps
+  2024-10: SR=+8.0 WR=51.5% PnL=+2277bps
+  2024-11: SR=+3.8 WR=53.9% PnL=+1966bps
+  2024-12: SR=+10.7 WR=54.6% PnL=+3373bps
+  2025-01: SR=+9.4 WR=52.2% PnL=+4713bps
+  2025-02: SR=+9.7 WR=54.4% PnL=+3675bps
+  2025-03: SR=+2.8 WR=51.4% PnL=+1162bps
+SOLUSDT: Overall=+6.05  Total=+36464bps  Neg=0/10  (58s)
+  2024-06: SR=+3.6 WR=52.9% PnL=+2014bps
+  2024-07: SR=+3.1 WR=53.8% PnL=+1731bps
+  2024-08: SR=+6.8 WR=57.3% PnL=+5600bps
+  2024-09: SR=+6.5 WR=54.4% PnL=+3283bps
+  2024-10: SR=+6.9 WR=55.8% PnL=+3626bps
+  2024-11: SR=+7.9 WR=53.9% PnL=+3558bps
+  2024-12: SR=+7.4 WR=55.9% PnL=+5221bps
+  2025-01: SR=+4.6 WR=48.9% PnL=+3053bps
+  2025-02: SR=+9.6 WR=53.5% PnL=+6709bps
+  2025-03: SR=+3.4 WR=52.0% PnL=+1669bps
+BNBUSDT: Overall=+4.77  Total=+18374bps  Neg=2/10  (57s)
+  2024-06: SR=-0.5 WR=51.3% PnL=-180bps
+  2024-07: SR=-1.0 WR=50.1% PnL=-349bps
+  2024-08: SR=+6.9 WR=52.0% PnL=+2792bps
+  2024-09: SR=+4.4 WR=52.4% PnL=+1149bps
+  2024-10: SR=+4.9 WR=51.3% PnL=+1741bps
+  2024-11: SR=+4.8 WR=53.2% PnL=+1754bps
+  2024-12: SR=+4.5 WR=49.3% PnL=+2200bps
+  2025-01: SR=+7.1 WR=53.2% PnL=+3319bps
+  2025-02: SR=+3.5 WR=52.4% PnL=+1447bps
+  2025-03: SR=+13.4 WR=54.7% PnL=+4501bps
+DOGEUSDT: Overall=+7.06  Total=+48000bps  Neg=0/10  (57s)
+  2024-06: SR=+10.3 WR=52.6% PnL=+4002bps
+  2024-07: SR=+3.7 WR=49.0% PnL=+1864bps
+  2024-08: SR=+11.7 WR=58.3% PnL=+5891bps
+  2024-09: SR=+10.9 WR=52.6% PnL=+3936bps
+  2024-10: SR=+9.4 WR=52.0% PnL=+4799bps
+  2024-11: SR=+8.0 WR=56.1% PnL=+11269bps
+  2024-12: SR=+6.9 WR=51.2% PnL=+6310bps
+  2025-01: SR=+5.5 WR=50.2% PnL=+3292bps
+  2025-02: SR=+8.0 WR=55.9% PnL=+2963bps
+  2025-03: SR=+6.8 WR=52.5% PnL=+3674bps
+
+COLLECTIVE (V8 fresh futures): +9.93
+  BTCUSDT: +5.31
+  ETHUSDT: +6.06
+  SOLUSDT: +6.05
+  BNBUSDT: +4.77
+  DOGEUSDT: +7.06
+Saved to data/v8_fresh_futures_pnl.parquet
