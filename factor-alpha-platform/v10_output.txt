@@ -1,0 +1,65 @@
+======================================================================
+V10: ENSEMBLE TOP-K CONFIGS (K=5)
+======================================================================
+BTCUSDT: Overall=+4.84  Total=+15541bps  Neg=0/10  (90s)
+  2024-06: SR=+6.8 WR=51.9% PnL=+1446bps
+  2024-07: SR=+5.3 WR=50.8% PnL=+1613bps
+  2024-08: SR=+3.6 WR=49.8% PnL=+1356bps
+  2024-09: SR=+7.9 WR=50.4% PnL=+1882bps
+  2024-10: SR=+1.6 WR=50.2% PnL=+460bps
+  2024-11: SR=+6.8 WR=54.0% PnL=+3088bps
+  2024-12: SR=+7.5 WR=53.4% PnL=+2467bps
+  2025-01: SR=+3.0 WR=49.1% PnL=+1092bps
+  2025-02: SR=+4.2 WR=52.9% PnL=+1084bps
+  2025-03: SR=+3.0 WR=52.6% PnL=+1053bps
+ETHUSDT: Overall=+5.87  Total=+23845bps  Neg=0/10  (77s)
+  2024-06: SR=+5.9 WR=55.0% PnL=+1763bps
+  2024-07: SR=+5.8 WR=49.8% PnL=+2308bps
+  2024-08: SR=+1.4 WR=52.2% PnL=+609bps
+  2024-09: SR=+7.6 WR=51.9% PnL=+2201bps
+  2024-10: SR=+5.7 WR=50.2% PnL=+1704bps
+  2024-11: SR=+3.2 WR=53.8% PnL=+1613bps
+  2024-12: SR=+13.0 WR=56.0% PnL=+5120bps
+  2025-01: SR=+5.8 WR=49.9% PnL=+3111bps
+  2025-02: SR=+6.8 WR=53.5% PnL=+2880bps
+  2025-03: SR=+5.7 WR=51.5% PnL=+2536bps
+SOLUSDT: Overall=+6.67  Total=+38655bps  Neg=0/10  (66s)
+  2024-06: SR=+3.5 WR=51.9% PnL=+1577bps
+  2024-07: SR=+5.5 WR=56.2% PnL=+2787bps
+  2024-08: SR=+5.8 WR=57.1% PnL=+4915bps
+  2024-09: SR=+9.6 WR=55.4% PnL=+4670bps
+  2024-10: SR=+7.6 WR=56.1% PnL=+4198bps
+  2024-11: SR=+6.6 WR=53.7% PnL=+2937bps
+  2024-12: SR=+9.0 WR=56.1% PnL=+5870bps
+  2025-01: SR=+5.1 WR=51.4% PnL=+3642bps
+  2025-02: SR=+8.0 WR=52.0% PnL=+4734bps
+  2025-03: SR=+6.3 WR=52.3% PnL=+3325bps
+BNBUSDT: Overall=+4.95  Total=+18384bps  Neg=1/10  (60s)
+  2024-06: SR=+5.1 WR=53.9% PnL=+1514bps
+  2024-07: SR=-1.3 WR=49.5% PnL=-475bps
+  2024-08: SR=+7.3 WR=52.0% PnL=+2865bps
+  2024-09: SR=+4.1 WR=52.4% PnL=+1095bps
+  2024-10: SR=+4.5 WR=51.2% PnL=+1322bps
+  2024-11: SR=+8.0 WR=54.1% PnL=+2990bps
+  2024-12: SR=+4.4 WR=49.8% PnL=+2154bps
+  2025-01: SR=+5.5 WR=52.9% PnL=+2161bps
+  2025-02: SR=+1.7 WR=49.8% PnL=+643bps
+  2025-03: SR=+9.9 WR=53.9% PnL=+4115bps
+DOGEUSDT: Overall=+6.31  Total=+44448bps  Neg=0/10  (58s)
+  2024-06: SR=+8.1 WR=50.5% PnL=+3206bps
+  2024-07: SR=+0.2 WR=49.1% PnL=+148bps
+  2024-08: SR=+5.3 WR=53.9% PnL=+3071bps
+  2024-09: SR=+10.2 WR=53.5% PnL=+3590bps
+  2024-10: SR=+6.0 WR=52.2% PnL=+4415bps
+  2024-11: SR=+10.2 WR=57.4% PnL=+13209bps
+  2024-12: SR=+6.1 WR=51.3% PnL=+4980bps
+  2025-01: SR=+8.0 WR=51.7% PnL=+4841bps
+  2025-02: SR=+10.5 WR=57.0% PnL=+4538bps
+  2025-03: SR=+3.9 WR=52.2% PnL=+2449bps
+
+COLLECTIVE (V10 ensemble): +9.71
+  BTCUSDT: +4.84
+  ETHUSDT: +5.87
+  SOLUSDT: +6.67
+  BNBUSDT: +4.95
+  DOGEUSDT: +6.31

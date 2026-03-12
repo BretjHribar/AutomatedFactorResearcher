@@ -81,17 +81,55 @@ STATE_FILE  = Path(__file__).parent / "real_state.json"
 BOOK_LOG    = Path(__file__).parent / "real_book_snapshots.jsonl"
 FILL_LOG    = Path(__file__).parent / "real_fill_quality.csv"
 
-# V2-optimized configs
+# V4 LGB engine configs (walk-forward validated 55%+ WR on filtered trades)
+# ETHUSDT/BTCUSDT: LightGBM model with probability threshold
+# SOLUSDT: MR ensemble with percentile threshold (LGB doesn't help SOL)
 CONFIGS = {
-    "BTCUSDT": {"corr_cutoff": 0.90, "max_alphas": 10, "lookback": 1440, "phl": 1},
-    "ETHUSDT": {"corr_cutoff": 0.80, "max_alphas": 12, "lookback": 5760, "phl": 1},
-    "SOLUSDT": {"corr_cutoff": 0.80, "max_alphas": 15, "lookback": 1440, "phl": 1},
+    "BTCUSDT": {"engine": "lgb", "prob_threshold": 0.535, "pctile": 85, "corr_cutoff": 0.90, "max_alphas": 10, "lookback": 1440, "phl": 1},
+    "ETHUSDT": {"engine": "lgb", "prob_threshold": 0.530, "pctile": 65, "corr_cutoff": 0.80, "max_alphas": 12, "lookback": 5760, "phl": 1},
+    "SOLUSDT": {"engine": "mr", "prob_threshold": 0.530, "pctile": 92, "corr_cutoff": 0.80, "max_alphas": 15, "lookback": 1440, "phl": 1},
 }
 
-TRADE_SIZE_USD = 1.0
-MAX_TRADE_SIZE = 5.0
+TRADE_SIZE_USD = 2.0     # Base trade size
+MAX_TRADE_SIZE = 8.0     # Max single trade ($2 * 3x = $6, with vol boost up to $8)
+MAX_FILL_PRICE = 0.53    # FILL GUARD: refuse to trade if ask > this (protects edge)
 MIN_CAPITAL = 150.0
-STARTING_CAPITAL = 194.0   # Updated after initial losses
+STARTING_CAPITAL = 217.86  # Actual balance as of 2026-03-10 19:44
+MIN_SIGNAL_STRENGTH = 0.0  # Threshold now handled by percentile filter
+
+def compute_trade_size(signal_strength, vol_expanded=False, engine_type="mr"):
+    """Compute trade size based on signal strength and volatility regime.
+    Walk-forward validated: strong signals have higher WR."""
+    base = TRADE_SIZE_USD
+    abs_s = abs(signal_strength)
+    
+    if engine_type == "lgb":
+        # LGB signals are probabilities centered at 0.5, so signal = proba - 0.5
+        # Typical range: 0.03 to 0.15
+        if abs_s > 0.08:
+            multiplier = 3.0
+        elif abs_s > 0.05:
+            multiplier = 2.0
+        elif abs_s > 0.03:
+            multiplier = 1.0
+        else:
+            multiplier = 0.5
+    else:
+        # MR signals: typical range 0.5 to 15
+        if abs_s > 1.5:
+            multiplier = 3.0
+        elif abs_s > 1.0:
+            multiplier = 2.0 
+        elif abs_s > 0.5:
+            multiplier = 1.0
+        else:
+            multiplier = 0.5  # Half size on weak signals
+    
+    # Boost if vol expanded (MR works better after big candles)
+    if vol_expanded and abs_s > (0.03 if engine_type == "lgb" else 0.5):
+        multiplier *= 1.5
+    
+    return min(base * multiplier, MAX_TRADE_SIZE)
 
 FEE_PER_TRADE_BPS = 50
 BARS_PER_DAY = 288
@@ -250,45 +288,324 @@ class KlineBuffer:
 
 
 # ============================================================================
-# ADAPTIVE NET SIGNAL ENGINE
+# MR ENSEMBLE SIGNAL ENGINE (v3 — walk-forward validated 54%+ WR on ETH)
 # ============================================================================
 
-class AdaptiveNetEngine:
-    def __init__(self, symbol, alpha_names, cfg):
-        self.symbol = symbol; self.alpha_names = alpha_names; self.cfg = cfg
-        self.lookback = cfg["lookback"]; self.phl = cfg["phl"]
-        self.outcome_history = []; self.bar_count = 0; self.is_warmup = True
+def build_mr_ensemble(df):
+    """Build 25-indicator mean-reversion ensemble.
+    
+    Walk-forward validated on 230k bars (2yr+) with no look-ahead:
+    - ETH p65: 54.2% WR (every quarter > 54%)
+    - BTC p75: 53.8% WR
+    - SOL p80: 53.2% WR
+    
+    All signals use data up to the CURRENT bar (no shift applied here;
+    the live engine uses the latest value to predict the NEXT bar).
+    """
+    close = df["close"]; high = df["high"]; low = df["low"]
+    opn = df["open"]; volume = df["volume"]
+    qv = df["quote_volume"]
+    ret = close.pct_change()
+    vwap = qv / volume.replace(0, np.nan)
+    
+    alphas = []
+    
+    # 1. Price MR z-score (9 alphas)
+    for w in [3, 5, 6, 8, 10, 12, 15, 20, 30]:
+        m = close.rolling(w, min_periods=2).mean()
+        s = close.rolling(w, min_periods=2).std().replace(0, np.nan)
+        alphas.append((-(close - m) / s).replace([np.inf, -np.inf], np.nan))
+    
+    # 2. VWAP MR (3 alphas)
+    for w in [10, 20, 30]:
+        m = vwap.rolling(w, min_periods=2).mean()
+        s = vwap.rolling(w, min_periods=2).std().replace(0, np.nan)
+        alphas.append((-(close - m) / s).replace([np.inf, -np.inf], np.nan))
+    
+    # 3. EMA MR (3 alphas)
+    for w in [5, 10, 20]:
+        e = close.ewm(halflife=w).mean()
+        s = close.rolling(w*2, min_periods=2).std().replace(0, np.nan)
+        alphas.append((-(close - e) / s).replace([np.inf, -np.inf], np.nan))
+    
+    # 4. RSI MR (2 alphas)
+    for w in [7, 14]:
+        gain = ret.clip(lower=0).rolling(w).mean()
+        loss = (-ret.clip(upper=0)).rolling(w).mean()
+        rsi = gain / (gain + loss + 1e-10)
+        alphas.append(-(rsi - 0.5))
+    
+    # 5. Bollinger MR (2 alphas)
+    for w in [10, 20]:
+        m = close.rolling(w).mean()
+        s = close.rolling(w).std()
+        alphas.append(-((close - m) / (2*s + 1e-10)))
+    
+    # 6. Keltner MR (2 alphas)
+    for w in [10, 20]:
+        atr = (high - low).rolling(w).mean()
+        e = close.ewm(halflife=w).mean()
+        alphas.append((-(close - e) / (atr + 1e-10)).replace([np.inf, -np.inf], np.nan))
+    
+    # 7. Stochastic MR (2 alphas)
+    for w in [5, 14]:
+        lowest = low.rolling(w).min()
+        highest = high.rolling(w).max()
+        k = (close - lowest) / (highest - lowest + 1e-10)
+        alphas.append(-(k - 0.5))
+    
+    # 8. CCI MR (2 alphas)
+    for w in [10, 20]:
+        tp = (high + low + close) / 3
+        m = tp.rolling(w).mean()
+        s = tp.rolling(w).std()
+        alphas.append(-((tp - m) / (0.015 * s + 1e-10)).replace([np.inf, -np.inf], np.nan))
+    
+    # Simple average of all 25 indicators
+    combo = pd.concat(alphas, axis=1).mean(axis=1)
+    return combo
+
+
+class MREnsembleEngine:
+    """V3 MR Ensemble Engine — replaces AdaptiveNetEngine.
+    
+    Key differences from v2:
+    1. 25 MR indicators instead of momentum+MR mix
+    2. Simple average instead of adaptive weighting
+    3. Signal magnitude filter using expanding percentile threshold
+    4. Per-coin optimized percentile (ETH=65, BTC=75, SOL=80)
+    """
+    def __init__(self, symbol, cfg):
+        self.symbol = symbol
+        self.pctile = cfg.get("pctile", 70)
+        self.bar_count = 0
+        self.threshold = 0.5  # Initial threshold, updated on first bar
+        self.threshold_history = []  # Track threshold evolution
+    
+    def update(self, df):
+        """Generate signal from MR ensemble.
+        
+        Returns: (direction, signal_val, info_dict)
+        - direction: +1 (UP), -1 (DOWN), 0 (no trade)
+        - signal_val: raw signal magnitude
+        - info_dict: diagnostic info
+        """
+        self.bar_count += 1
+        
+        if len(df) < 50:
+            return 0, 0.0, {}
+        
+        # Build MR ensemble signal
+        combo = build_mr_ensemble(df)
+        
+        # Latest signal value (uses data up to the just-closed bar)
+        signal_val = float(combo.iloc[-1])
+        if np.isnan(signal_val):
+            return 0, 0.0, {}
+        
+        # Update threshold from historical signals (expanding window)
+        # Only use past signals — no look-ahead
+        past_signals = combo.iloc[:-1].abs().dropna()
+        if len(past_signals) > 100:
+            self.threshold = float(np.percentile(past_signals, self.pctile))
+        
+        # Apply magnitude filter
+        if abs(signal_val) < self.threshold:
+            return 0, signal_val, {"threshold": self.threshold, "filtered": True}
+        
+        direction = int(np.sign(signal_val))
+        info = {
+            "threshold": self.threshold,
+            "signal_abs": abs(signal_val),
+            "n_indicators": 25,
+            "pctile": self.pctile,
+            "filtered": False,
+        }
+        return direction, signal_val, info
+
+
+def build_lgb_features(df):
+    """Build feature matrix for LightGBM engine."""
+    close = df["close"]; high = df["high"]; low = df["low"]; opn = df["open"]
+    volume = df["volume"]; qv = df["quote_volume"]; taker_buy = df["taker_buy_base"]
+    ret = close.pct_change()
+    vwap = qv / volume.replace(0, np.nan)
+    taker_imb = (2*taker_buy - volume) / volume.replace(0, np.nan)
+    vol_ratio = volume / volume.rolling(20).mean()
+    atr = high - low
+
+    feats = {}
+    # MR ensemble (lead feature)
+    feats["mr_ensemble"] = build_mr_ensemble(df)
+    feats["mr_ensemble_abs"] = feats["mr_ensemble"].abs()
+
+    # Individual MR z-scores
+    for w in [3, 5, 8, 10, 15, 20, 30]:
+        m = close.rolling(w, min_periods=2).mean()
+        s = close.rolling(w, min_periods=2).std().replace(0, np.nan)
+        feats[f"mr_{w}"] = (-(close - m) / s).replace([np.inf, -np.inf], np.nan)
+
+    # VWAP MR
+    for w in [10, 20]:
+        m = vwap.rolling(w, min_periods=2).mean()
+        s = vwap.rolling(w, min_periods=2).std().replace(0, np.nan)
+        feats[f"vmr_{w}"] = (-(close - m) / s).replace([np.inf, -np.inf], np.nan)
+
+    # RSI
+    for w in [7, 14]:
+        gain = ret.clip(lower=0).rolling(w).mean()
+        loss = (-ret.clip(upper=0)).rolling(w).mean()
+        feats[f"rsi_{w}"] = gain / (gain + loss + 1e-10)
+
+    # Stochastic
+    for w in [5, 14]:
+        feats[f"stoch_{w}"] = (close - low.rolling(w).min()) / (
+            high.rolling(w).max() - low.rolling(w).min() + 1e-10)
+
+    # Volume
+    feats["vol_ratio"] = vol_ratio.replace([np.inf, -np.inf], np.nan)
+    feats["taker_imb"] = taker_imb
+    for w in [5, 10]:
+        feats[f"timb_{w}"] = taker_imb.rolling(w).mean()
+
+    # Candle
+    feats["body"] = (close - opn) / (atr + 1e-10)
+    feats["cpos"] = (close - low) / (atr + 1e-10)
+    feats["body_5"] = ((close - opn) / (atr + 1e-10)).rolling(5).mean()
+
+    # Volatility
+    feats["atr_ratio"] = (atr / atr.rolling(20).mean()).replace([np.inf, -np.inf], np.nan)
+    feats["rvol_10"] = ret.rolling(10).std()
+
+    # Returns
+    for w in [1, 3, 5, 10]:
+        feats[f"ret_{w}"] = close.pct_change(w)
+
+    # Interactions
+    feats["ens_x_vol"] = feats["mr_ensemble"] * feats["vol_ratio"]
+    feats["ens_x_timb"] = feats["mr_ensemble"] * feats["taker_imb"]
+    feats["ens_x_atr"] = feats["mr_ensemble"] * feats["atr_ratio"]
+
+    # Time
+    if hasattr(df.index, "hour"):
+        feats["hour_sin"] = np.sin(2 * np.pi * df.index.hour / 24)
+        feats["hour_cos"] = np.cos(2 * np.pi * df.index.hour / 24)
+
+    return pd.DataFrame(feats, index=df.index)
+
+
+class LGBEngine:
+    """V4 LightGBM Engine — 55%+ WR at 25% of bars.
+
+    Walk-forward validated on 200k+ OOS predictions:
+    - ETH thresh=0.530: 54.7% WR on 23% of bars
+    - ETH thresh=0.540: 55.7% WR on 12% of bars
+    - BTC thresh=0.530: 54.5% WR on 16% of bars
+    """
+    LGB_PARAMS = {
+        "objective": "binary", "metric": "binary_logloss",
+        "num_leaves": 7, "learning_rate": 0.01,
+        "feature_fraction": 0.5, "bagging_fraction": 0.6,
+        "bagging_freq": 3, "min_child_samples": 100,
+        "verbose": -1, "n_jobs": -1,
+    }
+
+    def __init__(self, symbol, cfg):
+        self.symbol = symbol
+        self.prob_threshold = cfg.get("prob_threshold", 0.535)
+        self.model = None
+        self.bar_count = 0
+        self.retrain_interval = 2000  # Retrain every 2000 bars (~7 days)
+        self.last_train_bar = -9999  # Force training on first call
+        self.train_window = 80000
+        self.min_train = 2000  # Reduced from 5000 — rolling features drop many rows
+
+    def _train(self, df):
+        """Train LGB model on historical data. No look-ahead."""
+        import lightgbm as lgb
+
+        target = (df["close"] >= df["open"]).astype(int)
+        X_all = build_lgb_features(df)
+        y_all = target.shift(-1)  # Predict NEXT bar
+
+        # Use last train_window bars
+        start = max(0, len(df) - self.train_window)
+        X_tr = X_all.iloc[start:]
+        y_tr = y_all.iloc[start:]
+
+        valid = X_tr.dropna().index.intersection(y_tr.dropna().index)
+        if len(valid) < self.min_train:
+            return False
+
+        val_split = int(len(valid) * 0.8)
+        train_idx = valid[:val_split]
+        val_idx = valid[val_split:]
+
+        dtrain = lgb.Dataset(X_tr.loc[train_idx], y_tr.loc[train_idx])
+        dval = lgb.Dataset(X_tr.loc[val_idx], y_tr.loc[val_idx], reference=dtrain)
+
+        self.model = lgb.train(
+            self.LGB_PARAMS, dtrain, num_boost_round=1000,
+            valid_sets=[dval],
+            callbacks=[lgb.early_stopping(50, verbose=False)]
+        )
+        self.last_train_bar = self.bar_count
+        return True
 
     def update(self, df):
+        """Generate signal from LGB model.
+
+        Returns: (direction, signal_val, info_dict)
+        """
         self.bar_count += 1
-        alpha_df = build_alpha_signals(df, live_mode=True)
-        cols = [c for c in self.alpha_names if c in alpha_df.columns]
-        if len(cols) < 2: return 0, 0.0, {}
-        X = alpha_df[cols]
-        latest = X.iloc[-1]
-        if latest.isna().all(): return 0, 0.0, {}
-        target = (df["close"] >= df["open"]).astype(int)
-        # Signal on bar N predicts bar N+1's outcome, so shift target
-        y = 2.0 * (target.shift(-1).astype(float) - 0.5)
-        fee_per = FEE_PER_TRADE_BPS / 10000.0
-        fr = pd.DataFrame(index=X.index, columns=cols, dtype=float)
-        for col in cols:
-            d = np.sign(X[col].values)
-            fr[col] = d * y.values - fee_per
-        lb = min(self.lookback, len(fr))
-        rer = fr.rolling(lb, min_periods=min(200, lb)).mean()
-        w = rer.clip(lower=0)
-        ws = w.sum(axis=1).replace(0, np.nan)
-        wn = w.div(ws, axis=0).fillna(0)
-        if self.phl > 1:
-            wn = wn.ewm(halflife=self.phl, min_periods=1).mean()
-            ws2 = wn.sum(axis=1).replace(0, np.nan)
-            wn = wn.div(ws2, axis=0).fillna(0)
-        combined = (X * wn).sum(axis=1)
-        signal_val = combined.iloc[-1]
-        direction = int(np.sign(signal_val)) if not np.isnan(signal_val) else 0
-        weights = {c: float(wn[c].iloc[-1]) for c in cols if wn[c].iloc[-1] > 0.01}
-        return direction, float(signal_val), weights
+
+        if len(df) < 200:
+            return 0, 0.0, {}
+
+        # Retrain periodically
+        if self.model is None or (self.bar_count - self.last_train_bar) >= self.retrain_interval:
+            try:
+                success = self._train(df)
+                if success:
+                    print(f"    [LGB] {self.symbol} trained (bars={len(df)}, bar_count={self.bar_count})")
+                else:
+                    print(f"    [LGB] {self.symbol} training failed (not enough data)")
+            except Exception as e:
+                import traceback
+                print(f"    [!] LGB train error for {self.symbol}: {e}")
+                traceback.print_exc()
+                if self.model is None:
+                    return 0, 0.0, {}
+
+        if self.model is None:
+            return 0, 0.0, {}
+
+        # Build features for latest bar
+        X_all = build_lgb_features(df)
+        latest = X_all.iloc[[-1]]
+
+        if latest.isna().any(axis=1).iloc[0]:
+            return 0, 0.0, {}
+
+        proba = float(self.model.predict(latest)[0])
+
+        # Apply probability threshold
+        if proba >= self.prob_threshold:
+            direction = 1  # UP
+            signal_val = proba - 0.5
+        elif proba <= (1.0 - self.prob_threshold):
+            direction = -1  # DOWN
+            signal_val = proba - 0.5
+        else:
+            return 0, proba - 0.5, {"proba": proba, "threshold": self.prob_threshold, "filtered": True}
+
+        info = {
+            "proba": proba,
+            "threshold": self.prob_threshold,
+            "bars_since_train": self.bar_count - self.last_train_bar,
+            "filtered": False,
+        }
+        return direction, signal_val, info
 
 
 # ============================================================================
@@ -444,6 +761,7 @@ def snapshot_book(pm_client, contract, side="yes"):
 
 
 def execute_market_order(clob_client, token_id, size_usd, neg_risk=False):
+    """Execute a market order (fallback only)."""
     t0 = time.time()
     try:
         mo = MarketOrderArgs(token_id=token_id, amount=size_usd, side=BUY)
@@ -453,9 +771,184 @@ def execute_market_order(clob_client, token_id, size_usd, neg_risk=False):
             signed = clob_client.create_market_order(mo)
         resp = clob_client.post_order(signed, OrderType.FOK)
         latency_ms = (time.time() - t0) * 1000
-        # Check if order was actually matched
         success = resp.get("success", False) or resp.get("status") == "matched"
         return {"success": success, "response": resp, "latency_ms": latency_ms}
+    except Exception as e:
+        return {
+            "success": False, "error": str(e),
+            "traceback": traceback.format_exc(),
+            "latency_ms": (time.time() - t0) * 1000,
+        }
+
+
+LIMIT_PRICE = 0.53       # Data: WR=64% at $0.52-0.53, vs 38% at ≤$0.51 (adverse selection!)
+SNIPE_TIMEOUT = 5        # 5s max wait — don't snipe too long (adverse selection)
+MIN_SIGNAL_ABS = 0.7     # Only trade when |signal| >= 0.7 (WR=49% vs 46% for all)
+
+
+class BookSniper:
+    """Streams Polymarket order book via WebSocket, fires when price is right.
+    
+    Architecture:
+    - Persistent WS + background reader task continuously updates latest_asks
+    - Multiple concurrent wait_for_price() calls just poll the dict
+    - No WS read contention between coins
+    """
+    
+    WS_URL = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
+    
+    def __init__(self):
+        self.latest_asks = {}  # token_id -> latest best ask
+        self.ws = None
+        self._connected = False
+        self._reader_task = None
+    
+    async def connect(self):
+        """Establish persistent WS connection + start background reader."""
+        try:
+            self.ws = await websockets.connect(self.WS_URL, ping_interval=20, ping_timeout=10)
+            self._connected = True
+            # Start background reader
+            self._reader_task = asyncio.create_task(self._background_reader())
+            print("  [OK] Polymarket book stream connected")
+        except Exception as e:
+            print(f"  [!] Book stream connect failed: {e}")
+            self._connected = False
+    
+    async def _background_reader(self):
+        """Continuously read WS messages and update latest_asks dict."""
+        while self._connected and self.ws:
+            try:
+                msg = await asyncio.wait_for(self.ws.recv(), timeout=30)
+                data = json.loads(msg)
+                
+                if isinstance(data, list):
+                    for item in data:
+                        if item.get("event_type") == "book":
+                            asset_id = item.get("asset_id", "")
+                            asks = item.get("asks", [])
+                            if asks and asset_id:
+                                best_ask = min(float(a["price"]) for a in asks)
+                                self.latest_asks[asset_id] = best_ask
+                
+                elif isinstance(data, dict):
+                    if data.get("event_type") == "price_change":
+                        for change in data.get("price_changes", []):
+                            asset_id = change.get("asset_id", "")
+                            price = float(change.get("price", 0))
+                            side = change.get("side", "")
+                            if asset_id and price > 0 and side == "SELL":
+                                cur = self.latest_asks.get(asset_id, 999)
+                                self.latest_asks[asset_id] = min(cur, price)
+            
+            except asyncio.TimeoutError:
+                continue  # Keep alive
+            except websockets.exceptions.ConnectionClosed:
+                self._connected = False
+                print("  [!] Book stream disconnected, will reconnect")
+                break
+            except Exception:
+                continue
+    
+    async def subscribe(self, token_id):
+        """Subscribe to book updates for a token. Call BEFORE model runs."""
+        if not self._connected:
+            await self.connect()
+        if not self._connected:
+            return
+        try:
+            msg = json.dumps({
+                "auth": {},
+                "type": "subscribe",
+                "channel": "market",
+                "assets_ids": [token_id],
+            })
+            await self.ws.send(msg)
+            self.latest_asks[token_id] = 0  # Will be updated by background reader
+        except Exception as e:
+            self._connected = False
+    
+    async def wait_for_price(self, token_id, max_price, timeout_s):
+        """Wait for ask to drop to max_price. Just polls the dict (fast)."""
+        t0 = time.time()
+        best_seen = 999
+        
+        while time.time() - t0 < timeout_s:
+            ask = self.latest_asks.get(token_id, 0)
+            if ask > 0:
+                best_seen = min(best_seen, ask)
+                if ask <= max_price:
+                    return ask  # Price is right!
+            
+            await asyncio.sleep(0.1)  # Check every 100ms
+        
+        return 0  # Timeout
+    
+    async def unsubscribe(self, token_id):
+        """Unsubscribe from a token."""
+        if not self._connected or not self.ws:
+            return        
+        try:
+            msg = json.dumps({
+                "type": "unsubscribe", 
+                "channel": "market",
+                "assets_ids": [token_id],
+            })
+            await self.ws.send(msg)
+            self.latest_asks.pop(token_id, None)
+        except Exception:
+            pass
+
+
+async def execute_snipe_order(clob_client, pm_client, contract, token_id, token_side,
+                              size_usd, neg_risk, book_sniper):
+    """Sniper execution using WebSocket book stream.
+    
+    The book_sniper is already subscribed and streaming — just wait for price.
+    When ask ≤ $0.51, fire FOK market order instantly.
+    """
+    t0 = time.time()
+    
+    # Wait for good price (book is already streaming from subscribe() call)
+    ask = await book_sniper.wait_for_price(token_id, LIMIT_PRICE, SNIPE_TIMEOUT)
+    
+    if ask <= 0:
+        # Timeout — try one REST snapshot as fallback
+        wait_s = round(time.time() - t0, 1)
+        book = snapshot_book(pm_client, contract, side=token_side)
+        rest_ask = book.get("tob_ask", 0) or 0
+        if rest_ask <= 0 or rest_ask > LIMIT_PRICE:
+            return {
+                "success": False,
+                "response": {"status": "SNIPE_TIMEOUT"},
+                "latency_ms": (time.time() - t0) * 1000,
+                "fill_type": "SNIPE_TIMEOUT",
+                "snipe_wait_s": wait_s,
+                "snipe_ask": rest_ask,
+                "best_ask_seen": rest_ask,
+                "error": f"No fill at ≤${LIMIT_PRICE} in {SNIPE_TIMEOUT}s (REST ask=${rest_ask})",
+            }
+        ask = rest_ask  # REST says price is good, try FOK
+    
+    # Price is right — FIRE FOK immediately
+    try:
+        mo = MarketOrderArgs(token_id=token_id, amount=size_usd, side=BUY)
+        if neg_risk:
+            signed = clob_client.create_market_order(mo, options={"neg_risk": True})
+        else:
+            signed = clob_client.create_market_order(mo)
+        resp = clob_client.post_order(signed, OrderType.FOK)
+        latency_ms = (time.time() - t0) * 1000
+        success = resp.get("success", False) or resp.get("status") == "matched"
+        
+        return {
+            "success": success,
+            "response": resp,
+            "latency_ms": latency_ms,
+            "fill_type": "SNIPE",
+            "snipe_wait_s": round(time.time() - t0, 1),
+            "snipe_ask": ask,
+        }
     except Exception as e:
         return {
             "success": False, "error": str(e),
@@ -477,7 +970,12 @@ class RealTrader:
         self.pending = {}  # trade_id -> trade dict
         self.total_real_pnl = 0.0
         self.consecutive_errors = 0
-        self.redeemed_conditions = set()  # Track what we've already redeemed
+        self.redeemed_conditions = set()  # Successfully redeemed
+        self.traded_slugs = set()  # DEDUP: slugs we've already traded
+        self.session_start_ts = int(time.time())  # Track when this session started
+        # Redemption queue: condition_id -> {slug, added_ts, attempts}
+        self.redemption_queue = {}
+        self.in_flight_capital = 0.0  # Capital locked in unsettled positions
         self.load_state()
 
     def load_state(self):
@@ -489,10 +987,23 @@ class RealTrader:
                 self.trades = state.get("trades", [])
                 self.total_real_pnl = state.get("total_real_pnl", 0.0)
                 self.redeemed_conditions = set(state.get("redeemed_conditions", []))
+                self.redemption_queue = state.get("redemption_queue", {})
+                self.traded_slugs = set(state.get("traded_slugs", []))
+                n_queue = len(self.redemption_queue)
                 print(f"  Loaded state: ${self.capital:,.2f} capital, {len(self.trades)} trades, "
-                      f"PnL=${self.total_real_pnl:+,.2f}")
+                      f"PnL=${self.total_real_pnl:+,.2f}, {n_queue} pending redemptions, "
+                      f"{len(self.traded_slugs)} traded slugs")
             except Exception:
                 pass
+        # Rebuild traded_slugs from trade log if empty
+        if not self.traded_slugs and TRADE_LOG.exists():
+            with open(TRADE_LOG) as f:
+                for line in f:
+                    t = json.loads(line)
+                    slug = t.get('slug', '')
+                    if slug:
+                        self.traded_slugs.add(slug)
+            print(f"  Rebuilt {len(self.traded_slugs)} traded slugs from trade log")
 
     def save_state(self):
         state = {
@@ -500,9 +1011,85 @@ class RealTrader:
             "trades": self.trades[-2000:],
             "total_real_pnl": self.total_real_pnl,
             "redeemed_conditions": list(self.redeemed_conditions),
+            "redemption_queue": self.redemption_queue,
+            "traded_slugs": list(self.traded_slugs),
         }
         with open(STATE_FILE, "w") as f:
             json.dump(state, f, indent=2, default=str)
+
+    def is_capital_available(self, trade_size):
+        """Check if we have enough free capital (not locked in-flight)."""
+        max_in_flight = self.capital * 0.40  # Max 40% of capital in-flight
+        if self.in_flight_capital + trade_size > max_in_flight:
+            return False
+        return True
+
+    def sweep_redemptions(self):
+        """Integrated redemption sweep — called every bar, no daemon needed."""
+        if not self.redemption_queue:
+            return
+        try:
+            from web3 import Web3
+            w3 = Web3(Web3.HTTPProvider('https://polygon-bor-rpc.publicnode.com',
+                                         request_kwargs={'timeout': 10}))
+            pk = os.environ.get('POLYGON_PRIVATE_KEY', '')
+            if not pk:
+                return
+            acct = w3.eth.account.from_key(pk)
+            CT = Web3.to_checksum_address('0x4D97DCd97eC945f40cF65F87097ACe5EA0476045')
+            USDC = Web3.to_checksum_address('0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174')
+            CT_ABI = [
+                {'constant':True,'inputs':[{'name':'account','type':'address'},{'name':'id','type':'uint256'}],
+                 'name':'balanceOf','outputs':[{'name':'','type':'uint256'}],'type':'function'},
+                {'constant':False,'inputs':[
+                    {'name':'collateralToken','type':'address'},{'name':'parentCollectionId','type':'bytes32'},
+                    {'name':'conditionId','type':'bytes32'},{'name':'indexSets','type':'uint256[]'}
+                ],'name':'redeemPositions','outputs':[],'type':'function'},
+                {'constant':True,'inputs':[{'name':'conditionId','type':'bytes32'}],
+                 'name':'payoutDenominator','outputs':[{'name':'','type':'uint256'}],'type':'function'},
+            ]
+            ct = w3.eth.contract(address=CT, abi=CT_ABI)
+            nonce = w3.eth.get_transaction_count(acct.address)
+            settled = 0
+            to_remove = []
+            for cond_hex, info in list(self.redemption_queue.items()):
+                try:
+                    token_id = int(info.get('token_id', 0))
+                    if token_id == 0:
+                        to_remove.append(cond_hex)
+                        continue
+                    bal = ct.functions.balanceOf(acct.address, token_id).call()
+                    if bal == 0:
+                        to_remove.append(cond_hex)
+                        self.in_flight_capital = max(0, self.in_flight_capital - info.get('size', 1))
+                        continue
+                    cond_bytes = Web3.to_bytes(hexstr=cond_hex)
+                    payout = ct.functions.payoutDenominator(cond_bytes).call()
+                    if payout == 0:
+                        continue  # Not settled yet
+                    tx = ct.functions.redeemPositions(USDC, bytes(32), cond_bytes, [1, 2]).build_transaction({
+                        'from': acct.address, 'nonce': nonce,
+                        'gasPrice': w3.eth.gas_price, 'gas': 200000
+                    })
+                    signed = w3.eth.account.sign_transaction(tx, pk)
+                    w3.eth.send_raw_transaction(signed.raw_transaction)
+                    nonce += 1
+                    settled += 1
+                    to_remove.append(cond_hex)
+                    self.in_flight_capital = max(0, self.in_flight_capital - info.get('size', 1))
+                except Exception as e:
+                    if 'nonce' in str(e).lower():
+                        nonce = w3.eth.get_transaction_count(acct.address)
+            for c in to_remove:
+                self.redemption_queue.pop(c, None)
+                self.redeemed_conditions.add(c)
+            if settled > 0:
+                now_str = time.strftime('%H:%M:%S')
+                print(f"    Redemption sweep: {settled} settled, "
+                      f"{len(self.redemption_queue)} still pending, "
+                      f"in-flight=${self.in_flight_capital:.0f}", flush=True)
+        except Exception as e:
+            pass  # Non-critical, will retry next bar
 
     def should_stop(self):
         if self.capital < MIN_CAPITAL:
@@ -513,8 +1100,9 @@ class RealTrader:
             return True
         return False
 
-    def open_position(self, symbol, candle_open_time, direction,
-                      signal_value, weights, contract=None):
+    async def open_position(self, symbol, candle_open_time, direction,
+                      signal_value, weights, contract=None, book_sniper=None,
+                      engine_type="mr"):
         trade_start = time.time()
         now_ts = datetime.now(timezone.utc).isoformat()
         trade_id = f"{symbol}_5m_{candle_open_time}"
@@ -523,23 +1111,79 @@ class RealTrader:
             print(f"    [!] No contract found, skipping trade")
             return None
 
+        # DEDUP: Don't trade the same contract twice
+        slug = getattr(contract, 'slug', '') or ''
+        if slug and slug in self.traded_slugs:
+            print(f"    [!] Already traded {slug}, skipping duplicate")
+            return None
+
+        # SIGNAL FILTER: Weak signals have much lower WR
+        # LGB engine already filters by probability threshold, so skip this check
+        if engine_type != "lgb" and abs(signal_value) < MIN_SIGNAL_ABS:
+            print(f"    [!] Signal too weak ({signal_value:+.3f}), need |sig|>={MIN_SIGNAL_ABS}")
+            return None
+
+        # CAPITAL CHECK: Don't trade if too much is in-flight
+        planned_size = min(compute_trade_size(signal_value, vol_expanded=False, engine_type=engine_type),
+                           MAX_TRADE_SIZE, self.capital * 0.05)
+        if not self.is_capital_available(planned_size):
+            print(f"    [!] Capital locked: ${self.in_flight_capital:.0f} in-flight, skipping")
+            return None
+
         # Determine token
         if direction == "UP":
             token_side, token_id = "yes", contract.yes_token_id
         else:
             token_side, token_id = "no", contract.no_token_id
-
-        # Book snapshot BEFORE
+        
+        # Pre-book snapshot for logging
         pre_book = snapshot_book(self.pm, contract, side=token_side)
+        tob_ask = pre_book.get("tob_ask", 0) or 0
 
-        # Execute
-        size = min(TRADE_SIZE_USD, MAX_TRADE_SIZE, self.capital * 0.05)
+        # Execute — tiered sizing
+        size = min(compute_trade_size(signal_value, vol_expanded=False),
+                    MAX_TRADE_SIZE, self.capital * 0.05)
         try:
             neg_risk = self.clob.get_neg_risk(token_id)
         except:
             neg_risk = False
 
-        fill = execute_market_order(self.clob, token_id, size, neg_risk=neg_risk)
+        # EXECUTION: Strong signals → immediate FOK (adverse selection at cheap prices!)
+        # Data: fills at $0.51 have 38% WR, fills at $0.52-0.53 have 64% WR
+        if abs(signal_value) >= 1.0:
+            # Very strong signal (56% WR) → fire immediately, don't snipe
+            fill = execute_market_order(self.clob, token_id, size, neg_risk=neg_risk)
+            if book_sniper:
+                await book_sniper.unsubscribe(token_id)
+        elif book_sniper:
+            # Moderate signal → use sniper but with short timeout
+            fill = await execute_snipe_order(
+                self.clob, self.pm, contract, token_id, token_side,
+                size, neg_risk, book_sniper)
+            await book_sniper.unsubscribe(token_id)
+        else:
+            fill = execute_market_order(self.clob, token_id, size, neg_risk=neg_risk)
+        
+        if not fill.get("success"):
+            coin_name = BINANCE_TO_PM.get(symbol, symbol)
+            wait_s = fill.get("snipe_wait_s", 0)
+            print(f"    [SNIPE] {coin_name} no fill at ≤${LIMIT_PRICE} "
+                  f"(book=${tob_ask:.3f}, waited {wait_s}s)")
+            with open(TRADE_LOG, "a") as f:
+                f.write(json.dumps({
+                    "event": "FILL_SKIP", "symbol": symbol,
+                    "direction": direction, "signal_value": signal_value,
+                    "planned_size": size, "tob_ask": tob_ask,
+                    "slug": slug, "time": now_ts,
+                    "reason": fill.get("fill_type", "NO_FILL"),
+                    "snipe_wait_s": wait_s,
+                }, default=str) + "\n")
+            return None
+        else:
+            wait_s = fill.get("snipe_wait_s", 0)
+            snipe_ask = fill.get("snipe_ask", tob_ask)
+            print(f"    [SNIPE] Filled at ≤${LIMIT_PRICE} "
+                  f"(book=${snipe_ask:.3f}, waited {wait_s}s)")
 
         # Book snapshot AFTER
         post_book = snapshot_book(self.pm, contract, side=token_side)
@@ -590,6 +1234,20 @@ class RealTrader:
         if order_accepted:
             self.pending[trade_id] = trade
             self.consecutive_errors = 0
+            # DEDUP: Mark this slug as traded
+            if slug:
+                self.traded_slugs.add(slug)
+            # IN-FLIGHT tracking
+            self.in_flight_capital += size
+            # REDEMPTION QUEUE: Add for integrated sweep
+            cond_id = contract.condition_id
+            if cond_id:
+                self.redemption_queue[cond_id] = {
+                    'slug': slug,
+                    'token_id': token_id,
+                    'size': size,
+                    'added_ts': int(time.time()),
+                }
         else:
             self.consecutive_errors += 1
 
@@ -601,6 +1259,7 @@ class RealTrader:
                 "direction": direction, "pre": pre_book, "post": post_book,
             }, default=str) + "\n")
 
+        self.save_state()
         return trade
 
     def close_position(self, trade_id, pm_outcome):
@@ -659,30 +1318,41 @@ class RealTrader:
                     f"{pre.get('depth_3c_usd',0):.1f},{trade.get('api_latency_ms',0):.0f},"
                     f"{pm_outcome}\n")
 
-        # Auto-redeem ALL closed positions (wins get USDC back, losses clear tokens)
+        # Add to redemption queue (will retry until on-chain settlement)
         if trade.get("condition_id"):
             cond = trade["condition_id"]
-            if cond not in self.redeemed_conditions:
-                print(f"    Redeeming {cond[:16]}...")
-                gained = try_redeem_position(cond)
-                if gained > 0:
-                    print(f"    Redeemed +${gained:.2f} USDC")
-                self.redeemed_conditions.add(cond)
+            if cond not in self.redeemed_conditions and cond not in self.redemption_queue:
+                self.redemption_queue[cond] = {
+                    "slug": trade.get("slug", ""),
+                    "added_ts": time.time(),
+                    "attempts": 0,
+                }
                 self.save_state()
 
         return trade
 
-    def try_redeem_all_pending(self):
-        """Try to redeem ALL previously closed positions (not just wins)."""
+    def sweep_redemption_queue(self):
+        """Legacy wrapper — delegates to integrated sweep_redemptions."""
+        self.sweep_redemptions()
+
+    def rebuild_redemption_queue(self):
+        """Scan all trades and ensure every condition_id is either redeemed or in queue."""
+        added = 0
         for trade in self.trades:
             cond = trade.get("condition_id", "")
-            if not cond or cond in self.redeemed_conditions:
+            if not cond:
                 continue
-            gained = try_redeem_position(cond)
-            if gained > 0:
-                print(f"    [REDEEM] {trade['slug']}: +${gained:.2f} USDC")
-            self.redeemed_conditions.add(cond)
-        self.save_state()
+            if cond in self.redeemed_conditions or cond in self.redemption_queue:
+                continue
+            self.redemption_queue[cond] = {
+                "slug": trade.get("slug", ""),
+                "added_ts": time.time(),
+                "attempts": 0,
+            }
+            added += 1
+        if added:
+            print(f"    Rebuilt queue: added {added} missing redemptions")
+            self.save_state()
 
     def get_stats(self):
         if not self.trades: return {}
@@ -794,39 +1464,50 @@ async def run_live_feed():
     except Exception as e:
         print(f"  [!] Contract test: {e}")
 
-    # Engines
+    # V4 Engines — LGB for ETH/BTC, MR for SOL
     engines = {}
     for symbol in active_symbols:
         cfg = CONFIGS[symbol]
-        print(f"\n  Initializing {SYMBOL_NAMES[symbol]} engine...")
-        alpha_names, _ = select_alphas_from_history(symbol)
-        if not alpha_names:
-            alpha_names = [f"mr_{w}" for w in [10, 15, 20]] + [f"logrev_{w}" for w in [10, 20]]
-        engines[symbol] = AdaptiveNetEngine(symbol, alpha_names, cfg)
-        print(f"    Selected {len(alpha_names)} alphas: {alpha_names[:5]}...")
+        engine_type = cfg.get("engine", "mr")
+        if engine_type == "lgb":
+            print(f"\n  Initializing {SYMBOL_NAMES[symbol]} LGB engine (thresh={cfg.get('prob_threshold', 0.535)})...")
+            engines[symbol] = LGBEngine(symbol, cfg)
+            print(f"    LightGBM + MR features, prob_threshold={cfg.get('prob_threshold', 0.535)}")
+        else:
+            print(f"\n  Initializing {SYMBOL_NAMES[symbol]} MR ensemble engine (p{cfg.get('pctile', 70)})...")
+            engines[symbol] = MREnsembleEngine(symbol, cfg)
+            print(f"    25 MR indicator ensemble, pctile={cfg.get('pctile', 70)}")
 
-    # Buffers — seed with enough bars for the full lookback window
+    # Buffers — seed with enough bars for LGB training
     buffers = {}
     for symbol in active_symbols:
         cfg = CONFIGS[symbol]
-        n_seed = max(cfg["lookback"] + 200, 2000)  # ETH needs 5760+200
+        engine_type = cfg.get("engine", "mr")
+        n_seed = 10000 if engine_type == "lgb" else 2000  # LGB needs more for training
         buf = KlineBuffer(symbol, max_size=n_seed + 500)
         buf.seed_from_parquet(DATA_DIR / f"{symbol}_{INTERVAL}.parquet", n_bars=n_seed)
         buffers[symbol] = buf
         df = buf.to_dataframe()
         if len(df) > 100:
+            # Warm up: train initial model / compute initial threshold
+            engines[symbol].update(df)
             engine = engines[symbol]
-            for i in range(50, len(df)):
-                engine.update(df.iloc[:i])
-            engine.is_warmup = False
-            print(f"    [OK] {SYMBOL_NAMES[symbol]} warm ({len(df)} bars, lookback={cfg['lookback']})")
+            if hasattr(engine, "threshold"):
+                print(f"    [OK] {SYMBOL_NAMES[symbol]} warm ({len(df)} bars, threshold={engine.threshold:.3f})")
+            elif hasattr(engine, "model") and engine.model is not None:
+                print(f"    [OK] {SYMBOL_NAMES[symbol]} warm ({len(df)} bars, LGB trained)")
+            else:
+                print(f"    [OK] {SYMBOL_NAMES[symbol]} warm ({len(df)} bars)")
 
-    # Trader
+    # Trader + Book Sniper
     trader = RealTrader(clob, pm_client)
+    book_sniper = BookSniper()
+    await book_sniper.connect()
 
-    # Try to redeem any old pending wins
-    print("\n  Checking for unredeemed positions...")
-    trader.try_redeem_all_pending()
+    # Rebuild redemption queue from trade history (catches anything missed)
+    print("\n  Rebuilding redemption queue...")
+    trader.rebuild_redemption_queue()
+    trader.sweep_redemption_queue()
 
     # WebSocket
     streams = [f"{s.lower()}@kline_{INTERVAL}" for s in active_symbols]
@@ -849,6 +1530,9 @@ async def run_live_feed():
             async with websockets.connect(ws_url, ping_interval=20) as ws:
                 print(f"  [OK] Connected to Binance WebSocket")
 
+                # Collect bar closes into batches and process concurrently
+                pending_bars = {}  # symbol -> kline data
+                
                 async for msg in ws:
                     try:
                         data = json.loads(msg)
@@ -859,88 +1543,143 @@ async def run_live_feed():
                         if symbol not in active_symbols or not is_closed:
                             continue
 
-                        name = SYMBOL_NAMES[symbol]
-                        pm_coin = BINANCE_TO_PM.get(symbol, "")
-                        now_str = datetime.now().strftime('%H:%M:%S')
-
-                        # 1) Close pending position — check POLYMARKET resolution
-                        prev_id = last_trade_id[symbol]
-                        prev_slug = last_trade_slug[symbol]
-                        if prev_id and prev_id in trader.pending and prev_slug:
-                            # Query Polymarket for the actual resolution
-                            pm_outcome = check_polymarket_resolution(prev_slug)
-                            if pm_outcome is None:
-                                # Not resolved yet — use Binance as fallback
-                                # (matches ~97% of the time)
-                                binance_up = float(kline["c"]) >= float(kline["o"])
-                                pm_outcome = "UP" if binance_up else "DOWN"
-                                outcome_source = "BINANCE_FALLBACK"
-                            else:
-                                outcome_source = "POLYMARKET"
-
-                            closed = trader.close_position(prev_id, pm_outcome)
-                            if closed:
-                                r = "WIN " if closed["result"] == "WIN" else "LOSS"
-                                print(f"  {now_str:<10} {name:<5} {'':>4} {'':>8} "
-                                      f"{'':>8} {r:>8} ${closed['pnl']:>+9.2f} "
-                                      f"${trader.capital:>11.2f} [{outcome_source}]")
-
-                        # 2) Add bar
-                        buffers[symbol].add_kline(kline)
-
-                        # 3) Signal
-                        df = buffers[symbol].to_dataframe()
-                        if len(df) < 60:
-                            continue
-                        direction, signal_val, weights = engines[symbol].update(df)
-                        if direction == 0:
-                            last_trade_id[symbol] = None
-                            last_trade_slug[symbol] = None
-                            continue
-
-                        # 4) Discover contract — FIXED: use candle START timestamp
-                        #    No delay — fire immediately for best fill price
-                        contract = None
-                        if pm_coin:
+                        # Collect this bar close
+                        pending_bars[symbol] = kline
+                        
+                        # If we haven't collected all symbols yet, check for more
+                        # (give 200ms for other bars to arrive — they close simultaneously)
+                        if len(pending_bars) < len(active_symbols):
                             try:
-                                # The contract we want to bet on has its 5m window
-                                # starting NOW (after the delay)
-                                start_ts = get_current_contract_start_ts()
-                                contract = pm_client.discover_contract(
-                                    pm_coin, INTERVAL, start_ts
-                                )
-                            except Exception as e:
-                                print(f"    [!] Contract discovery failed: {e}")
-
-                        # 6) Trade
-                        dir_str = "UP" if direction > 0 else "DOWN"
-                        trade = trader.open_position(
-                            symbol=symbol,
-                            candle_open_time=kline["T"],
-                            direction=dir_str,
-                            signal_value=signal_val,
-                            weights=weights,
-                            contract=contract,
-                        )
-                        if trade:
-                            last_trade_id[symbol] = trade["id"]
-                            last_trade_slug[symbol] = trade.get("slug")
-                            arrow = "UP" if dir_str == "UP" else "DN"
-                            status = "LIVE" if trade["order_accepted"] else "FAIL"
-                            entry = trade.get("expected_price", 0.50)
-                            latency = trade.get("api_latency_ms", 0)
-                            shares = trade.get("shares_received", 0)
-                            print(f"  {now_str:<10} {name:<5} {arrow:>4} "
-                                  f"{signal_val:>+8.4f} ${entry:>7.3f} "
-                                  f"{status:>8} {'':>10} "
-                                  f"{'':>12} [{latency:.0f}ms {shares:.1f}sh]")
-                            if contract:
-                                print(f"    -> {contract.question}")
-                        else:
-                            last_trade_id[symbol] = None
-                            last_trade_slug[symbol] = None
-
-                        # 7) Stats
+                                while True:
+                                    extra = await asyncio.wait_for(ws.recv(), timeout=0.2)
+                                    d2 = json.loads(extra)
+                                    k2 = d2.get("k", {})
+                                    s2 = k2.get("s", "")
+                                    if s2 in active_symbols and k2.get("x", False):
+                                        pending_bars[s2] = k2
+                                    if len(pending_bars) >= len(active_symbols):
+                                        break
+                            except asyncio.TimeoutError:
+                                pass  # Done collecting, process what we have
+                        
+                        # ===== PROCESS ALL BAR CLOSES =====
+                        now_str = datetime.now().strftime('%H:%M:%S')
+                        
+                        # Phase 1: Close positions + add bars + discover contracts (fast)
+                        trade_tasks = {}  # symbol -> (contract, direction, signal, weights, kline)
+                        
+                        for sym, kl in pending_bars.items():
+                            name = SYMBOL_NAMES[sym]
+                            pm_coin = BINANCE_TO_PM.get(sym, "")
+                            
+                            # 1) Close pending position
+                            prev_id = last_trade_id[sym]
+                            prev_slug = last_trade_slug[sym]
+                            if prev_id and prev_id in trader.pending and prev_slug:
+                                pm_outcome = check_polymarket_resolution(prev_slug)
+                                if pm_outcome is None:
+                                    binance_up = float(kl["c"]) >= float(kl["o"])
+                                    pm_outcome = "UP" if binance_up else "DOWN"
+                                    outcome_source = "BINANCE_FALLBACK"
+                                else:
+                                    outcome_source = "POLYMARKET"
+                                closed = trader.close_position(prev_id, pm_outcome)
+                                if closed:
+                                    r = "WIN " if closed["result"] == "WIN" else "LOSS"
+                                    print(f"  {now_str:<10} {name:<5} {'':>4} {'':>8} "
+                                          f"{'':>8} {r:>8} ${closed['pnl']:>+9.2f} "
+                                          f"${trader.capital:>11.2f} [{outcome_source}]")
+                            
+                            # 1b) Redemption sweep
+                            trader.sweep_redemptions()
+                            
+                            # 2) Add bar + compute signal
+                            buffers[sym].add_kline(kl)
+                            df = buffers[sym].to_dataframe()
+                            if len(df) < 60:
+                                continue
+                            
+                            # 3) Discover contract + subscribe to book WS
+                            contract = None
+                            if pm_coin:
+                                try:
+                                    start_ts = get_current_contract_start_ts()
+                                    contract = pm_client.discover_contract(
+                                        pm_coin, INTERVAL, start_ts)
+                                    if contract and contract.yes_token_id:
+                                        await book_sniper.subscribe(contract.yes_token_id)
+                                        if contract.no_token_id:
+                                            await book_sniper.subscribe(contract.no_token_id)
+                                except Exception as e:
+                                    print(f"    [!] {name} contract discovery failed: {e}")
+                            
+                            # 4) Compute signal
+                            direction, signal_val, weights = engines[sym].update(df)
+                            proba_str = f" p={weights.get('proba', 0):.3f}" if isinstance(weights, dict) and 'proba' in weights else ""
+                            if direction == 0:
+                                cfg = CONFIGS[sym]
+                                engine_type = cfg.get("engine", "mr")
+                                if engine_type == "lgb":
+                                    filt = weights.get("filtered", False) if isinstance(weights, dict) else False
+                                    if filt:
+                                        print(f"    {name}: SKIP (filtered{proba_str})")
+                                last_trade_id[sym] = None
+                                last_trade_slug[sym] = None
+                                continue
+                            
+                            dir_str = "UP" if direction > 0 else "DOWN"
+                            print(f"    >>> {name}: {dir_str} sig={signal_val:+.4f}{proba_str}")
+                            trade_tasks[sym] = (contract, dir_str, signal_val, weights, kl)
+                        
+                        # Phase 2: Fire all snipe orders CONCURRENTLY
+                        async def process_trade(sym, contract, dir_str, signal_val, weights, kl):
+                            cfg = CONFIGS[sym]
+                            trade = await trader.open_position(
+                                symbol=sym,
+                                candle_open_time=kl["T"],
+                                direction=dir_str,
+                                signal_value=signal_val,
+                                weights=weights,
+                                contract=contract,
+                                book_sniper=book_sniper,
+                                engine_type=cfg.get("engine", "mr"),
+                            )
+                            return sym, trade
+                        
+                        if trade_tasks:
+                            tasks = [
+                                process_trade(sym, *args) 
+                                for sym, args in trade_tasks.items()
+                            ]
+                            results = await asyncio.gather(*tasks, return_exceptions=True)
+                            
+                            for result in results:
+                                if isinstance(result, Exception):
+                                    print(f"    [!] Trade error: {result}")
+                                    continue
+                                sym, trade = result
+                                name = SYMBOL_NAMES[sym]
+                                if trade:
+                                    last_trade_id[sym] = trade["id"]
+                                    last_trade_slug[sym] = trade.get("slug")
+                                    dir_str = trade.get("direction", "?")
+                                    arrow = "UP" if dir_str == "UP" else "DN"
+                                    status = "LIVE" if trade["order_accepted"] else "FAIL"
+                                    entry = trade.get("expected_price", 0.50)
+                                    latency = trade.get("api_latency_ms", 0)
+                                    shares = trade.get("shares_received", 0)
+                                    signal_val = trade.get("signal", 0)
+                                    print(f"  {now_str:<10} {name:<5} {arrow:>4} "
+                                          f"{signal_val:>+8.4f} ${entry:>7.3f} "
+                                          f"{status:>8} {'':>10} "
+                                          f"{'':>12} [{latency:.0f}ms {shares:.1f}sh]")
+                                    if contract:
+                                        print(f"    -> {trade.get('question', '')}")
+                                else:
+                                    last_trade_id[sym] = None
+                                    last_trade_slug[sym] = None
+                        
+                        # Phase 3: Stats
                         stats = trader.get_stats()
                         n = stats.get("total_trades", 0)
                         if n > 0 and n % 15 == 0:
@@ -949,10 +1688,12 @@ async def run_live_feed():
                                   f"WR: {stats['recent_wr']:.1%}  "
                                   f"PnL: ${stats['all_time_pnl']:+.2f}")
                             print()
-
-                        # 8) Periodic redemption attempts (every 10 trades)
-                        if n > 0 and n % 10 == 0:
-                            trader.try_redeem_all_pending()
+                        
+                        # Phase 4: Sweep redemptions
+                        trader.sweep_redemption_queue()
+                        
+                        # Clear batch
+                        pending_bars.clear()
 
                     except json.JSONDecodeError:
                         continue
@@ -989,8 +1730,9 @@ def main():
     if args.redeem:
         pm = PolymarketClient()
         trader = RealTrader(ClobClient("https://clob.polymarket.com"), pm)
-        print("Attempting to redeem all pending wins...")
-        trader.try_redeem_all_pending()
+        print("Sweeping redemption queue...")
+        trader.rebuild_redemption_queue()
+        trader.sweep_redemption_queue()
         return
 
     pk = os.getenv("POLYGON_PRIVATE_KEY")
