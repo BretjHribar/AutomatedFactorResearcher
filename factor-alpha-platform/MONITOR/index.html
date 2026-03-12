@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>V9b Paper Trader — Live Monitor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0a0a1a;
+            --bg-secondary: #111128;
+            --bg-card: #161640;
+            --bg-card-hover: #1c1c50;
+            --border: #2a2a5a;
+            --text-primary: #e8e8f0;
+            --text-secondary: #9090b8;
+            --text-muted: #606088;
+            --green: #00e676;
+            --green-dim: #00c85320;
+            --red: #ff5252;
+            --red-dim: #ff525220;
+            --gold: #ffd740;
+            --blue: #448aff;
+            --purple: #b388ff;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--bg-secondary), var(--bg-card));
+            border-bottom: 1px solid var(--border);
+            padding: 16px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 20px;
+            font-weight: 600;
+            background: linear-gradient(90deg, var(--blue), var(--purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header-status {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .pulse {
+            width: 8px; height: 8px;
+            background: var(--green);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.4); }
+            50% { box-shadow: 0 0 0 6px rgba(0, 230, 118, 0); }
+        }
+
+        .main { padding: 24px 32px; }
+
+        /* Portfolio Summary */
+        .portfolio-summary {
+            background: linear-gradient(135deg, var(--bg-card), var(--bg-secondary));
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            gap: 24px;
+        }
+
+        .portfolio-pnl {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            border-right: 1px solid var(--border);
+            padding-right: 24px;
+        }
+
+        .portfolio-pnl .label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .portfolio-pnl .value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 36px;
+            font-weight: 700;
+        }
+
+        .portfolio-pnl .sub {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .pnl-positive { color: var(--green); }
+        .pnl-negative { color: var(--red); }
+        .pnl-zero { color: var(--text-secondary); }
+
+        /* Chart */
+        .chart-container {
+            position: relative;
+            height: 200px;
+        }
+
+        /* Positions Grid */
+        .positions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .position-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px;
+            transition: all 0.2s ease;
+        }
+
+        .position-card:hover {
+            border-color: var(--blue);
+            transform: translateY(-2px);
+        }
+
+        .position-card .sym-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .position-card .sym-name {
+            font-weight: 600;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .sym-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .position-card .direction-badge {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 10px;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-long { background: var(--green-dim); color: var(--green); border: 1px solid var(--green); }
+        .badge-short { background: var(--red-dim); color: var(--red); border: 1px solid var(--red); }
+        .badge-flat { background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid var(--text-muted); }
+
+        .position-card .metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .metric {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .metric .label {
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .metric .value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        /* Equity chart section */
+        .equity-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+        }
+
+        .equity-section h2 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--text-secondary);
+        }
+
+        .full-chart-container {
+            position: relative;
+            height: 350px;
+        }
+
+        /* Trade log */
+        .trade-log {
+            margin-top: 24px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+        }
+
+        .trade-log h2 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text-secondary);
+        }
+
+        .log-entry {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            padding: 6px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            color: var(--text-secondary);
+        }
+
+        .log-entry:last-child { border-bottom: none; }
+
+        .updated-flash {
+            animation: flash 0.3s ease;
+        }
+
+        @keyframes flash {
+            0% { background: rgba(68, 138, 255, 0.1); }
+            100% { background: transparent; }
+        }
+
+        @media (max-width: 768px) {
+            .main { padding: 16px; }
+            .portfolio-summary { grid-template-columns: 1fr; }
+            .positions-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>V9b Paper Trader — Live Monitor</h1>
+        <div class="header-status">
+            <div class="pulse" id="pulse"></div>
+            <span id="server-time">Connecting...</span>
+            <span>|</span>
+            <span id="signal-count">0 signals</span>
+            <span>|</span>
+            <span id="trade-count">0 trades</span>
+        </div>
+    </div>
+
+    <div class="main">
+        <!-- Portfolio Summary -->
+        <div class="portfolio-summary">
+            <div class="portfolio-pnl">
+                <div class="label">Portfolio Total PnL (sum)</div>
+                <div class="value pnl-zero" id="portfolio-pnl">—</div>
+                <div class="sub" id="portfolio-sub">Waiting for data...</div>
+            </div>
+            <div class="chart-container">
+                <canvas id="mini-chart"></canvas>
+            </div>
+        </div>
+
+        <!-- Position Cards -->
+        <div class="positions-grid" id="positions-grid">
+            <!-- Dynamically populated -->
+        </div>
+
+        <!-- Full Equity Curve -->
+        <div class="equity-section">
+            <h2>Realized Equity Curves (per signal)</h2>
+            <div class="full-chart-container">
+                <canvas id="equity-chart"></canvas>
+            </div>
+        </div>
+
+        <!-- Recent Trades -->
+        <div class="trade-log">
+            <h2>Recent Log</h2>
+            <div id="log-entries">
+                <div class="log-entry">Waiting for signals...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    const SYMBOL_COLORS = {
+        'BTCUSDT': '#F7931A', 'ETHUSDT': '#627EEA', 'SOLUSDT': '#9945FF',
+        'BNBUSDT': '#F3BA2F', 'DOGEUSDT': '#C2A633',
+        'XRPUSDT': '#00AAE4', 'ADAUSDT': '#0033AD', 'AVAXUSDT': '#E84142',
+        'LINKUSDT': '#2A5ADA', 'LTCUSDT': '#BFBBBB',
+    };
+
+    let miniChart = null;
+    let equityChart = null;
+    let lastState = null;
+
+    function pnlClass(val) {
+        if (val > 0.5) return 'pnl-positive';
+        if (val < -0.5) return 'pnl-negative';
+        return 'pnl-zero';
+    }
+
+    function formatBps(val) {
+        if (val === undefined || val === null) return '—';
+        const sign = val >= 0 ? '+' : '';
+        return `${sign}${val.toFixed(1)} bps`;
+    }
+
+    function updateDashboard(state) {
+        lastState = state;
+
+        // Header
+        document.getElementById('server-time').textContent = state.server_time;
+        document.getElementById('signal-count').textContent = `${state.n_signals} signals`;
+        document.getElementById('trade-count').textContent = `${state.n_trades} trades`;
+
+        // Portfolio PnL (average of all positions' total MTM)
+        const positions = state.positions;
+        const syms = Object.keys(positions);
+        if (syms.length > 0) {
+            const sumMtm = syms.reduce((s, sym) => s + positions[sym].total_bps, 0);
+            const avgMtm = sumMtm / syms.length;
+            const pnlEl = document.getElementById('portfolio-pnl');
+            pnlEl.textContent = formatBps(sumMtm);
+            pnlEl.className = `value ${pnlClass(sumMtm)}`;
+
+            const realizedSum = syms.reduce((s, sym) => s + positions[sym].realized_bps, 0);
+            const unrealizedSum = syms.reduce((s, sym) => s + positions[sym].unrealized_bps, 0);
+            document.getElementById('portfolio-sub').textContent =
+                `Realized: ${formatBps(realizedSum)} | Unrealized: ${formatBps(unrealizedSum)} | Avg/sym: ${formatBps(avgMtm)}`;
+        }
+
+        // Position Cards
+        const grid = document.getElementById('positions-grid');
+        grid.innerHTML = '';
+        for (const sym of syms) {
+            const p = positions[sym];
+            const color = SYMBOL_COLORS[sym] || '#888';
+            const badgeClass = p.direction > 0 ? 'badge-long' : p.direction < 0 ? 'badge-short' : 'badge-flat';
+
+            const card = document.createElement('div');
+            card.className = 'position-card updated-flash';
+            card.innerHTML = `
+                <div class="sym-header">
+                    <div class="sym-name">
+                        <span class="sym-dot" style="background:${color}"></span>
+                        ${sym.replace('USDT', '')}
+                    </div>
+                    <span class="direction-badge ${badgeClass}">${p.dir_str}</span>
+                </div>
+                <div class="metrics">
+                    <div class="metric">
+                        <span class="label">Live Price</span>
+                        <span class="value">$${p.live_price?.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) ?? '—'}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Signal</span>
+                        <span class="value ${pnlClass(p.signal_value)}">${p.signal_value >= 0 ? '+' : ''}${p.signal_value?.toFixed(4) ?? '—'}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Realized</span>
+                        <span class="value ${pnlClass(p.realized_bps)}">${formatBps(p.realized_bps)}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Unrealized</span>
+                        <span class="value ${pnlClass(p.unrealized_bps)}">${formatBps(p.unrealized_bps)}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Total MTM</span>
+                        <span class="value ${pnlClass(p.total_bps)}" style="font-size:16px;font-weight:700">${formatBps(p.total_bps)}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Entry</span>
+                        <span class="value">$${p.entry_price?.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) ?? '—'}</span>
+                    </div>
+                </div>
+            `;
+            grid.appendChild(card);
+        }
+
+        // Equity Chart
+        updateEquityChart(state);
+
+        // Mini portfolio chart
+        updateMiniChart(state);
+
+        // Log entries
+        updateLog(state);
+    }
+
+    function updateMiniChart(state) {
+        const ctx = document.getElementById('mini-chart');
+        const mtm = state.mtm_series || [];
+        if (mtm.length < 2) return;
+
+        const labels = mtm.map(p => new Date(p.time + 'Z'));
+        const data = mtm.map(p => p.portfolio_sum);
+        const lastVal = data[data.length - 1];
+        const lineColor = lastVal >= 0 ? '#00e676' : '#ff5252';
+        const bgColor = lastVal >= 0 ? 'rgba(0, 230, 118, 0.1)' : 'rgba(255, 82, 82, 0.1)';
+
+        if (miniChart) miniChart.destroy();
+        miniChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    data,
+                    borderColor: lineColor,
+                    backgroundColor: bgColor,
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 0,
+                    borderWidth: 2,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: {
+                        type: 'time',
+                        display: true,
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        ticks: { color: '#606088', font: { size: 10 }, maxTicksLimit: 6 }
+                    },
+                    y: {
+                        display: true,
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        ticks: {
+                            color: '#606088',
+                            font: { size: 10, family: 'JetBrains Mono' },
+                            callback: v => `${v >= 0 ? '+' : ''}${v.toFixed(0)}`
+                        }
+                    }
+                },
+                animation: false,
+            }
+        });
+    }
+
+    function updateEquityChart(state) {
+        const ctx = document.getElementById('equity-chart');
+        const mtm = state.mtm_series || [];
+        if (mtm.length < 2) return;
+
+        // Get all symbols from first snapshot
+        const allSyms = Object.keys(mtm[0].symbols || {});
+        if (allSyms.length === 0) return;
+
+        const datasets = allSyms.map(sym => ({
+            label: sym.replace('USDT', ''),
+            data: mtm.map(p => ({ x: new Date(p.time + 'Z'), y: p.symbols[sym] || 0 })),
+            borderColor: SYMBOL_COLORS[sym] || '#888',
+            borderWidth: 2,
+            pointRadius: 0,
+            tension: 0.2,
+            fill: false,
+        }));
+
+        // Portfolio sum line
+        datasets.push({
+            label: 'PORTFOLIO (sum)',
+            data: mtm.map(p => ({ x: new Date(p.time + 'Z'), y: p.portfolio_sum })),
+            borderColor: '#ffffff',
+            borderWidth: 3,
+            pointRadius: 0,
+            tension: 0.2,
+            fill: false,
+        });
+
+        if (equityChart) equityChart.destroy();
+        equityChart = new Chart(ctx, {
+            type: 'line',
+            data: { datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            color: '#9090b8',
+                            font: { family: 'Inter', size: 11 },
+                            usePointStyle: true,
+                            pointStyle: 'circle',
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'time',
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        ticks: { color: '#606088', font: { size: 10 }, maxTicksLimit: 8 }
+                    },
+                    y: {
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        ticks: {
+                            color: '#606088',
+                            font: { size: 11, family: 'JetBrains Mono' },
+                            callback: v => `${v >= 0 ? '+' : ''}${v.toFixed(0)} bps`
+                        }
+                    }
+                },
+                animation: false,
+            }
+        });
+    }
+
+    function updateLog(state) {
+        const container = document.getElementById('log-entries');
+        // Build log from positions
+        const entries = [];
+        const positions = state.positions;
+        for (const sym of Object.keys(positions)) {
+            const p = positions[sym];
+            entries.push({
+                time: p.last_signal_time,
+                text: `${p.last_signal_time.substring(11, 19)} | ${sym.padEnd(10)} ${p.dir_str.padEnd(5)} sig=${p.signal_value >= 0 ? '+' : ''}${p.signal_value?.toFixed(4)} price=$${p.live_price?.toFixed(2)} mtm=${formatBps(p.total_bps)}`,
+            });
+        }
+        entries.sort((a, b) => b.time.localeCompare(a.time));
+
+        container.innerHTML = entries.map(e =>
+            `<div class="log-entry">${e.text}</div>`
+        ).join('') || '<div class="log-entry">Waiting for signals...</div>';
+    }
+
+    // Poll every 5 seconds
+    async function poll() {
+        try {
+            const resp = await fetch('/api/state');
+            if (resp.ok) {
+                const state = await resp.json();
+                updateDashboard(state);
+            }
+        } catch (e) {
+            console.error('Poll error:', e);
+        }
+    }
+
+    // Initial load + polling
+    poll();
+    setInterval(poll, 5000);
+    </script>
+</body>
+</html>
