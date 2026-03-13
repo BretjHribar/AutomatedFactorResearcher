@@ -48,6 +48,11 @@ COVERAGE_CUTOFF = 0.3
 MIN_IS_SHARPE  = 1.5
 MIN_IC_MEAN    = -0.05       # Loose IC gate — Sharpe/stability/DSR are the real filters
 CORR_CUTOFF    = 0.70
+MAX_TURNOVER   = 0.40        # Reject high-turnover alphas — ρ=-0.62 with val Sharpe
+MIN_SUB_SHARPE = 1.0         # Each sub-period must have meaningful Sharpe (not just > 0)
+MAX_PNL_KURTOSIS = 20        # Reject fat-tailed PnL distributions — ρ=-0.51 with val Sharpe
+MAX_ROLLING_SR_STD = 0.05    # Reject inconsistent performers — ρ=-0.40 with val Sharpe
+MIN_PNL_SKEW = -0.5          # Reject negatively-skewed PnL (steamroller risk) — ρ=+0.32 with val Sharpe
 
 # Shared DB (same as Agent 2 and existing infrastructure)
 DB_PATH = "data/alphas.db"
@@ -85,9 +90,10 @@ def get_num_trials(conn):
     return conn.execute("SELECT COUNT(*) FROM trial_log").fetchone()[0]
 
 
-def check_diversity(conn, expression, new_alpha_df):
+def check_diversity(conn, expression, new_alpha_raw):
     """Check signal correlation against all existing alphas on train data.
-    Rejects if expression already exists OR if signal correlation > CORR_CUTOFF."""
+    Rejects if expression already exists OR if signal correlation > CORR_CUTOFF.
+    new_alpha_raw should be the RAW expression output (before process_signal)."""
     # Check exact duplicate
     existing = conn.execute("SELECT id FROM alphas WHERE expression=? AND archived=0",
                             (expression,)).fetchone()
@@ -95,7 +101,7 @@ def check_diversity(conn, expression, new_alpha_df):
         print(f"  REJECTED: Expression already exists as alpha #{existing[0]}")
         return False
 
-    if new_alpha_df is None:
+    if new_alpha_raw is None:
         return True
 
     # Check signal correlation against all existing alphas
@@ -103,22 +109,24 @@ def check_diversity(conn, expression, new_alpha_df):
     if not rows:
         return True
 
-    # Flatten new signal to a 1D vector for correlation
-    new_flat = new_alpha_df.values.flatten()
-    new_flat = np.nan_to_num(new_flat, nan=0.0)
+    matrices, universe = load_data("train")
 
-    matrices, _ = load_data("train")
+    # Process BOTH alphas through the same pipeline for fair comparison
+    new_processed = process_signal(new_alpha_raw, universe_df=universe, max_wt=MAX_WEIGHT)
+
     for alpha_id, alpha_expr in rows:
         try:
-            existing_df = evaluate_expression(alpha_expr, matrices)
-            if existing_df is None:
+            existing_raw = evaluate_expression(alpha_expr, matrices)
+            if existing_raw is None:
                 continue
+            # Apply the SAME processing to the existing alpha (apples-to-apples)
+            existing_df = process_signal(existing_raw, universe_df=universe, max_wt=MAX_WEIGHT)
             # Align shapes
-            common_idx = new_alpha_df.index.intersection(existing_df.index)
-            common_cols = new_alpha_df.columns.intersection(existing_df.columns)
+            common_idx = new_processed.index.intersection(existing_df.index)
+            common_cols = new_processed.columns.intersection(existing_df.columns)
             if len(common_idx) < 50 or len(common_cols) < 5:
                 continue
-            a = new_alpha_df.loc[common_idx, common_cols].values.flatten()
+            a = new_processed.loc[common_idx, common_cols].values.flatten()
             b = existing_df.loc[common_idx, common_cols].values.flatten()
             # Remove NaN pairs
             mask = np.isfinite(a) & np.isfinite(b)
@@ -137,7 +145,7 @@ def check_diversity(conn, expression, new_alpha_df):
 
 def save_alpha(conn, expression, reasoning, metrics):
     """Save alpha to the existing alphas table schema."""
-    if not check_diversity(conn, expression, metrics.get('_alpha_df')):
+    if not check_diversity(conn, expression, metrics.get('_alpha_raw')):
         return False
 
     c = conn.cursor()
@@ -209,7 +217,7 @@ def load_data(split="train"):
 
     if "close" in split_matrices and "returns" in split_matrices:
         close = split_matrices["close"]
-        split_matrices["returns"] = close - close.shift(1)
+        split_matrices["returns"] = close.pct_change()
 
     result = (split_matrices, split_universe)
     _DATA_CACHE[split] = result
@@ -314,16 +322,16 @@ def eval_single(expression, split="train", fees_bps=0.0):
 
     t0 = time.time()
     try:
-        alpha_df = evaluate_expression(expression, matrices)
+        alpha_raw = evaluate_expression(expression, matrices)
     except Exception as e:
         return {"success": False, "error": f"Expression error: {e}"}
 
-    if alpha_df is None or (hasattr(alpha_df, 'empty') and alpha_df.empty):
+    if alpha_raw is None or (hasattr(alpha_raw, 'empty') and alpha_raw.empty):
         return {"success": False, "error": "Expression returned None/empty"}
 
     # --- WORLDQUANT SIGNAL PROCESSING (Demean -> Scale -> Clip) ---
     # Matches superproject: RiskModelFunctions.hedgeGlobal and StratMangerBillion.py
-    alpha_df = process_signal(alpha_df, universe_df=universe, max_wt=MAX_WEIGHT)
+    alpha_df = process_signal(alpha_raw, universe_df=universe, max_wt=MAX_WEIGHT)
 
     try:
         result = simulate(alpha_df, returns_pct, close, universe, fees_bps=fees_bps)
@@ -337,7 +345,8 @@ def eval_single(expression, split="train", fees_bps=0.0):
         "returns_ann": result.returns_ann,
         "n_bars": len(result.daily_pnl),
         "pnl_vec": np.array(result.daily_pnl),
-        "alpha_df": alpha_df, "returns_pct": returns_pct,
+        "alpha_df": alpha_df, "alpha_raw": alpha_raw,
+        "returns_pct": returns_pct,
         "elapsed": time.time() - t0,
     }
 
@@ -369,6 +378,15 @@ def eval_full(expression, conn):
     # DSR
     dsr = deflated_sharpe_ratio(is_m["sharpe"], n_trials, is_m["n_bars"])
 
+    # PnL distribution metrics (novel gates — empirically validated)
+    pnl = is_m["pnl_vec"]
+    pnl_kurtosis = float(pd.Series(pnl).kurtosis()) if len(pnl) > 10 else 0
+    pnl_skew = float(pd.Series(pnl).skew()) if len(pnl) > 10 else 0
+    rolling_sr = pd.Series(pnl).rolling(60 * BARS_PER_DAY).apply(
+        lambda x: x.mean() / x.std() if x.std() > 0 else 0
+    ).dropna()
+    rolling_sr_std = float(rolling_sr.std()) if len(rolling_sr) > 10 else 999
+
     return {
         "success": True,
         "is_sharpe": is_m["sharpe"], "is_fitness": is_m["fitness"],
@@ -379,7 +397,10 @@ def eval_full(expression, conn):
         "stability_h2": stability.get("H2", 0),
         "deflated_sharpe": dsr, "n_trials": n_trials,
         "pnl_vec": is_m["pnl_vec"],
-        "_alpha_df": is_m["alpha_df"],  # for correlation check on save
+        "pnl_kurtosis": pnl_kurtosis,
+        "pnl_skew": pnl_skew,
+        "rolling_sr_std": rolling_sr_std,
+        "_alpha_raw": is_m["alpha_raw"],  # RAW signal for correlation check on save
     }
 
 
@@ -479,6 +500,11 @@ def main():
     print(f"  Turnover:     {result['turnover']:.3f}")
     print(f"  Max Drawdown: {result['max_drawdown']:.3f}")
 
+    print(f"\n  --- PNL DISTRIBUTION ---")
+    print(f"  PnL Kurtosis: {result['pnl_kurtosis']:.1f}")
+    print(f"  PnL Skewness: {result['pnl_skew']:+.3f}")
+    print(f"  Rolling SR std: {result['rolling_sr_std']:.4f}")
+
     print(f"\n  --- INFORMATION COEFFICIENT ---")
     print(f"  Mean IC:      {result['ic_mean']:+.4f}")
     print(f"  IC Std:       {result['ic_std']:.4f}")
@@ -495,10 +521,19 @@ def main():
 
     # Gates
     print(f"\n  --- QUALITY GATES ---")
+    min_sub = min(result['stability_h1'], result['stability_h2'])
     gates = [
         (result['is_sharpe'] >= MIN_IS_SHARPE, f"IS Sharpe >= {MIN_IS_SHARPE}: {result['is_sharpe']:+.3f}"),
         (result['ic_mean'] >= MIN_IC_MEAN, f"Mean IC >= {MIN_IC_MEAN}: {result['ic_mean']:+.4f}"),
         (both_pos, f"Sub-period stability: H1={result['stability_h1']:+.2f} H2={result['stability_h2']:+.2f}"),
+        (result['turnover'] <= MAX_TURNOVER, f"Turnover <= {MAX_TURNOVER}: {result['turnover']:.3f}"),
+        (min_sub >= MIN_SUB_SHARPE, f"Min sub-period Sharpe >= {MIN_SUB_SHARPE}: {min_sub:+.2f}"),
+        (result['pnl_kurtosis'] <= MAX_PNL_KURTOSIS,
+         f"PnL Kurtosis <= {MAX_PNL_KURTOSIS}: {result['pnl_kurtosis']:.1f}"),
+        (result['rolling_sr_std'] <= MAX_ROLLING_SR_STD,
+         f"Rolling SR Consistency <= {MAX_ROLLING_SR_STD}: {result['rolling_sr_std']:.4f}"),
+        (result['pnl_skew'] >= MIN_PNL_SKEW,
+         f"PnL Skew >= {MIN_PNL_SKEW}: {result['pnl_skew']:+.3f}"),
     ]
     # DSR shown as info only, not a gate
     print(f"  [INFO] DSR: {result['deflated_sharpe']:.3f} (informational, not a gate)")

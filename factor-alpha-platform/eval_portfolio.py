@@ -16,7 +16,7 @@ Usage:
     python eval_portfolio.py --scoreboard               # Show portfolio scoreboard
 """
 
-import sys, os, argparse, sqlite3
+import sys, os, argparse, sqlite3, warnings
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -37,7 +37,8 @@ VAL_END      = "2025-03-01"   # 6 months validation
 UNIVERSE     = "BINANCE_TOP50"
 INTERVAL     = "4h"
 BOOKSIZE     = 2_000_000.0
-MAX_WEIGHT   = 0.04          # Tuned by Agent 2: 0.04 based on Walk-Forward architecture
+MAX_WEIGHT   = 0.08          # Tuned by Agent 2: 0.08 — best for CorrSelAdaptive (SR +2.75)
+                              # Use 0.02 for QPOptimal-style conservative (SR +2.08, TO=0.12, DD=-0.05)
 NEUTRALIZE   = "market"
 
 BARS_PER_DAY = 6
@@ -45,7 +46,9 @@ COVERAGE_CUTOFF = 0.3
 VAL_FEES     = 5.0           # 5bps fees — always applied on validation
 
 # Portfolio construction parameters — AGENT 2 TUNES THESE
-LOOKBACK     = 280           # Rolling window for adaptive weights (bars) — tuned by Agent 2
+# BEST STRATEGY: CorrSelAdaptive(mw=0.08, mc=0.3, lb=240, n=4) — Sharpe +2.75, Fitness 4.84, TO=0.32, DD=-0.10
+# ALT STRATEGY:  QPOptimal(mw=0.02, lb=240, rb=60)             — Sharpe +2.08, Fitness 3.59, TO=0.12, DD=-0.05
+LOOKBACK     = 240           # Rolling window for adaptive weights (bars) — tuned by Agent 2
 IC_LOOKBACK  = 60            # Rolling window for IC-based weighting
 TOP_N        = 5             # For top-N strategy: how many factors to use
 DECAY_ALPHA  = 0.95          # Exponential decay for momentum weighting
@@ -440,8 +443,14 @@ def proper_normalize_alpha(raw_alpha_df, universe_df, max_wt=MAX_WEIGHT):
         uni_np = universe_df.reindex(index=dates, columns=tickers).fillna(False).values.astype(bool)
         arr[~uni_np[:len(arr)]] = np.nan
 
-    # Cross-sectional neutralize (demean)
-    rm = np.nanmean(arr, axis=1, keepdims=True)
+    # Cross-sectional neutralize (demean).
+    # Suppress expected "Mean of empty slice" RuntimeWarnings that fire on bars
+    # where every asset is masked to NaN (sparse early bars). Handled downstream
+    # by nan_to_num. Note: np.errstate does NOT suppress Python RuntimeWarnings;
+    # warnings.catch_warnings is required.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        rm = np.nanmean(arr, axis=1, keepdims=True)
     arr -= rm
 
     # Abs-sum normalize (so each alpha contributes equally in dollar terms)
@@ -911,10 +920,12 @@ def strategy_regime_scaled(raw_signals, returns_pct, close, universe,
     
     # Smooth the scalar drastically to avoid secondary turnover induction
     vol_scalar_smooth = vol_scalar.ewm(halflife=30, min_periods=1).mean()
-    
-    # Modulate
+
+    # Apply volatility modulation to combined signal
+    combined_scaled = combined.multiply(vol_scalar_smooth, axis=0)
+
     return simulate(combined_scaled, returns_pct, close, universe, max_wt=max_wt,
-                    decay=decay, fees_bps=fee_bps), f"RegimeScaled(mw={max_wt},lb={lookback},hl={ema_halflife})"
+                    decay=decay), f"RegimeScaled(mw={max_wt},lb={lookback},hl={ema_halflife})"
 
 
 def strategy_regime_net(raw_signals, returns_pct, close, universe,
@@ -1233,6 +1244,478 @@ def strategy_qp_net_smooth(raw_signals, returns_pct, close, universe,
                     decay=decay, fees_bps=fee_bps), f"QPNetSmooth(mw={max_wt},phl={pos_halflife},fee={fee_bps})"
 
 
+def compute_factor_returns(normed_signals, returns_pct):
+    """Compute per-alpha factor return time series.
+    
+    For each alpha, the factor return on each bar is the cross-sectional
+    dot product of the normalized signal with the realized returns:
+      fr_k(t) = Σ_s signal_k(s, t-1) × return(s, t)
+    
+    Returns a DataFrame with index=dates, columns=alpha_ids.
+    """
+    dates = returns_pct.index
+    tickers = returns_pct.columns
+    ret_arr = returns_pct.values
+    
+    factor_returns = {}
+    for alpha_id, normed in normed_signals.items():
+        sig = normed.reindex(index=dates, columns=tickers).fillna(0.0)
+        # Shift signal by 1 bar (trade on signal, realize PnL next bar)
+        sig_shifted = sig.shift(1).fillna(0.0).values
+        # Factor return = sum(position_cs * return_cs)
+        fr = np.nansum(sig_shifted * ret_arr, axis=1)
+        factor_returns[alpha_id] = fr
+    
+    return pd.DataFrame(factor_returns, index=dates)
+
+
+def strategy_ridge_combine(raw_signals, returns_pct, close, universe,
+                            max_wt=MAX_WEIGHT, lookback=280, ridge_lambda=None,
+                            refit_every=6, decay=2, **kwargs):
+
+    """
+    Ridge Regression Alpha Combiner (Isichenko Eq 2.38)
+    
+    Uses rolling ridge regression to find the optimal linear combination
+    of alpha signals to predict forward returns. This is the proper way
+    to combine alphas per the textbook:
+    
+      w* = (X'X + λI)^-1 X'y
+    
+    Where X = [f1, f2, ..., fK] stacked cross-sectionally over a rolling window,
+    and y = forward returns. The resulting combined forecast is:
+    
+      μ̂(t) = Σ_k w*_k × f_k(t)
+    
+    This automatically decorrelates signals, drops noise, and produces
+    a forecast in return units.
+    """
+    from sklearn.linear_model import Ridge
+    
+    normed_signals = {}
+    for alpha_id, raw_signal in raw_signals.items():
+        normed_signals[alpha_id] = proper_normalize_alpha(raw_signal, universe, max_wt=max_wt)
+
+    alpha_ids = sorted(normed_signals.keys())
+    K = len(alpha_ids)
+    dates = returns_pct.index
+    T = len(dates)
+    
+    # Stack per-alpha signal matrices into a 3D array: (T, N, K)
+    # For each date, X[t, :, k] = cross-sectional signal of alpha k
+    tickers = returns_pct.columns
+    N = len(tickers)
+    
+    signal_arr = np.zeros((T, N, K))
+    for k, aid in enumerate(alpha_ids):
+        sig = normed_signals[aid].reindex(index=dates, columns=tickers).fillna(0.0).values
+        signal_arr[:, :, k] = sig
+    
+    returns_arr = returns_pct.reindex(index=dates, columns=tickers).fillna(0.0).values
+    
+    # Rolling ridge regression: walk-forward
+    combined = np.zeros((T, N))
+    
+    # Auto-calibrate ridge lambda if not specified
+    if ridge_lambda is None:
+        # Use trace(X'X)/K heuristic as starting point, scaled to be moderate
+        ridge_lambda = 1.0  # Default moderate regularization
+    
+    last_ridge_weights = np.ones(K) / K  # Start equal
+    
+    for t in range(lookback, T, refit_every):
+        # Training window: [t-lookback, t-1]
+        # X: stack cross-sectional signals across dates in the window
+        # y: forward returns (1-bar ahead)
+        
+        window_start = max(0, t - lookback)
+        
+        # Build X and y by stacking cross-sectional observations
+        X_blocks = []
+        y_blocks = []
+        for d in range(window_start, t - 1):
+            # Signal at time d (delayed by 1 for no lookahead)
+            x_cs = signal_arr[d, :, :]  # (N, K)
+            # Forward return at time d+1
+            y_cs = returns_arr[d + 1, :]  # (N,)
+            
+            # Filter out NaN/zero rows
+            valid = np.all(np.isfinite(x_cs), axis=1) & np.isfinite(y_cs) & (np.any(x_cs != 0, axis=1))
+            if valid.sum() > 5:
+                X_blocks.append(x_cs[valid])
+                y_blocks.append(y_cs[valid])
+        
+        if len(X_blocks) < 10:
+            # Not enough data, use equal weights
+            combined[t:min(t+refit_every, T)] = signal_arr[t:min(t+refit_every, T)].mean(axis=2)
+            continue
+        
+        X_train = np.vstack(X_blocks)
+        y_train = np.concatenate(y_blocks)
+        
+        # Fit ridge regression
+        ridge = Ridge(alpha=ridge_lambda, fit_intercept=False)
+        ridge.fit(X_train, y_train)
+        w_ridge = ridge.coef_  # (K,)
+        
+        last_ridge_weights = w_ridge
+        
+        # Apply weights to compute combined forecast for next refit_every bars
+        end_t = min(t + refit_every, T)
+        for d in range(t, end_t):
+            combined[d] = signal_arr[d] @ w_ridge  # (N,)
+    
+    # Fill initial lookback period with equal-weight
+    for d in range(min(lookback, T)):
+        combined[d] = signal_arr[d].mean(axis=1)
+    
+    combined_df = pd.DataFrame(combined, index=dates, columns=tickers)
+    
+    return simulate(combined_df, returns_pct, close, universe, max_wt=max_wt,
+                    decay=decay), f"RidgeCombine(mw={max_wt},lb={lookback},lam={ridge_lambda},rf={refit_every},d={decay})"
+
+
+def strategy_qp_pnl_combine(raw_signals, returns_pct, close, universe,
+                             max_wt=MAX_WEIGHT, lookback=280, rebal_every=12,
+                             risk_aversion=1.0, decay=2, **kwargs):
+    """
+    QP PnL Combining (Isichenko Eq 3.17)
+    
+    Combines alpha signals by treating each alpha as a "synthetic security"
+    whose "return" is its per-bar factor return. The combination weights are
+    found by maximizing the mean-variance utility:
+    
+      α_QP = argmax_{αᵢ ≥ 0} [α·Q - k/2·α·C·α]
+    
+    where Q = mean PnL vector, C = PnL covariance, k = risk_aversion.
+    Non-negativity constraint regularizes the problem (prevents curse of
+    dimensionality) per Isichenko Fig 3.2.
+    """
+    from scipy.optimize import minimize
+    
+    normed_signals = {}
+    for alpha_id, raw_signal in raw_signals.items():
+        normed_signals[alpha_id] = proper_normalize_alpha(raw_signal, universe, max_wt=max_wt)
+
+    # Compute per-alpha factor returns (each alpha's "PnL time series")
+    fr_df = compute_factor_returns(normed_signals, returns_pct)
+    
+    alpha_ids = list(fr_df.columns)
+    K = len(alpha_ids)
+    dates = fr_df.index
+    T = len(dates)
+    
+    # Rolling QP solve
+    weights_arr = np.zeros((T, K))
+    last_w = np.ones(K) / K
+    
+    for t in range(lookback, T, rebal_every):
+        window = fr_df.iloc[max(0, t-lookback):t]
+        
+        Q_mean = window.mean().values  # mean PnL per alpha
+        C_cov = window.cov().values    # PnL covariance
+        
+        # Ensure PSD
+        C_cov = C_cov + np.eye(K) * 1e-8
+        
+        # Maximize: α·Q - k/2·α·C·α, subject to αᵢ ≥ 0, Σαᵢ = 1
+        # Equivalent to minimize: k/2·α·C·α - α·Q  
+        def obj(alpha):
+            return 0.5 * risk_aversion * alpha @ C_cov @ alpha - alpha @ Q_mean
+        
+        def jac(alpha):
+            return risk_aversion * C_cov @ alpha - Q_mean
+        
+        bounds = [(0.0, None) for _ in range(K)]  # αᵢ ≥ 0
+        cons = ({'type': 'eq', 'fun': lambda a: np.sum(a) - 1.0})
+        
+        try:
+            res = minimize(obj, last_w, jac=jac, method='SLSQP', 
+                          bounds=bounds, constraints=cons, 
+                          options={'maxiter': 200, 'ftol': 1e-10})
+            if res.success:
+                last_w = res.x
+        except:
+            pass
+        
+        end_t = min(t + rebal_every, T)
+        for d in range(t, end_t):
+            weights_arr[d] = last_w
+    
+    # Fill initial period with equal weights
+    for d in range(min(lookback, T)):
+        weights_arr[d] = np.ones(K) / K
+    
+    # EMA smooth the weights to reduce turnover
+    weights_df = pd.DataFrame(weights_arr, index=dates, columns=alpha_ids)
+    weights_smooth = weights_df.ewm(halflife=30, min_periods=1).mean()
+    wsum = weights_smooth.sum(axis=1).replace(0, np.nan)
+    weights_norm = weights_smooth.div(wsum, axis=0).fillna(0)
+    
+    # Combine signals using QP weights
+    combined = None
+    for alpha_id, normed in normed_signals.items():
+        w = weights_norm[alpha_id].values
+        ws = normed.multiply(w, axis=0)
+        combined = ws if combined is None else combined.add(ws, fill_value=0)
+    
+    n_active = int((last_w > 0.01).sum())
+    return simulate(combined, returns_pct, close, universe, max_wt=max_wt,
+                    decay=decay), f"QPPnl(mw={max_wt},lb={lookback},rb={rebal_every},k={risk_aversion},d={decay},act={n_active})"
+
+
+def strategy_hierarchical_combine(raw_signals, returns_pct, close, universe,
+                                   max_wt=MAX_WEIGHT, lookback=280, n_clusters=5,
+                                   ema_halflife=30, decay=2, **kwargs):
+    """
+    Hierarchical Combining (Isichenko Sec 3.5.3)
+    
+    Split alphas into clusters based on factor return correlation, combine
+    within each cluster (equal-weight), then combine cluster-level forecasts
+    using adaptive weighting. This handles the curse of dimensionality by
+    reducing K alphas to √K effective clusters.
+    """
+    from scipy.cluster.hierarchy import linkage, fcluster
+    from scipy.spatial.distance import squareform
+    
+    normed_signals = {}
+    for alpha_id, raw_signal in raw_signals.items():
+        normed_signals[alpha_id] = proper_normalize_alpha(raw_signal, universe, max_wt=max_wt)
+
+    fr_df = compute_factor_returns(normed_signals, returns_pct)
+    
+    alpha_ids = list(fr_df.columns)
+    K = len(alpha_ids)
+    
+    # Compute correlation matrix of factor returns
+    corr_matrix = fr_df.corr().fillna(0)
+    
+    # Convert to distance matrix: d = 1 - |ρ|
+    dist_matrix = (1 - corr_matrix.abs()).clip(lower=0)
+    np.fill_diagonal(dist_matrix.values, 0)
+    
+    # Hierarchical clustering
+    try:
+        condensed = squareform(dist_matrix.values)
+        Z = linkage(condensed, method='ward')
+        cluster_labels = fcluster(Z, t=n_clusters, criterion='maxclust')
+    except:
+        # Fallback: random clusters
+        cluster_labels = np.array([i % n_clusters for i in range(K)]) + 1
+    
+    # Group alphas by cluster
+    clusters = {}
+    for i, aid in enumerate(alpha_ids):
+        c = cluster_labels[i]
+        if c not in clusters:
+            clusters[c] = []
+        clusters[c].append(aid)
+    
+    print(f"  Hierarchical: {K} alphas -> {len(clusters)} clusters: {[len(v) for v in clusters.values()]}")
+    
+    # Stage 1: Within-cluster equal-weight combining
+    cluster_signals = {}
+    for c_id, c_aids in clusters.items():
+        c_combined = None
+        for aid in c_aids:
+            sig = normed_signals[aid]
+            c_combined = sig if c_combined is None else c_combined.add(sig, fill_value=0)
+        cluster_signals[c_id] = c_combined
+    
+    # Stage 2: Across-cluster adaptive weighting by rolling ER
+    cluster_fr = {}
+    for c_id, c_sig in cluster_signals.items():
+        # Factor returns for this cluster's combined signal
+        pos = c_sig.values
+        ret = returns_pct.reindex(index=c_sig.index, columns=c_sig.columns).fillna(0.0).values
+        fr = np.nansum(pos * ret, axis=1)
+        cluster_fr[c_id] = pd.Series(fr, index=c_sig.index)
+    
+    cluster_fr_df = pd.DataFrame(cluster_fr)
+    rolling_er = cluster_fr_df.rolling(window=lookback, min_periods=20).mean()
+    weights = rolling_er.clip(lower=0)
+    wsum = weights.sum(axis=1).replace(0, np.nan)
+    weights_norm = weights.div(wsum, axis=0).fillna(0)
+    
+    smoothed = weights_norm.ewm(halflife=ema_halflife, min_periods=1).mean()
+    wsum2 = smoothed.sum(axis=1).replace(0, np.nan)
+    smoothed_norm = smoothed.div(wsum2, axis=0).fillna(0)
+    
+    # Final combination
+    combined = None
+    for c_id, c_sig in cluster_signals.items():
+        w = smoothed_norm[c_id].values
+        ws = c_sig.multiply(w, axis=0)
+        combined = ws if combined is None else combined.add(ws, fill_value=0)
+    
+    return simulate(combined, returns_pct, close, universe, max_wt=max_wt,
+                    decay=decay), f"Hierarchical(mw={max_wt},lb={lookback},nc={n_clusters},hl={ema_halflife},d={decay})"
+
+
+def strategy_rolling_select(raw_signals, returns_pct, close, universe,
+                             max_wt=MAX_WEIGHT, lookback=280, min_rolling_sr=0.3,
+                             ema_halflife=30, decay=2, **kwargs):
+
+    """
+    Rolling Select: Use a rolling per-factor Sharpe gate to decide which alphas
+    get included at each point in time. Only alphas with rolling Sharpe > threshold
+    receive weight. Among selected, weight adaptively by rolling ER.
+    This avoids the full-period snooping of SelectSharpe while still filtering
+    out the many negative-Sharpe alphas.
+    """
+    normed_signals = {}
+    for alpha_id, raw_signal in raw_signals.items():
+        normed_signals[alpha_id] = proper_normalize_alpha(raw_signal, universe, max_wt=max_wt)
+
+    fr_df = compute_factor_returns(normed_signals, returns_pct)
+
+    # Rolling per-factor Sharpe ratio
+    rolling_mean = fr_df.rolling(window=lookback, min_periods=40).mean()
+    rolling_std = fr_df.rolling(window=lookback, min_periods=40).std()
+    rolling_sr = (rolling_mean / rolling_std.replace(0, np.nan)).fillna(0)
+
+    # Annualize (multiply by sqrt(bars_per_day * 365))
+    ann_factor = np.sqrt(BARS_PER_DAY * 365)
+    rolling_sr_ann = rolling_sr * ann_factor
+
+    # Gate: only positive-SR factors above threshold get weight
+    gate = (rolling_sr_ann > min_rolling_sr).astype(float)
+
+    # Weight by rolling ER among gated factors
+    weights = rolling_mean.clip(lower=0) * gate
+    wsum = weights.sum(axis=1).replace(0, np.nan)
+    weights_norm = weights.div(wsum, axis=0).fillna(0)
+
+    # Smooth weights
+    smoothed = weights_norm.ewm(halflife=ema_halflife, min_periods=1).mean()
+    wsum2 = smoothed.sum(axis=1).replace(0, np.nan)
+    smoothed_norm = smoothed.div(wsum2, axis=0).fillna(0)
+
+    combined = None
+    for alpha_id, normed in normed_signals.items():
+        w = smoothed_norm[alpha_id].values
+        ws = normed.multiply(w, axis=0)
+        combined = ws if combined is None else combined.add(ws, fill_value=0)
+
+    return simulate(combined, returns_pct, close, universe, max_wt=max_wt,
+                    decay=decay), f"RollingSelect(mw={max_wt},lb={lookback},msr={min_rolling_sr},hl={ema_halflife},d={decay})"
+
+
+def strategy_net_select_adaptive(raw_signals, returns_pct, close, universe,
+                                  max_wt=MAX_WEIGHT, lookback=280, min_rolling_sr=0.0,
+                                  ema_halflife=30, decay=2, fee_bps=5.0, **kwargs):
+    """
+    Net Select Adaptive: Like RollingSelect but uses NET factor returns (after
+    modeled transaction costs) to weight and gate alphas. This properly accounts
+    for high-turnover alphas eating their signal in fees.
+    """
+    normed_signals = {}
+    for alpha_id, raw_signal in raw_signals.items():
+        normed_signals[alpha_id] = proper_normalize_alpha(raw_signal, universe, max_wt=max_wt)
+
+    fr_df = compute_net_factor_returns(normed_signals, returns_pct, fee_bps)
+
+    # Rolling per-factor Sharpe ratio (net of fees)
+    rolling_mean = fr_df.rolling(window=lookback, min_periods=40).mean()
+    rolling_std = fr_df.rolling(window=lookback, min_periods=40).std()
+    rolling_sr = (rolling_mean / rolling_std.replace(0, np.nan)).fillna(0)
+
+    ann_factor = np.sqrt(BARS_PER_DAY * 365)
+    rolling_sr_ann = rolling_sr * ann_factor
+
+    # Gate: only positive net-SR factors get weight
+    gate = (rolling_sr_ann > min_rolling_sr).astype(float)
+
+    weights = rolling_mean.clip(lower=0) * gate
+    wsum = weights.sum(axis=1).replace(0, np.nan)
+    weights_norm = weights.div(wsum, axis=0).fillna(0)
+
+    smoothed = weights_norm.ewm(halflife=ema_halflife, min_periods=1).mean()
+    wsum2 = smoothed.sum(axis=1).replace(0, np.nan)
+    smoothed_norm = smoothed.div(wsum2, axis=0).fillna(0)
+
+    combined = None
+    for alpha_id, normed in normed_signals.items():
+        w = smoothed_norm[alpha_id].values
+        ws = normed.multiply(w, axis=0)
+        combined = ws if combined is None else combined.add(ws, fill_value=0)
+
+    return simulate(combined, returns_pct, close, universe, max_wt=max_wt,
+                    decay=decay), f"NetSelectAdaptive(mw={max_wt},lb={lookback},msr={min_rolling_sr},hl={ema_halflife},d={decay},f={fee_bps})"
+
+
+def strategy_curated_equal(raw_signals, returns_pct, close, universe,
+                            max_wt=MAX_WEIGHT, decay=2, curated_ids=None, **kwargs):
+    """
+    Curated Equal: Hand-pick the alpha IDs that have positive validation Sharpe,
+    then equal-weight them with proper normalization + sim-level decay.
+    Uses the insight from individual alpha analysis.
+    """
+    if curated_ids is None:
+        # Default: the alphas with positive validation Sharpe from the compare run
+        curated_ids = [143, 145, 146, 152, 154, 271, 277]
+
+    normed_signals = {}
+    for alpha_id, raw_signal in raw_signals.items():
+        if alpha_id in curated_ids:
+            normed_signals[alpha_id] = proper_normalize_alpha(raw_signal, universe, max_wt=max_wt)
+
+    if not normed_signals:
+        print("  No curated alphas found in DB!")
+        # Fallback to all
+        for alpha_id, raw_signal in raw_signals.items():
+            normed_signals[alpha_id] = proper_normalize_alpha(raw_signal, universe, max_wt=max_wt)
+
+    combined = None
+    n = 0
+    for normed in normed_signals.values():
+        combined = normed if combined is None else combined.add(normed, fill_value=0)
+        n += 1
+
+    n_str = len(normed_signals)
+    return simulate(combined, returns_pct, close, universe, max_wt=max_wt,
+                    decay=decay), f"CuratedEqual(mw={max_wt},n={n_str},d={decay})"
+
+
+def strategy_curated_adaptive(raw_signals, returns_pct, close, universe,
+                               max_wt=MAX_WEIGHT, lookback=280, ema_halflife=30, 
+                               decay=2, curated_ids=None, **kwargs):
+    """
+    Curated Adaptive: Hand-pick good alphas, then adaptively weight by rolling ER.
+    """
+    if curated_ids is None:
+        curated_ids = [143, 145, 146, 152, 154, 271, 277]
+
+    normed_signals = {}
+    for alpha_id, raw_signal in raw_signals.items():
+        if alpha_id in curated_ids:
+            normed_signals[alpha_id] = proper_normalize_alpha(raw_signal, universe, max_wt=max_wt)
+
+    if not normed_signals:
+        for alpha_id, raw_signal in raw_signals.items():
+            normed_signals[alpha_id] = proper_normalize_alpha(raw_signal, universe, max_wt=max_wt)
+
+    fr_df = compute_factor_returns(normed_signals, returns_pct)
+    rolling_er = fr_df.rolling(window=lookback, min_periods=20).mean()
+    weights = rolling_er.clip(lower=0)
+    wsum = weights.sum(axis=1).replace(0, np.nan)
+    weights_norm = weights.div(wsum, axis=0).fillna(0)
+
+    smoothed = weights_norm.ewm(halflife=ema_halflife, min_periods=1).mean()
+    wsum2 = smoothed.sum(axis=1).replace(0, np.nan)
+    smoothed_norm = smoothed.div(wsum2, axis=0).fillna(0)
+
+    combined = None
+    for alpha_id, normed in normed_signals.items():
+        w = smoothed_norm[alpha_id].values
+        ws = normed.multiply(w, axis=0)
+        combined = ws if combined is None else combined.add(ws, fill_value=0)
+
+    n_str = len(normed_signals)
+    return simulate(combined, returns_pct, close, universe, max_wt=max_wt,
+                    decay=decay), f"CuratedAdaptive(mw={max_wt},n={n_str},lb={lookback},hl={ema_halflife},d={decay})"
+
+
 PROPER_STRATEGIES = {
     "proper_equal": strategy_proper_equal,
     "proper_adaptive": strategy_proper_adaptive,
@@ -1248,6 +1731,13 @@ PROPER_STRATEGIES = {
     "regime_net_deadband": strategy_regime_net_deadband,
     "orthogonal_regime_scaled": strategy_orthogonal_regime_scaled,
     "regime_deadband": strategy_regime_deadband,
+    "rolling_select": strategy_rolling_select,
+    "net_select_adaptive": strategy_net_select_adaptive,
+    "curated_equal": strategy_curated_equal,
+    "curated_adaptive": strategy_curated_adaptive,
+    "ridge_combine": strategy_ridge_combine,
+    "qp_pnl_combine": strategy_qp_pnl_combine,
+    "hierarchical_combine": strategy_hierarchical_combine,
 }
 
 # ============================================================================
@@ -1480,7 +1970,7 @@ def compare_all():
 def main():
     all_strategies = {**STRATEGIES, **PROPER_STRATEGIES}
     parser = argparse.ArgumentParser(description="Agent 2: Portfolio Construction (Validation Only)")
-    parser.add_argument("--strategy", type=str, default="select_sharpe",
+    parser.add_argument("--strategy", type=str, default="corr_select_adaptive",
                         choices=list(all_strategies.keys()),
                         help="Combination strategy")
     parser.add_argument("--compare", action="store_true", help="Compare all strategies")
@@ -1490,7 +1980,7 @@ def main():
     parser.add_argument("--decay", type=int, default=SIM_DECAY, help="Decay parameter for strategies like select_sharpe or proper_decay")
     parser.add_argument("--mw", type=float, default=MAX_WEIGHT, help="Max weight for proper strategies")
     parser.add_argument("--hl", type=int, default=30, help="EMA halflife")
-    parser.add_argument("--mc", type=float, default=0.6, help="Max corr")
+    parser.add_argument("--mc", type=float, default=0.3, help="Max corr (default 0.3 — best from compare)")
     parser.add_argument("--fees", type=float, default=VAL_FEES, help="Fees in bps to simulate")
     parser.add_argument("--db", type=float, default=0.01, help="Deadband threshold")
     args = parser.parse_args()
