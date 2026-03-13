@@ -24,12 +24,25 @@ You are Agent 1: an autonomous alpha researcher for **Binance crypto perpetual f
 // turbo
 1. Check current state: `python eval_alpha.py --scoreboard`
 
+> **📖 Before hypothesizing, read [`.agents/alpha-templates.md`](./../alpha-templates.md)**
+> This file contains:
+> - Proven passing alpha templates (copy-paste ready)
+> - Sub-signal H1/H2 profiles (which signals anchor bear vs bull regimes)
+> - The golden composite template with zscore_cs + add + clip
+> - Debugging guide for each quality gate
+> - Unexplored signal directions
+
 ## Research Loop
 
 Repeat this loop indefinitely. Each iteration = one alpha hypothesis.
 
 ### Step 1: Hypothesize
 You must formulate a hypothesis for a predictive signal and explain your logic. Every alpha must have a clearly stated reason for why it is expected to work.
+
+**Before hypothesizing:** consult `.agents/alpha-templates.md` to check:
+- Which sub-signals are already profiled (avoid re-testing known weak signals)
+- What regime gaps exist in the current DB (need more H1-strong or H2-strong signals?)
+- Whether you can build a new composite by substituting one component from a proven template
 
 ### Step 2: Implement and Test
 Use `eval_alpha.py` to test your expression. 
@@ -59,7 +72,7 @@ Look at ALL the metrics:
 
 If IS Sharpe is high but stability fails → likely overfit to one regime, discard.
 If Sharpe is borderline, try variations: different lookbacks (30, 60, 120), etc.
-**Avoid using `rank()`** in your expressions unless you specifically need cross-sectional comparison as part of the logic (e.g., `volume / rank(volume)`). The evaluation harness (`eval_alpha.py`) and Agent 2 already handle normalization. Raw signals preserve magnitude information (e.g., how extremely overbought an asset is) which is lost when you wrap everything in `rank()`.
+**Signal Combination Tactic**: One of the most powerful techniques is combining multiple orthogonal sub-signals into a single composite alpha. The proven approach: (1) build each sub-signal independently, (2) wrap each in `rank()` or `zscore_cs()` to put them on a common scale, (3) combine with `add()` (equal-weight ensemble) or `multiply()` (interaction/amplification). This is especially effective when sub-signals are strong in *different* regimes — e.g., one signal dominates in H1 (bear) and another in H2 (bull). Their combination achieves regime-balanced Sharpe that neither achieves alone. Optionally apply `df_min(df_max(..., -1.5), 1.5)` to clip extremes and reduce PnL kurtosis. Example: `df_min(df_max(add(add(zscore_cs(signal_A), zscore_cs(signal_B)), zscore_cs(signal_C)), -1.5), 1.5)`
 **Target Low Turnover**: Our fee model is aggressively punitive at 10bps per trade, so you must exclusively discover structural, slow-moving alphas that produce a mean Turnover < 0.05 per 4-hour bar. Use `sma()` smoothing, long lookbacks, and slow decay to achieve this.
 
 ### Step 4: Save Good Alphas
@@ -96,7 +109,7 @@ All DataFrames of shape (dates × tickers):
 `ts_delta(x,d)`, `ts_rank(x,d)`, `sma(x,d)`/`ts_mean(x,d)`, `stddev(x,d)`/`ts_std_dev(x,d)`, `ts_min(x,d)`, `ts_max(x,d)`, `ts_sum(x,d)`, `ts_zscore(x,d)`, `ts_skewness(x,d)`, `ts_kurtosis(x,d)`, `ts_entropy(x,d)`, `ts_corr(x,y,d)`, `ts_cov(x,y,d)`, `ts_regression(y,x,d,lag=0,rettype=0)` (0=residual, 2=slope), `delay(x,d)`, `ArgMax(x,d)`, `ArgMin(x,d)`, `Decay_lin(x,d)`, `Decay_exp(x,alpha)`, `Product(x,d)`, `hump(x,val)`
 
 **Cross-Sectional** (across instruments):
-`rank(x)` (use sparingly), `scale(x)`, `zscore_cs(x)`, `normalize(x)`
+`rank(x)`, `scale(x)`, `zscore_cs(x)`, `normalize(x)`
 
 **Arithmetic** (element-wise):
 `add(x,y)`, `subtract(x,y)`, `multiply(x,y)`, `true_divide(x,y)`, `negative(x)`, `Abs(x)`, `Sign(x)`, `Log(x)`, `square(x)`, `sqrt(x)`, `df_max(x,y)`, `df_min(x,y)`, `SignedPower(x,e)`, `s_log_1p(x)`
@@ -108,7 +121,7 @@ All DataFrames of shape (dates × tickers):
 
 ## Anti-Overfitting Rules
 1. **Simple > complex**: `ts_delta(close, 60)` beats nested 5-operator chains
-2. **Avoid `rank()`**: Do NOT wrap your whole expression in `rank()`. Magnitude matters. Agent 2's optimizer (especially `qp_optimal`) performs better with raw signals that distinguish between "strong" and "extreme" breakouts.
+2. **Signal Combination via rank/zscore_cs + add**: When a single signal fails gates due to H1/H2 regime imbalance, combine multiple sub-signals. Wrap each in `rank()` or `zscore_cs()` for uniform scaling, then `add()` them together. Sub-signals that are strong in *different* regimes are complementary — their sum achieves balanced H1 and H2 Sharpe. Apply `df_min(df_max(..., -1.5), 1.5)` clipping to control kurtosis and rolling SR std. `multiply()` can also be used for interaction effects (e.g., sign-filtered amplification).
 3. **Round lookbacks**: Use 30, 60, 120 (real timeframes), not 47 or 83
 3. **Test sensitivity**: If it works at 60, check 30 and 120. If it breaks → discard
 4. **DSR tracks your trial count**: The more you test, the more likely any single discovery is noise. Keep this in mind.
