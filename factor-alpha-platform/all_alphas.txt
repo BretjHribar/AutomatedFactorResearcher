@@ -1,0 +1,6 @@
+Alpha #62:
+df_min(df_max(add(add(rank(sma(taker_buy_ratio, 12)),rank(negative(sma(vwap_deviation, 12)))),rank(sma(ts_delta(trades_per_volume, 6), 12))), -1.5), 1.5)
+
+Alpha #63:
+df_min(df_max(add(add(rank(sma(true_divide(lower_shadow, df_max(high_low_range, 0.001)), 6)),rank(negative(sma(close_position_in_range, 6)))),rank(sma(volume_momentum_1, 12))), -1.5), 1.5)
+

@@ -35,8 +35,8 @@ MATRICES_DIR = DATA_DIR / "matrices"
 FUNDING_DIR = DATA_DIR / "funding_rates"
 UNIVERSE_DIR = DATA_DIR / "universes"
 
-INTERVALS = ["1d", "12h", "4h"]
-INTERVAL_MS = {"1d": 86400000, "12h": 43200000, "4h": 14400000}
+INTERVALS = ["1d", "12h", "4h", "5m"]
+INTERVAL_MS = {"1d": 86400000, "12h": 43200000, "4h": 14400000, "5m": 300000}
 MAX_CANDLES = 1500        # Binance max per request
 REQUEST_WEIGHT = 5        # Weight per klines request
 MAX_WEIGHT_PER_MIN = 2400
@@ -585,7 +585,7 @@ MIN_LISTING_AGE_DAYS = 365
 #   1d  → every 20 bars = 20 days
 #   4h  → every 120 bars = 20 days
 #   12h → every 40 bars  = 20 days
-REBAL_BARS = {"1d": 20, "12h": 40, "4h": 120}
+REBAL_BARS = {"1d": 20, "12h": 40, "4h": 120, "5m": 5760}
 
 
 def build_universes(symbols_df: pd.DataFrame, interval: str = "1d"):
@@ -721,13 +721,13 @@ def main():
 
     # Step 4: Build matrices for ALL downloaded intervals
     build_matrices("1d")
-    for iv in ["12h", "4h"]:
+    for iv in ["12h", "4h", "5m"]:
         if (KLINES_DIR / iv).exists():
             build_matrices(iv)
 
     # Step 5: BTC beta for all intervals
     compute_btc_beta("1d")
-    for iv in ["4h"]:
+    for iv in ["4h", "5m"]:
         iv_dir = MATRICES_DIR / iv
         if iv_dir.exists() and (iv_dir / "returns.parquet").exists():
             compute_btc_beta(iv)
@@ -735,7 +735,7 @@ def main():
 
     # Step 6: Universes for all intervals
     build_universes(symbols_df, "1d")
-    for iv in ["4h"]:
+    for iv in ["4h", "5m"]:
         iv_dir = MATRICES_DIR / iv
         if iv_dir.exists() and (iv_dir / "adv20.parquet").exists():
             build_universes(symbols_df, iv)

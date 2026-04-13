@@ -250,7 +250,7 @@ def simulate_vectorized_polars(
 
     # Fitness
     if avg_turnover > 0.001:
-        fitness = sharpe * math.sqrt(abs(returns_ann) / max(avg_turnover, 0.125))
+        fitness = sharpe * math.sqrt(abs(returns_ann) / max(avg_turnover, 0.01))
     else:
         fitness = 0.0
 

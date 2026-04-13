@@ -1,0 +1,868 @@
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:156: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:156: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:156: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:156: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:156: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\src\simulation\vectorized_sim_polars.py:156: RuntimeWarning: Mean of empty slice
+  row_means = np.nanmean(alpha_np, axis=1, keepdims=True)
+C:\Users\breth\PycharmProjects\AutomatedFactorResearcher\factor-alpha-platform\eval_portfolio.py:218: ConstantInputWarning: An input array is constant; the correlation coefficient is not defined.
+  ic, _ = stats.spearmanr(a[common], r[common])
+
+Comparing strategies on 21 rank-norm / 21 raw alphas
+Validation (2024-09-01 to 2025-03-01), 5.0bps fees
+
+Individual Alpha Performance (Validation):
+  ID      Sharpe  Fitness     TO       DD
+  ---------------------------------------------
+  #10     -2.173   -2.243  0.558   -0.299
+  #11     +0.563    0.443  0.292   -0.150
+  #12     +0.923    1.235  0.091   -0.097
+  #13     +0.628    0.504  0.320   -0.087
+  #14     +0.514    0.506  0.100   -0.100
+  #15     -2.583   -3.166  0.470   -0.334
+  #16     -1.391   -1.941  0.176   -0.170
+  #18     +0.677    0.886  0.089   -0.129
+  #19     +1.452    2.684  0.095   -0.094
+  #20     +0.766    1.099  0.113   -0.111
+  #21     +0.834    0.971  0.170   -0.106
+  #22     +0.771    1.046  0.102   -0.088
+  #23     +0.881    1.419  0.113   -0.132
+  #24     -1.016   -1.276  0.163   -0.133
+  #25     +0.695    0.810  0.169   -0.152
+  #26     -0.019   -0.004  0.109   -0.115
+  #27     -0.257   -0.189  0.082   -0.150
+  #28     +0.290    0.209  0.158   -0.089
+  #29     -0.523   -0.592  0.090   -0.131
+  #30     +1.240    2.190  0.124   -0.129
+  #31     +0.477    0.414  0.172   -0.119
+
+================================================================================
+  SelectSharpe: 11/21 alphas selected (min_sr=0.5, d=2)
+  Selected IDs: [11, 12, 18, 19, 20, 21, 22, 23, 25, 30, 31]
+  SelectSharpe: 14/21 alphas selected (min_sr=0.0, d=1)
+  Selected IDs: [11, 12, 13, 14, 18, 19, 20, 21, 22, 23, 25, 28, 30, 31]
+  SelectSharpe: 13/21 alphas selected (min_sr=0.3, d=1)
+  Selected IDs: [11, 12, 13, 14, 18, 19, 20, 21, 22, 23, 25, 30, 31]
+  SelectSharpe: 12/21 alphas selected (min_sr=0.5, d=1)
+  Selected IDs: [11, 12, 13, 14, 18, 19, 20, 21, 22, 23, 25, 30]
+  SelectSharpe: 15/21 alphas selected (min_sr=0.0, d=2)
+  Selected IDs: [11, 12, 13, 14, 18, 19, 20, 21, 22, 23, 25, 26, 28, 30, 31]
+  SelectSharpe: 14/21 alphas selected (min_sr=0.3, d=2)
+  Selected IDs: [11, 12, 13, 14, 18, 19, 20, 21, 22, 23, 25, 28, 30, 31]
+  SelectSharpe: 11/21 alphas selected (min_sr=0.5, d=2)
+  Selected IDs: [11, 12, 18, 19, 20, 21, 22, 23, 25, 30, 31]
+  SelectSharpe: 13/21 alphas selected (min_sr=0.0, d=3)
+  Selected IDs: [11, 12, 14, 18, 19, 20, 21, 22, 23, 25, 28, 30, 31]
+  SelectSharpe: 12/21 alphas selected (min_sr=0.3, d=3)
+  Selected IDs: [11, 12, 14, 18, 19, 20, 21, 22, 23, 25, 30, 31]
+  SelectSharpe: 9/21 alphas selected (min_sr=0.5, d=3)
+  Selected IDs: [12, 18, 19, 20, 21, 22, 23, 25, 30]
+  CorrSelect: 5/21 alphas selected (max_corr=0.3)
+  Selected IDs: [13, 31, 10, 12, 18]
+  CorrSelect: 5/21 alphas selected (max_corr=0.3)
+  Selected IDs: [13, 31, 10, 12, 18]
+  CorrSelect: 5/21 alphas selected (max_corr=0.3)
+  Selected IDs: [13, 31, 10, 12, 18]
+  CorrSelect: 5/21 alphas selected (max_corr=0.3)
+  Selected IDs: [13, 31, 10, 12, 18]
+  CorrSelect: 5/21 alphas selected (max_corr=0.3)
+  Selected IDs: [13, 31, 10, 12, 18]
+  CorrSelect: 5/21 alphas selected (max_corr=0.3)
+  Selected IDs: [13, 31, 10, 12, 18]
+  CorrSelect: 6/21 alphas selected (max_corr=0.4)
+  Selected IDs: [13, 31, 10, 12, 11, 18]
+  CorrSelect: 6/21 alphas selected (max_corr=0.4)
+  Selected IDs: [13, 31, 10, 12, 11, 18]
+  CorrSelect: 6/21 alphas selected (max_corr=0.4)
+  Selected IDs: [13, 31, 10, 12, 11, 18]
+  CorrSelect: 6/21 alphas selected (max_corr=0.4)
+  Selected IDs: [13, 31, 10, 12, 11, 18]
+  CorrSelect: 6/21 alphas selected (max_corr=0.4)
+  Selected IDs: [13, 31, 10, 12, 11, 18]
+  CorrSelect: 6/21 alphas selected (max_corr=0.4)
+  Selected IDs: [13, 31, 10, 12, 11, 18]
+  CorrSelect: 7/21 alphas selected (max_corr=0.5)
+  Selected IDs: [13, 31, 10, 12, 11, 20, 18]
+  CorrSelect: 7/21 alphas selected (max_corr=0.5)
+  Selected IDs: [13, 31, 10, 12, 11, 20, 18]
+  CorrSelect: 7/21 alphas selected (max_corr=0.5)
+  Selected IDs: [13, 31, 10, 12, 11, 20, 18]
+  CorrSelect: 7/21 alphas selected (max_corr=0.5)
+  Selected IDs: [13, 31, 10, 12, 11, 20, 18]
+  CorrSelect: 7/21 alphas selected (max_corr=0.5)
+  Selected IDs: [13, 31, 10, 12, 11, 20, 18]
+  CorrSelect: 7/21 alphas selected (max_corr=0.5)
+  Selected IDs: [13, 31, 10, 12, 11, 20, 18]
+  CorrSelect: 10/21 alphas selected (max_corr=0.6)
+  Selected IDs: [13, 31, 10, 12, 11, 20, 14, 18, 22, 28]
+  CorrSelect: 10/21 alphas selected (max_corr=0.6)
+  Selected IDs: [13, 31, 10, 12, 11, 20, 14, 18, 22, 28]
+  CorrSelect: 10/21 alphas selected (max_corr=0.6)
+  Selected IDs: [13, 31, 10, 12, 11, 20, 14, 18, 22, 28]
+  CorrSelect: 10/21 alphas selected (max_corr=0.6)
+  Selected IDs: [13, 31, 10, 12, 11, 20, 14, 18, 22, 28]
+  CorrSelect: 10/21 alphas selected (max_corr=0.6)
+  Selected IDs: [13, 31, 10, 12, 11, 20, 14, 18, 22, 28]
+  CorrSelect: 10/21 alphas selected (max_corr=0.6)
+  Selected IDs: [13, 31, 10, 12, 11, 20, 14, 18, 22, 28]
+  CorrSelect: 12/21 alphas selected (max_corr=0.7)
+  Selected IDs: [13, 31, 30, 10, 12, 11, 20, 14, 21, 18, 22, 16]
+  CorrSelect: 12/21 alphas selected (max_corr=0.7)
+  Selected IDs: [13, 31, 30, 10, 12, 11, 20, 14, 21, 18, 22, 16]
+  CorrSelect: 12/21 alphas selected (max_corr=0.7)
+  Selected IDs: [13, 31, 30, 10, 12, 11, 20, 14, 21, 18, 22, 16]
+  CorrSelect: 12/21 alphas selected (max_corr=0.7)
+  Selected IDs: [13, 31, 30, 10, 12, 11, 20, 14, 21, 18, 22, 16]
+  CorrSelect: 12/21 alphas selected (max_corr=0.7)
+  Selected IDs: [13, 31, 30, 10, 12, 11, 20, 14, 21, 18, 22, 16]
+  CorrSelect: 12/21 alphas selected (max_corr=0.7)
+  Selected IDs: [13, 31, 30, 10, 12, 11, 20, 14, 21, 18, 22, 16]
+  CorrSelect: 5/21 alphas selected (max_corr=0.3)
+  Selected IDs: [13, 30, 10, 12, 18]
+  CorrSelect: 5/21 alphas selected (max_corr=0.3)
+  Selected IDs: [13, 30, 10, 12, 18]
+  CorrSelect: 5/21 alphas selected (max_corr=0.3)
+  Selected IDs: [13, 30, 10, 12, 18]
+  CorrSelect: 5/21 alphas selected (max_corr=0.3)
+  Selected IDs: [13, 30, 10, 12, 18]
+  CorrSelect: 5/21 alphas selected (max_corr=0.3)
+  Selected IDs: [13, 30, 10, 12, 18]
+  CorrSelect: 5/21 alphas selected (max_corr=0.3)
+  Selected IDs: [13, 30, 10, 12, 18]
+  CorrSelect: 6/21 alphas selected (max_corr=0.4)
+  Selected IDs: [13, 30, 11, 10, 12, 18]
+  CorrSelect: 6/21 alphas selected (max_corr=0.4)
+  Selected IDs: [13, 30, 11, 10, 12, 18]
+  CorrSelect: 6/21 alphas selected (max_corr=0.4)
+  Selected IDs: [13, 30, 11, 10, 12, 18]
+  CorrSelect: 6/21 alphas selected (max_corr=0.4)
+  Selected IDs: [13, 30, 11, 10, 12, 18]
+  CorrSelect: 6/21 alphas selected (max_corr=0.4)
+  Selected IDs: [13, 30, 11, 10, 12, 18]
+  CorrSelect: 6/21 alphas selected (max_corr=0.4)
+  Selected IDs: [13, 30, 11, 10, 12, 18]
+  CorrSelect: 6/21 alphas selected (max_corr=0.5)
+  Selected IDs: [13, 30, 11, 10, 12, 19]
+  CorrSelect: 6/21 alphas selected (max_corr=0.5)
+  Selected IDs: [13, 30, 11, 10, 12, 19]
+  CorrSelect: 6/21 alphas selected (max_corr=0.5)
+  Selected IDs: [13, 30, 11, 10, 12, 19]
+  CorrSelect: 6/21 alphas selected (max_corr=0.5)
+  Selected IDs: [13, 30, 11, 10, 12, 19]
+  CorrSelect: 6/21 alphas selected (max_corr=0.5)
+  Selected IDs: [13, 30, 11, 10, 12, 19]
+  CorrSelect: 6/21 alphas selected (max_corr=0.5)
+  Selected IDs: [13, 30, 11, 10, 12, 19]
+  CorrSelect: 8/21 alphas selected (max_corr=0.6)
+  Selected IDs: [13, 30, 11, 10, 12, 21, 14, 18]
+  CorrSelect: 8/21 alphas selected (max_corr=0.6)
+  Selected IDs: [13, 30, 11, 10, 12, 21, 14, 18]
+  CorrSelect: 8/21 alphas selected (max_corr=0.6)
+  Selected IDs: [13, 30, 11, 10, 12, 21, 14, 18]
+  CorrSelect: 8/21 alphas selected (max_corr=0.6)
+  Selected IDs: [13, 30, 11, 10, 12, 21, 14, 18]
+  CorrSelect: 8/21 alphas selected (max_corr=0.6)
+  Selected IDs: [13, 30, 11, 10, 12, 21, 14, 18]
+  CorrSelect: 8/21 alphas selected (max_corr=0.6)
+  Selected IDs: [13, 30, 11, 10, 12, 21, 14, 18]
+  CorrSelect: 12/21 alphas selected (max_corr=0.7)
+  Selected IDs: [13, 30, 31, 11, 10, 12, 21, 22, 14, 20, 18, 16]
+  CorrSelect: 12/21 alphas selected (max_corr=0.7)
+  Selected IDs: [13, 30, 31, 11, 10, 12, 21, 22, 14, 20, 18, 16]
+  CorrSelect: 12/21 alphas selected (max_corr=0.7)
+  Selected IDs: [13, 30, 31, 11, 10, 12, 21, 22, 14, 20, 18, 16]
+  CorrSelect: 12/21 alphas selected (max_corr=0.7)
+  Selected IDs: [13, 30, 31, 11, 10, 12, 21, 22, 14, 20, 18, 16]
+  CorrSelect: 12/21 alphas selected (max_corr=0.7)
+  Selected IDs: [13, 30, 31, 11, 10, 12, 21, 22, 14, 20, 18, 16]
+  CorrSelect: 12/21 alphas selected (max_corr=0.7)
+  Selected IDs: [13, 30, 31, 11, 10, 12, 21, 22, 14, 20, 18, 16]
+  CorrSelect: 5/21 alphas selected (max_corr=0.3)
+  Selected IDs: [13, 11, 19, 10, 12]
+  CorrSelect: 5/21 alphas selected (max_corr=0.3)
+  Selected IDs: [13, 11, 19, 10, 12]
+  CorrSelect: 5/21 alphas selected (max_corr=0.3)
+  Selected IDs: [13, 11, 19, 10, 12]
+  CorrSelect: 5/21 alphas selected (max_corr=0.3)
+  Selected IDs: [13, 11, 19, 10, 12]
+  CorrSelect: 5/21 alphas selected (max_corr=0.3)
+  Selected IDs: [13, 11, 19, 10, 12]
+  CorrSelect: 5/21 alphas selected (max_corr=0.3)
+  Selected IDs: [13, 11, 19, 10, 12]
+  CorrSelect: 6/21 alphas selected (max_corr=0.4)
+  Selected IDs: [13, 11, 30, 10, 12, 18]
+  CorrSelect: 6/21 alphas selected (max_corr=0.4)
+  Selected IDs: [13, 11, 30, 10, 12, 18]
+  CorrSelect: 6/21 alphas selected (max_corr=0.4)
+  Selected IDs: [13, 11, 30, 10, 12, 18]
+  CorrSelect: 6/21 alphas selected (max_corr=0.4)
+  Selected IDs: [13, 11, 30, 10, 12, 18]
+  CorrSelect: 6/21 alphas selected (max_corr=0.4)
+  Selected IDs: [13, 11, 30, 10, 12, 18]
+  CorrSelect: 6/21 alphas selected (max_corr=0.4)
+  Selected IDs: [13, 11, 30, 10, 12, 18]
+  CorrSelect: 6/21 alphas selected (max_corr=0.5)
+  Selected IDs: [13, 11, 30, 19, 10, 12]
+  CorrSelect: 6/21 alphas selected (max_corr=0.5)
+  Selected IDs: [13, 11, 30, 19, 10, 12]
+  CorrSelect: 6/21 alphas selected (max_corr=0.5)
+  Selected IDs: [13, 11, 30, 19, 10, 12]
+  CorrSelect: 6/21 alphas selected (max_corr=0.5)
+  Selected IDs: [13, 11, 30, 19, 10, 12]
+  CorrSelect: 6/21 alphas selected (max_corr=0.5)
+  Selected IDs: [13, 11, 30, 19, 10, 12]
+  CorrSelect: 6/21 alphas selected (max_corr=0.5)
+  Selected IDs: [13, 11, 30, 19, 10, 12]
+  CorrSelect: 8/21 alphas selected (max_corr=0.6)
+  Selected IDs: [13, 11, 30, 19, 10, 12, 14, 18]
+  CorrSelect: 8/21 alphas selected (max_corr=0.6)
+  Selected IDs: [13, 11, 30, 19, 10, 12, 14, 18]
+  CorrSelect: 8/21 alphas selected (max_corr=0.6)
+  Selected IDs: [13, 11, 30, 19, 10, 12, 14, 18]
+  CorrSelect: 8/21 alphas selected (max_corr=0.6)
+  Selected IDs: [13, 11, 30, 19, 10, 12, 14, 18]
+  CorrSelect: 8/21 alphas selected (max_corr=0.6)
+  Selected IDs: [13, 11, 30, 19, 10, 12, 14, 18]
+  CorrSelect: 8/21 alphas selected (max_corr=0.6)
+  Selected IDs: [13, 11, 30, 19, 10, 12, 14, 18]
+  CorrSelect: 12/21 alphas selected (max_corr=0.7)
+  Selected IDs: [13, 11, 30, 19, 10, 31, 12, 21, 14, 18, 16, 27]
+  CorrSelect: 12/21 alphas selected (max_corr=0.7)
+  Selected IDs: [13, 11, 30, 19, 10, 31, 12, 21, 14, 18, 16, 27]
+  CorrSelect: 12/21 alphas selected (max_corr=0.7)
+  Selected IDs: [13, 11, 30, 19, 10, 31, 12, 21, 14, 18, 16, 27]
+  CorrSelect: 12/21 alphas selected (max_corr=0.7)
+  Selected IDs: [13, 11, 30, 19, 10, 31, 12, 21, 14, 18, 16, 27]
+  CorrSelect: 12/21 alphas selected (max_corr=0.7)
+  Selected IDs: [13, 11, 30, 19, 10, 31, 12, 21, 14, 18, 16, 27]
+  CorrSelect: 12/21 alphas selected (max_corr=0.7)
+  Selected IDs: [13, 11, 30, 19, 10, 31, 12, 21, 14, 18, 16, 27]
+  CorrSelect: 4/21 alphas selected (max_corr=0.3)
+  Selected IDs: [13, 19, 12, 10]
+  CorrSelect: 4/21 alphas selected (max_corr=0.3)
+  Selected IDs: [13, 19, 12, 10]
+  CorrSelect: 4/21 alphas selected (max_corr=0.3)
+  Selected IDs: [13, 19, 12, 10]
+  CorrSelect: 4/21 alphas selected (max_corr=0.3)
+  Selected IDs: [13, 19, 12, 10]
+  CorrSelect: 4/21 alphas selected (max_corr=0.3)
+  Selected IDs: [13, 19, 12, 10]
+  CorrSelect: 4/21 alphas selected (max_corr=0.3)
+  Selected IDs: [13, 19, 12, 10]
+  CorrSelect: 7/21 alphas selected (max_corr=0.4)
+  Selected IDs: [13, 11, 19, 12, 10, 27, 24]
+  CorrSelect: 7/21 alphas selected (max_corr=0.4)
+  Selected IDs: [13, 11, 19, 12, 10, 27, 24]
+  CorrSelect: 7/21 alphas selected (max_corr=0.4)
+  Selected IDs: [13, 11, 19, 12, 10, 27, 24]
+  CorrSelect: 7/21 alphas selected (max_corr=0.4)
+  Selected IDs: [13, 11, 19, 12, 10, 27, 24]
+  CorrSelect: 7/21 alphas selected (max_corr=0.4)
+  Selected IDs: [13, 11, 19, 12, 10, 27, 24]
+  CorrSelect: 7/21 alphas selected (max_corr=0.4)
+  Selected IDs: [13, 11, 19, 12, 10, 27, 24]
+  CorrSelect: 6/21 alphas selected (max_corr=0.5)
+  Selected IDs: [13, 11, 19, 25, 12, 10]
+  CorrSelect: 6/21 alphas selected (max_corr=0.5)
+  Selected IDs: [13, 11, 19, 25, 12, 10]
+  CorrSelect: 6/21 alphas selected (max_corr=0.5)
+  Selected IDs: [13, 11, 19, 25, 12, 10]
+  CorrSelect: 6/21 alphas selected (max_corr=0.5)
+  Selected IDs: [13, 11, 19, 25, 12, 10]
+  CorrSelect: 6/21 alphas selected (max_corr=0.5)
+  Selected IDs: [13, 11, 19, 25, 12, 10]
+  CorrSelect: 6/21 alphas selected (max_corr=0.5)
+  Selected IDs: [13, 11, 19, 25, 12, 10]
+  CorrSelect: 8/21 alphas selected (max_corr=0.6)
+  Selected IDs: [13, 11, 19, 25, 12, 10, 14, 24]
+  CorrSelect: 8/21 alphas selected (max_corr=0.6)
+  Selected IDs: [13, 11, 19, 25, 12, 10, 14, 24]
+  CorrSelect: 8/21 alphas selected (max_corr=0.6)
+  Selected IDs: [13, 11, 19, 25, 12, 10, 14, 24]
+  CorrSelect: 8/21 alphas selected (max_corr=0.6)
+  Selected IDs: [13, 11, 19, 25, 12, 10, 14, 24]
+  CorrSelect: 8/21 alphas selected (max_corr=0.6)
+  Selected IDs: [13, 11, 19, 25, 12, 10, 14, 24]
+  CorrSelect: 8/21 alphas selected (max_corr=0.6)
+  Selected IDs: [13, 11, 19, 25, 12, 10, 14, 24]
+  CorrSelect: 12/21 alphas selected (max_corr=0.7)
+  Selected IDs: [13, 11, 19, 25, 12, 31, 10, 18, 14, 27, 16, 24]
+  CorrSelect: 12/21 alphas selected (max_corr=0.7)
+  Selected IDs: [13, 11, 19, 25, 12, 31, 10, 18, 14, 27, 16, 24]
+  CorrSelect: 12/21 alphas selected (max_corr=0.7)
+  Selected IDs: [13, 11, 19, 25, 12, 31, 10, 18, 14, 27, 16, 24]
+  CorrSelect: 12/21 alphas selected (max_corr=0.7)
+  Selected IDs: [13, 11, 19, 25, 12, 31, 10, 18, 14, 27, 16, 24]
+  CorrSelect: 12/21 alphas selected (max_corr=0.7)
+  Selected IDs: [13, 11, 19, 25, 12, 31, 10, 18, 14, 27, 16, 24]
+  CorrSelect: 12/21 alphas selected (max_corr=0.7)
+  Selected IDs: [13, 11, 19, 25, 12, 31, 10, 18, 14, 27, 16, 24]
+
+  Strategy                                        Sharpe  Fitness     TO       DD
+  --------------------------------------------------------------------------------
+  CorrSelAdaptive(mw=0.08,mc=0.3,lb=240,n=4)      +2.753    4.837  0.324   -0.104
+  CorrSelAdaptive(mw=0.08,mc=0.3,lb=240,n=4)      +2.753    4.837  0.324   -0.104
+  CorrSelAdaptive(mw=0.08,mc=0.3,lb=240,n=4)      +2.753    4.837  0.324   -0.104
+  CorrSelAdaptive(mw=0.08,mc=0.3,lb=240,n=4)      +2.753    4.837  0.324   -0.104
+  CorrSelAdaptive(mw=0.08,mc=0.3,lb=240,n=4)      +2.753    4.837  0.324   -0.104
+  CorrSelAdaptive(mw=0.08,mc=0.3,lb=180,n=4)      +2.668    4.626  0.320   -0.108
+  CorrSelAdaptive(mw=0.08,mc=0.3,lb=180,n=4)      +2.668    4.626  0.320   -0.108
+  CorrSelAdaptive(mw=0.08,mc=0.3,lb=180,n=4)      +2.668    4.626  0.320   -0.108
+  CorrSelAdaptive(mw=0.08,mc=0.3,lb=180,n=4)      +2.668    4.626  0.320   -0.108
+  CorrSelAdaptive(mw=0.08,mc=0.3,lb=180,n=4)      +2.668    4.626  0.320   -0.108
+  CorrSelAdaptive(mw=0.08,mc=0.3,lb=280,n=4)      +2.506    4.197  0.325   -0.106
+  CorrSelAdaptive(mw=0.08,mc=0.3,lb=280,n=4)      +2.506    4.197  0.325   -0.106
+  CorrSelAdaptive(mw=0.08,mc=0.3,lb=280,n=4)      +2.506    4.197  0.325   -0.106
+  CorrSelAdaptive(mw=0.08,mc=0.3,lb=280,n=4)      +2.506    4.197  0.325   -0.106
+  CorrSelAdaptive(mw=0.08,mc=0.3,lb=280,n=4)      +2.506    4.197  0.325   -0.106
+  RegimeScaled(mw=0.02,lb=280,hl=90)              +2.325    4.294  0.101   -0.043
+  CorrSelect(mw=0.08,mc=0.3,n=4)                  +2.324    3.909  0.269   -0.103
+  CorrSelect(mw=0.08,mc=0.3,n=4)                  +2.324    3.909  0.269   -0.103
+  CorrSelect(mw=0.08,mc=0.3,n=4)                  +2.324    3.909  0.269   -0.103
+  CorrSelect(mw=0.08,mc=0.3,n=4)                  +2.324    3.909  0.269   -0.103
+  CorrSelect(mw=0.08,mc=0.3,n=4)                  +2.324    3.909  0.269   -0.103
+  CorrSelect(mw=0.08,mc=0.3,n=4)                  +2.324    3.909  0.269   -0.103
+  ProperDecay(mw=0.02,lb=280,d=2,hl=90)           +2.303    4.232  0.101   -0.043
+  RegimeScaled(mw=0.02,lb=280,hl=60)              +2.287    4.201  0.098   -0.044
+  ProperDecay(mw=0.02,lb=280,d=2,hl=60)           +2.264    4.139  0.099   -0.044
+  RegimeScaled(mw=0.02,lb=280,hl=30)              +2.180    3.925  0.097   -0.049
+  ProperDecay(mw=0.02,lb=280,d=2,hl=30)           +2.157    3.865  0.097   -0.049
+  RegimeScaled(mw=0.02,lb=360,hl=60)              +2.150    3.820  0.102   -0.044
+  RegimeScaled(mw=0.02,lb=360,hl=90)              +2.104    3.707  0.104   -0.043
+  ProperAdaptive(mw=0.02,lb=280)                  +2.042    3.545  0.128   -0.045
+  CorrSelect(mw=0.08,mc=0.5,n=6)                  +2.026    3.185  0.267   -0.098
+  CorrSelect(mw=0.08,mc=0.5,n=6)                  +2.026    3.185  0.267   -0.098
+  CorrSelect(mw=0.08,mc=0.5,n=6)                  +2.026    3.185  0.267   -0.098
+  CorrSelect(mw=0.08,mc=0.5,n=6)                  +2.026    3.185  0.267   -0.098
+  CorrSelect(mw=0.08,mc=0.5,n=6)                  +2.026    3.185  0.267   -0.098
+  CorrSelect(mw=0.08,mc=0.5,n=6)                  +2.026    3.185  0.267   -0.098
+  CorrSelAdaptive(mw=0.02,mc=0.3,lb=280,n=5)      +2.013    3.773  0.160   -0.113
+  CorrSelAdaptive(mw=0.02,mc=0.3,lb=280,n=5)      +2.013    3.773  0.160   -0.113
+  CorrSelAdaptive(mw=0.02,mc=0.3,lb=280,n=5)      +2.013    3.773  0.160   -0.113
+  CorrSelAdaptive(mw=0.02,mc=0.3,lb=280,n=5)      +2.013    3.773  0.160   -0.113
+  CorrSelAdaptive(mw=0.02,mc=0.3,lb=280,n=5)      +2.013    3.773  0.160   -0.113
+  CorrSelAdaptive(mw=0.03,mc=0.3,lb=280,n=5)      +2.005    3.418  0.210   -0.118
+  CorrSelAdaptive(mw=0.03,mc=0.3,lb=280,n=5)      +2.005    3.418  0.210   -0.118
+  CorrSelAdaptive(mw=0.03,mc=0.3,lb=280,n=5)      +2.005    3.418  0.210   -0.118
+  CorrSelAdaptive(mw=0.03,mc=0.3,lb=280,n=5)      +2.005    3.418  0.210   -0.118
+  CorrSelAdaptive(mw=0.03,mc=0.3,lb=280,n=5)      +2.005    3.418  0.210   -0.118
+  RegimeScaled(mw=0.02,lb=240,hl=90)              +1.977    3.443  0.098   -0.044
+  ProperDDControl(mw=0.02,lb=280,mdd=0.08)        +1.959    3.318  0.096   -0.050
+  ProperDecay(mw=0.02,lb=240,d=2,hl=90)           +1.955    3.386  0.098   -0.044
+  CorrSelAdaptive(mw=0.05,mc=0.4,lb=180,n=6)      +1.955    3.003  0.273   -0.091
+  CorrSelAdaptive(mw=0.05,mc=0.4,lb=180,n=6)      +1.955    3.003  0.273   -0.091
+  CorrSelAdaptive(mw=0.05,mc=0.4,lb=180,n=6)      +1.955    3.003  0.273   -0.091
+  CorrSelAdaptive(mw=0.05,mc=0.4,lb=180,n=6)      +1.955    3.003  0.273   -0.091
+  CorrSelAdaptive(mw=0.05,mc=0.4,lb=180,n=6)      +1.955    3.003  0.273   -0.091
+  ProperAdaptive(mw=0.02,lb=280)                  +1.951    3.361  0.125   -0.043
+  RegimeScaled(mw=0.02,lb=360,hl=30)              +1.950    3.329  0.100   -0.050
+  ProperDecay(mw=0.02,lb=280,d=4,hl=60)           +1.933    3.248  0.074   -0.055
+  ProperDecay(mw=0.02,lb=280,d=4,hl=90)           +1.925    3.218  0.075   -0.055
+  ProperDecay(mw=0.02,lb=280,d=3,hl=90)           +1.895    3.156  0.085   -0.049
+  CorrSelAdaptive(mw=0.02,mc=0.3,lb=240,n=5)      +1.892    3.537  0.160   -0.137
+  CorrSelAdaptive(mw=0.02,mc=0.3,lb=240,n=5)      +1.892    3.537  0.160   -0.137
+  CorrSelAdaptive(mw=0.02,mc=0.3,lb=240,n=5)      +1.892    3.537  0.160   -0.137
+  CorrSelAdaptive(mw=0.02,mc=0.3,lb=240,n=5)      +1.892    3.537  0.160   -0.137
+  CorrSelAdaptive(mw=0.02,mc=0.3,lb=240,n=5)      +1.892    3.537  0.160   -0.137
+  RegimeScaled(mw=0.02,lb=240,hl=60)              +1.887    3.251  0.095   -0.045
+  CorrSelAdaptive(mw=0.05,mc=0.6,lb=180,n=8)      +1.879    2.946  0.251   -0.104
+  CorrSelAdaptive(mw=0.05,mc=0.6,lb=180,n=8)      +1.879    2.946  0.251   -0.104
+  CorrSelAdaptive(mw=0.05,mc=0.6,lb=180,n=8)      +1.879    2.946  0.251   -0.104
+  CorrSelAdaptive(mw=0.05,mc=0.6,lb=180,n=8)      +1.879    2.946  0.251   -0.104
+  CorrSelAdaptive(mw=0.05,mc=0.6,lb=180,n=8)      +1.879    2.946  0.251   -0.104
+  ProperDecay(mw=0.02,lb=240,d=2,hl=60)           +1.866    3.196  0.095   -0.045
+  CorrSelAdaptive(mw=0.03,mc=0.3,lb=240,n=5)      +1.853    3.122  0.209   -0.149
+  CorrSelAdaptive(mw=0.03,mc=0.3,lb=240,n=5)      +1.853    3.122  0.209   -0.149
+  CorrSelAdaptive(mw=0.03,mc=0.3,lb=240,n=5)      +1.853    3.122  0.209   -0.149
+  CorrSelAdaptive(mw=0.03,mc=0.3,lb=240,n=5)      +1.853    3.122  0.209   -0.149
+  CorrSelAdaptive(mw=0.03,mc=0.3,lb=240,n=5)      +1.853    3.122  0.209   -0.149
+  ProperDecay(mw=0.02,lb=280,d=3,hl=60)           +1.844    3.037  0.083   -0.049
+  ProperDecay(mw=0.02,lb=280,d=4,hl=30)           +1.789    2.907  0.072   -0.053
+  CorrSelAdaptive(mw=0.08,mc=0.5,lb=180,n=6)      +1.783    2.511  0.312   -0.095
+  CorrSelAdaptive(mw=0.08,mc=0.5,lb=180,n=6)      +1.783    2.511  0.312   -0.095
+  CorrSelAdaptive(mw=0.08,mc=0.5,lb=180,n=6)      +1.783    2.511  0.312   -0.095
+  CorrSelAdaptive(mw=0.08,mc=0.5,lb=180,n=6)      +1.783    2.511  0.312   -0.095
+  CorrSelAdaptive(mw=0.08,mc=0.5,lb=180,n=6)      +1.783    2.511  0.312   -0.095
+  CorrSelAdaptive(mw=0.08,mc=0.5,lb=240,n=6)      +1.781    2.503  0.312   -0.095
+  CorrSelAdaptive(mw=0.08,mc=0.5,lb=240,n=6)      +1.781    2.503  0.312   -0.095
+  CorrSelAdaptive(mw=0.08,mc=0.5,lb=240,n=6)      +1.781    2.503  0.312   -0.095
+  CorrSelAdaptive(mw=0.08,mc=0.5,lb=240,n=6)      +1.781    2.503  0.312   -0.095
+  CorrSelAdaptive(mw=0.08,mc=0.5,lb=240,n=6)      +1.781    2.503  0.312   -0.095
+  CorrSelAdaptive(mw=0.08,mc=0.6,lb=180,n=8)      +1.736    2.445  0.304   -0.113
+  CorrSelAdaptive(mw=0.08,mc=0.6,lb=180,n=8)      +1.736    2.445  0.304   -0.113
+  CorrSelAdaptive(mw=0.08,mc=0.6,lb=180,n=8)      +1.736    2.445  0.304   -0.113
+  CorrSelAdaptive(mw=0.08,mc=0.6,lb=180,n=8)      +1.736    2.445  0.304   -0.113
+  CorrSelAdaptive(mw=0.08,mc=0.6,lb=180,n=8)      +1.736    2.445  0.304   -0.113
+  CorrSelAdaptive(mw=0.05,mc=0.6,lb=240,n=8)      +1.725    2.571  0.254   -0.123
+  CorrSelAdaptive(mw=0.05,mc=0.6,lb=240,n=8)      +1.725    2.571  0.254   -0.123
+  CorrSelAdaptive(mw=0.05,mc=0.6,lb=240,n=8)      +1.725    2.571  0.254   -0.123
+  CorrSelAdaptive(mw=0.05,mc=0.6,lb=240,n=8)      +1.725    2.571  0.254   -0.123
+  CorrSelAdaptive(mw=0.05,mc=0.6,lb=240,n=8)      +1.725    2.571  0.254   -0.123
+  CorrSelAdaptive(mw=0.05,mc=0.5,lb=180,n=6)      +1.722    2.537  0.262   -0.100
+  CorrSelAdaptive(mw=0.05,mc=0.5,lb=180,n=6)      +1.722    2.537  0.262   -0.100
+  CorrSelAdaptive(mw=0.05,mc=0.5,lb=180,n=6)      +1.722    2.537  0.262   -0.100
+  CorrSelAdaptive(mw=0.05,mc=0.5,lb=180,n=6)      +1.722    2.537  0.262   -0.100
+  CorrSelAdaptive(mw=0.05,mc=0.5,lb=180,n=6)      +1.722    2.537  0.262   -0.100
+  SelectSharpe(n=12,d=1)                          +1.713    3.186  0.168   -0.144
+  ProperDecay(mw=0.02,lb=280,d=3,hl=30)           +1.703    2.705  0.082   -0.047
+  CorrSelect(mw=0.05,mc=0.6,n=8)                  +1.696    2.723  0.180   -0.110
+  CorrSelect(mw=0.05,mc=0.6,n=8)                  +1.696    2.723  0.180   -0.110
+  CorrSelect(mw=0.05,mc=0.6,n=8)                  +1.696    2.723  0.180   -0.110
+  CorrSelect(mw=0.05,mc=0.6,n=8)                  +1.696    2.723  0.180   -0.110
+  CorrSelect(mw=0.05,mc=0.6,n=8)                  +1.696    2.723  0.180   -0.110
+  CorrSelect(mw=0.05,mc=0.6,n=8)                  +1.696    2.723  0.180   -0.110
+  CorrSelAdaptive(mw=0.08,mc=0.4,lb=240,n=7)      +1.692    2.317  0.320   -0.108
+  CorrSelAdaptive(mw=0.08,mc=0.4,lb=240,n=7)      +1.692    2.317  0.320   -0.108
+  CorrSelAdaptive(mw=0.08,mc=0.4,lb=240,n=7)      +1.692    2.317  0.320   -0.108
+  CorrSelAdaptive(mw=0.08,mc=0.4,lb=240,n=7)      +1.692    2.317  0.320   -0.108
+  CorrSelAdaptive(mw=0.08,mc=0.4,lb=240,n=7)      +1.692    2.317  0.320   -0.108
+  CorrSelAdaptive(mw=0.05,mc=0.6,lb=280,n=8)      +1.690    2.439  0.255   -0.099
+  CorrSelAdaptive(mw=0.05,mc=0.6,lb=280,n=8)      +1.690    2.439  0.255   -0.099
+  CorrSelAdaptive(mw=0.05,mc=0.6,lb=280,n=8)      +1.690    2.439  0.255   -0.099
+  CorrSelAdaptive(mw=0.05,mc=0.6,lb=280,n=8)      +1.690    2.439  0.255   -0.099
+  CorrSelAdaptive(mw=0.05,mc=0.6,lb=280,n=8)      +1.690    2.439  0.255   -0.099
+  CorrSelAdaptive(mw=0.08,mc=0.5,lb=280,n=6)      +1.689    2.287  0.312   -0.098
+  CorrSelAdaptive(mw=0.08,mc=0.5,lb=280,n=6)      +1.689    2.287  0.312   -0.098
+  CorrSelAdaptive(mw=0.08,mc=0.5,lb=280,n=6)      +1.689    2.287  0.312   -0.098
+  CorrSelAdaptive(mw=0.08,mc=0.5,lb=280,n=6)      +1.689    2.287  0.312   -0.098
+  CorrSelAdaptive(mw=0.08,mc=0.5,lb=280,n=6)      +1.689    2.287  0.312   -0.098
+  CorrSelect(mw=0.08,mc=0.7,n=12)                 +1.687    2.697  0.205   -0.122
+  CorrSelect(mw=0.08,mc=0.7,n=12)                 +1.687    2.697  0.205   -0.122
+  CorrSelect(mw=0.08,mc=0.7,n=12)                 +1.687    2.697  0.205   -0.122
+  CorrSelect(mw=0.08,mc=0.7,n=12)                 +1.687    2.697  0.205   -0.122
+  CorrSelect(mw=0.08,mc=0.7,n=12)                 +1.687    2.697  0.205   -0.122
+  CorrSelect(mw=0.08,mc=0.7,n=12)                 +1.687    2.697  0.205   -0.122
+  CorrSelAdaptive(mw=0.08,mc=0.6,lb=240,n=8)      +1.663    2.283  0.305   -0.102
+  CorrSelAdaptive(mw=0.08,mc=0.6,lb=240,n=8)      +1.663    2.283  0.305   -0.102
+  CorrSelAdaptive(mw=0.08,mc=0.6,lb=240,n=8)      +1.663    2.283  0.305   -0.102
+  CorrSelAdaptive(mw=0.08,mc=0.6,lb=240,n=8)      +1.663    2.283  0.305   -0.102
+  CorrSelAdaptive(mw=0.08,mc=0.6,lb=240,n=8)      +1.663    2.283  0.305   -0.102
+  CorrSelAdaptive(mw=0.03,mc=0.3,lb=180,n=5)      +1.661    2.702  0.205   -0.158
+  CorrSelAdaptive(mw=0.03,mc=0.3,lb=180,n=5)      +1.661    2.702  0.205   -0.158
+  CorrSelAdaptive(mw=0.03,mc=0.3,lb=180,n=5)      +1.661    2.702  0.205   -0.158
+  CorrSelAdaptive(mw=0.03,mc=0.3,lb=180,n=5)      +1.661    2.702  0.205   -0.158
+  CorrSelAdaptive(mw=0.03,mc=0.3,lb=180,n=5)      +1.661    2.702  0.205   -0.158
+  ProperDecay(mw=0.05,lb=280,d=2,hl=30)           +1.655    3.022  0.157   -0.080
+  CorrSelAdaptive(mw=0.05,mc=0.4,lb=240,n=6)      +1.654    2.332  0.275   -0.112
+  CorrSelAdaptive(mw=0.05,mc=0.4,lb=240,n=6)      +1.654    2.332  0.275   -0.112
+  CorrSelAdaptive(mw=0.05,mc=0.4,lb=240,n=6)      +1.654    2.332  0.275   -0.112
+  CorrSelAdaptive(mw=0.05,mc=0.4,lb=240,n=6)      +1.654    2.332  0.275   -0.112
+  CorrSelAdaptive(mw=0.05,mc=0.4,lb=240,n=6)      +1.654    2.332  0.275   -0.112
+  ProperAdaptive(mw=0.02,lb=240)                  +1.648    2.700  0.124   -0.045
+  CorrSelAdaptive(mw=0.08,mc=0.4,lb=280,n=7)      +1.647    2.202  0.321   -0.107
+  CorrSelAdaptive(mw=0.08,mc=0.4,lb=280,n=7)      +1.647    2.202  0.321   -0.107
+  CorrSelAdaptive(mw=0.08,mc=0.4,lb=280,n=7)      +1.647    2.202  0.321   -0.107
+  CorrSelAdaptive(mw=0.08,mc=0.4,lb=280,n=7)      +1.647    2.202  0.321   -0.107
+  CorrSelAdaptive(mw=0.08,mc=0.4,lb=280,n=7)      +1.647    2.202  0.321   -0.107
+  CorrSelect(mw=0.08,mc=0.6,n=8)                  +1.624    2.343  0.245   -0.109
+  CorrSelect(mw=0.08,mc=0.6,n=8)                  +1.624    2.343  0.245   -0.109
+  CorrSelect(mw=0.08,mc=0.6,n=8)                  +1.624    2.343  0.245   -0.109
+  CorrSelect(mw=0.08,mc=0.6,n=8)                  +1.624    2.343  0.245   -0.109
+  CorrSelect(mw=0.08,mc=0.6,n=8)                  +1.624    2.343  0.245   -0.109
+  CorrSelect(mw=0.08,mc=0.6,n=8)                  +1.624    2.343  0.245   -0.109
+  CorrSelAdaptive(mw=0.08,mc=0.4,lb=180,n=7)      +1.624    2.178  0.317   -0.113
+  CorrSelAdaptive(mw=0.08,mc=0.4,lb=180,n=7)      +1.624    2.178  0.317   -0.113
+  CorrSelAdaptive(mw=0.08,mc=0.4,lb=180,n=7)      +1.624    2.178  0.317   -0.113
+  CorrSelAdaptive(mw=0.08,mc=0.4,lb=180,n=7)      +1.624    2.178  0.317   -0.113
+  CorrSelAdaptive(mw=0.08,mc=0.4,lb=180,n=7)      +1.624    2.178  0.317   -0.113
+  CorrSelect(mw=0.03,mc=0.3,n=5)                  +1.620    2.508  0.140   -0.085
+  CorrSelect(mw=0.03,mc=0.3,n=5)                  +1.620    2.508  0.140   -0.085
+  CorrSelect(mw=0.03,mc=0.3,n=5)                  +1.620    2.508  0.140   -0.085
+  CorrSelect(mw=0.03,mc=0.3,n=5)                  +1.620    2.508  0.140   -0.085
+  CorrSelect(mw=0.03,mc=0.3,n=5)                  +1.620    2.508  0.140   -0.085
+  CorrSelect(mw=0.03,mc=0.3,n=5)                  +1.620    2.508  0.140   -0.085
+  SelectSharpe(n=13,d=1)                          +1.616    2.905  0.171   -0.148
+  CorrSelAdaptive(mw=0.05,mc=0.5,lb=280,n=6)      +1.595    2.198  0.266   -0.090
+  CorrSelAdaptive(mw=0.05,mc=0.5,lb=280,n=6)      +1.595    2.198  0.266   -0.090
+  CorrSelAdaptive(mw=0.05,mc=0.5,lb=280,n=6)      +1.595    2.198  0.266   -0.090
+  CorrSelAdaptive(mw=0.05,mc=0.5,lb=280,n=6)      +1.595    2.198  0.266   -0.090
+  CorrSelAdaptive(mw=0.05,mc=0.5,lb=280,n=6)      +1.595    2.198  0.266   -0.090
+  CorrSelAdaptive(mw=0.02,mc=0.5,lb=280,n=7)      +1.592    2.523  0.151   -0.108
+  CorrSelAdaptive(mw=0.02,mc=0.5,lb=280,n=7)      +1.592    2.523  0.151   -0.108
+  CorrSelAdaptive(mw=0.02,mc=0.5,lb=280,n=7)      +1.592    2.523  0.151   -0.108
+  CorrSelAdaptive(mw=0.02,mc=0.5,lb=280,n=7)      +1.592    2.523  0.151   -0.108
+  CorrSelAdaptive(mw=0.02,mc=0.5,lb=280,n=7)      +1.592    2.523  0.151   -0.108
+  CorrSelect(mw=0.05,mc=0.3,n=5)                  +1.591    2.182  0.236   -0.087
+  CorrSelect(mw=0.05,mc=0.3,n=5)                  +1.591    2.182  0.236   -0.087
+  CorrSelect(mw=0.05,mc=0.3,n=5)                  +1.591    2.182  0.236   -0.087
+  CorrSelect(mw=0.05,mc=0.3,n=5)                  +1.591    2.182  0.236   -0.087
+  CorrSelect(mw=0.05,mc=0.3,n=5)                  +1.591    2.182  0.236   -0.087
+  CorrSelect(mw=0.05,mc=0.3,n=5)                  +1.591    2.182  0.236   -0.087
+  ProperDecay(mw=0.02,lb=240,d=3,hl=90)           +1.590    2.470  0.083   -0.049
+  CorrSelAdaptive(mw=0.05,mc=0.5,lb=240,n=6)      +1.587    2.225  0.265   -0.114
+  CorrSelAdaptive(mw=0.05,mc=0.5,lb=240,n=6)      +1.587    2.225  0.265   -0.114
+  CorrSelAdaptive(mw=0.05,mc=0.5,lb=240,n=6)      +1.587    2.225  0.265   -0.114
+  CorrSelAdaptive(mw=0.05,mc=0.5,lb=240,n=6)      +1.587    2.225  0.265   -0.114
+  CorrSelAdaptive(mw=0.05,mc=0.5,lb=240,n=6)      +1.587    2.225  0.265   -0.114
+  CorrSelAdaptive(mw=0.03,mc=0.6,lb=280,n=8)      +1.580    2.300  0.199   -0.076
+  CorrSelAdaptive(mw=0.03,mc=0.6,lb=280,n=8)      +1.580    2.300  0.199   -0.076
+  CorrSelAdaptive(mw=0.03,mc=0.6,lb=280,n=8)      +1.580    2.300  0.199   -0.076
+  CorrSelAdaptive(mw=0.03,mc=0.6,lb=280,n=8)      +1.580    2.300  0.199   -0.076
+  CorrSelAdaptive(mw=0.03,mc=0.6,lb=280,n=8)      +1.580    2.300  0.199   -0.076
+  CorrSelAdaptive(mw=0.05,mc=0.4,lb=280,n=6)      +1.568    2.117  0.274   -0.094
+  CorrSelAdaptive(mw=0.05,mc=0.4,lb=280,n=6)      +1.568    2.117  0.274   -0.094
+  CorrSelAdaptive(mw=0.05,mc=0.4,lb=280,n=6)      +1.568    2.117  0.274   -0.094
+  CorrSelAdaptive(mw=0.05,mc=0.4,lb=280,n=6)      +1.568    2.117  0.274   -0.094
+  CorrSelAdaptive(mw=0.05,mc=0.4,lb=280,n=6)      +1.568    2.117  0.274   -0.094
+  CorrSelect(mw=0.05,mc=0.5,n=6)                  +1.563    2.314  0.207   -0.111
+  CorrSelect(mw=0.05,mc=0.5,n=6)                  +1.563    2.314  0.207   -0.111
+  CorrSelect(mw=0.05,mc=0.5,n=6)                  +1.563    2.314  0.207   -0.111
+  CorrSelect(mw=0.05,mc=0.5,n=6)                  +1.563    2.314  0.207   -0.111
+  CorrSelect(mw=0.05,mc=0.5,n=6)                  +1.563    2.314  0.207   -0.111
+  CorrSelect(mw=0.05,mc=0.5,n=6)                  +1.563    2.314  0.207   -0.111
+  CorrSelect(mw=0.05,mc=0.4,n=6)                  +1.551    2.170  0.218   -0.108
+  CorrSelect(mw=0.05,mc=0.4,n=6)                  +1.551    2.170  0.218   -0.108
+  CorrSelect(mw=0.05,mc=0.4,n=6)                  +1.551    2.170  0.218   -0.108
+  CorrSelect(mw=0.05,mc=0.4,n=6)                  +1.551    2.170  0.218   -0.108
+  CorrSelect(mw=0.05,mc=0.4,n=6)                  +1.551    2.170  0.218   -0.108
+  CorrSelect(mw=0.05,mc=0.4,n=6)                  +1.551    2.170  0.218   -0.108
+  CorrSelAdaptive(mw=0.05,mc=0.3,lb=240,n=5)      +1.548    2.121  0.277   -0.104
+  CorrSelAdaptive(mw=0.05,mc=0.3,lb=240,n=5)      +1.548    2.121  0.277   -0.104
+  CorrSelAdaptive(mw=0.05,mc=0.3,lb=240,n=5)      +1.548    2.121  0.277   -0.104
+  CorrSelAdaptive(mw=0.05,mc=0.3,lb=240,n=5)      +1.548    2.121  0.277   -0.104
+  CorrSelAdaptive(mw=0.05,mc=0.3,lb=240,n=5)      +1.548    2.121  0.277   -0.104
+  RegimeScaled(mw=0.03,lb=280,hl=90)              +1.541    2.596  0.130   -0.063
+  CorrSelAdaptive(mw=0.08,mc=0.6,lb=280,n=8)      +1.540    2.007  0.305   -0.103
+  CorrSelAdaptive(mw=0.08,mc=0.6,lb=280,n=8)      +1.540    2.007  0.305   -0.103
+  CorrSelAdaptive(mw=0.08,mc=0.6,lb=280,n=8)      +1.540    2.007  0.305   -0.103
+  CorrSelAdaptive(mw=0.08,mc=0.6,lb=280,n=8)      +1.540    2.007  0.305   -0.103
+  CorrSelAdaptive(mw=0.08,mc=0.6,lb=280,n=8)      +1.540    2.007  0.305   -0.103
+  RegimeScaled(mw=0.03,lb=280,hl=30)              +1.537    2.646  0.123   -0.066
+  ProperDDControl(mw=0.02,lb=280,mdd=0.05)        +1.525    2.266  0.092   -0.060
+  ProperDecay(mw=0.03,lb=280,d=2,hl=90)           +1.512    2.523  0.130   -0.063
+  SelectSharpe(n=14,d=1)                          +1.511    2.633  0.170   -0.148
+  CorrSelAdaptive(mw=0.02,mc=0.3,lb=180,n=5)      +1.511    2.620  0.158   -0.149
+  CorrSelAdaptive(mw=0.02,mc=0.3,lb=180,n=5)      +1.511    2.620  0.158   -0.149
+  CorrSelAdaptive(mw=0.02,mc=0.3,lb=180,n=5)      +1.511    2.620  0.158   -0.149
+  CorrSelAdaptive(mw=0.02,mc=0.3,lb=180,n=5)      +1.511    2.620  0.158   -0.149
+  CorrSelAdaptive(mw=0.02,mc=0.3,lb=180,n=5)      +1.511    2.620  0.158   -0.149
+  ProperDecay(mw=0.03,lb=280,d=2,hl=30)           +1.508    2.573  0.123   -0.066
+  ProperAdaptive(mw=0.05,lb=280)                  +1.507    2.290  0.206   -0.085
+  ProperDecay(mw=0.02,lb=240,d=3,hl=60)           +1.507    2.295  0.081   -0.049
+  SelectSharpe(n=11,d=2)                          +1.496    3.058  0.113   -0.144
+  SelectSharpe(n=11,d=2)                          +1.496    3.058  0.113   -0.144
+  CorrSelAdaptive(mw=0.05,mc=0.3,lb=280,n=5)      +1.485    1.968  0.278   -0.089
+  CorrSelAdaptive(mw=0.05,mc=0.3,lb=280,n=5)      +1.485    1.968  0.278   -0.089
+  CorrSelAdaptive(mw=0.05,mc=0.3,lb=280,n=5)      +1.485    1.968  0.278   -0.089
+  CorrSelAdaptive(mw=0.05,mc=0.3,lb=280,n=5)      +1.485    1.968  0.278   -0.089
+  CorrSelAdaptive(mw=0.05,mc=0.3,lb=280,n=5)      +1.485    1.968  0.278   -0.089
+  ProperDecay(mw=0.02,lb=240,d=4,hl=90)           +1.485    2.221  0.073   -0.055
+  RegimeScaled(mw=0.03,lb=280,hl=60)              +1.472    2.460  0.126   -0.066
+  CorrSelAdaptive(mw=0.02,mc=0.5,lb=240,n=7)      +1.469    2.347  0.150   -0.138
+  CorrSelAdaptive(mw=0.02,mc=0.5,lb=240,n=7)      +1.469    2.347  0.150   -0.138
+  CorrSelAdaptive(mw=0.02,mc=0.5,lb=240,n=7)      +1.469    2.347  0.150   -0.138
+  CorrSelAdaptive(mw=0.02,mc=0.5,lb=240,n=7)      +1.469    2.347  0.150   -0.138
+  CorrSelAdaptive(mw=0.02,mc=0.5,lb=240,n=7)      +1.469    2.347  0.150   -0.138
+  RegimeScaled(mw=0.03,lb=360,hl=60)              +1.469    2.374  0.132   -0.065
+  CorrSelAdaptive(mw=0.05,mc=0.3,lb=180,n=5)      +1.466    1.972  0.273   -0.108
+  CorrSelAdaptive(mw=0.05,mc=0.3,lb=180,n=5)      +1.466    1.972  0.273   -0.108
+  CorrSelAdaptive(mw=0.05,mc=0.3,lb=180,n=5)      +1.466    1.972  0.273   -0.108
+  CorrSelAdaptive(mw=0.05,mc=0.3,lb=180,n=5)      +1.466    1.972  0.273   -0.108
+  CorrSelAdaptive(mw=0.05,mc=0.3,lb=180,n=5)      +1.466    1.972  0.273   -0.108
+  CorrSelect(mw=0.03,mc=0.5,n=6)                  +1.465    2.173  0.148   -0.083
+  CorrSelect(mw=0.03,mc=0.5,n=6)                  +1.465    2.173  0.148   -0.083
+  CorrSelect(mw=0.03,mc=0.5,n=6)                  +1.465    2.173  0.148   -0.083
+  CorrSelect(mw=0.03,mc=0.5,n=6)                  +1.465    2.173  0.148   -0.083
+  CorrSelect(mw=0.03,mc=0.5,n=6)                  +1.465    2.173  0.148   -0.083
+  CorrSelect(mw=0.03,mc=0.5,n=6)                  +1.465    2.173  0.148   -0.083
+  SelectSharpe(n=9,d=3)                           +1.447    2.927  0.079   -0.148
+  ProperDecay(mw=0.03,lb=280,d=2,hl=60)           +1.444    2.388  0.127   -0.066
+  CorrSelAdaptive(mw=0.03,mc=0.6,lb=240,n=8)      +1.439    2.097  0.197   -0.121
+  CorrSelAdaptive(mw=0.03,mc=0.6,lb=240,n=8)      +1.439    2.097  0.197   -0.121
+  CorrSelAdaptive(mw=0.03,mc=0.6,lb=240,n=8)      +1.439    2.097  0.197   -0.121
+  CorrSelAdaptive(mw=0.03,mc=0.6,lb=240,n=8)      +1.439    2.097  0.197   -0.121
+  CorrSelAdaptive(mw=0.03,mc=0.6,lb=240,n=8)      +1.439    2.097  0.197   -0.121
+  RegimeScaled(mw=0.03,lb=360,hl=30)              +1.427    2.319  0.129   -0.065
+  RegimeScaled(mw=0.02,lb=240,hl=30)              +1.425    2.231  0.093   -0.068
+  ProperAdaptive(mw=0.03,lb=280)                  +1.416    2.084  0.160   -0.063
+  RegimeScaled(mw=0.03,lb=360,hl=90)              +1.409    2.202  0.135   -0.061
+  ProperDecay(mw=0.02,lb=240,d=4,hl=60)           +1.407    2.058  0.072   -0.055
+  ProperDecay(mw=0.02,lb=240,d=2,hl=30)           +1.406    2.186  0.093   -0.068
+  ProperDecay(mw=0.05,lb=280,d=2,hl=60)           +1.401    2.325  0.160   -0.079
+  CorrSelAdaptive(mw=0.03,mc=0.4,lb=280,n=6)      +1.398    1.933  0.207   -0.113
+  CorrSelAdaptive(mw=0.03,mc=0.4,lb=280,n=6)      +1.398    1.933  0.207   -0.113
+  CorrSelAdaptive(mw=0.03,mc=0.4,lb=280,n=6)      +1.398    1.933  0.207   -0.113
+  CorrSelAdaptive(mw=0.03,mc=0.4,lb=280,n=6)      +1.398    1.933  0.207   -0.113
+  CorrSelAdaptive(mw=0.03,mc=0.4,lb=280,n=6)      +1.398    1.933  0.207   -0.113
+  CorrSelAdaptive(mw=0.02,mc=0.6,lb=280,n=10)     +1.395    2.074  0.144   -0.103
+  CorrSelAdaptive(mw=0.02,mc=0.6,lb=280,n=10)     +1.395    2.074  0.144   -0.103
+  CorrSelAdaptive(mw=0.02,mc=0.6,lb=280,n=10)     +1.395    2.074  0.144   -0.103
+  CorrSelAdaptive(mw=0.02,mc=0.6,lb=280,n=10)     +1.395    2.074  0.144   -0.103
+  CorrSelAdaptive(mw=0.02,mc=0.6,lb=280,n=10)     +1.395    2.074  0.144   -0.103
+  CorrSelAdaptive(mw=0.03,mc=0.5,lb=280,n=6)      +1.393    1.905  0.204   -0.103
+  CorrSelAdaptive(mw=0.03,mc=0.5,lb=280,n=6)      +1.393    1.905  0.204   -0.103
+  CorrSelAdaptive(mw=0.03,mc=0.5,lb=280,n=6)      +1.393    1.905  0.204   -0.103
+  CorrSelAdaptive(mw=0.03,mc=0.5,lb=280,n=6)      +1.393    1.905  0.204   -0.103
+  CorrSelAdaptive(mw=0.03,mc=0.5,lb=280,n=6)      +1.393    1.905  0.204   -0.103
+  ProperDDControl(mw=0.03,lb=280,mdd=0.08)        +1.390    2.274  0.122   -0.066
+  CorrSelect(mw=0.05,mc=0.7,n=12)                 +1.389    2.207  0.153   -0.128
+  CorrSelect(mw=0.05,mc=0.7,n=12)                 +1.389    2.207  0.153   -0.128
+  CorrSelect(mw=0.05,mc=0.7,n=12)                 +1.389    2.207  0.153   -0.128
+  CorrSelect(mw=0.05,mc=0.7,n=12)                 +1.389    2.207  0.153   -0.128
+  CorrSelect(mw=0.05,mc=0.7,n=12)                 +1.389    2.207  0.153   -0.128
+  CorrSelect(mw=0.05,mc=0.7,n=12)                 +1.389    2.207  0.153   -0.128
+  ProperDecay(mw=0.05,lb=240,d=2,hl=60)           +1.386    2.305  0.157   -0.080
+  SelectSharpe(n=12,d=3)                          +1.386    2.722  0.099   -0.150
+  SelectSharpe(n=14,d=2)                          +1.383    2.666  0.128   -0.143
+  RegimeScaled(mw=0.03,lb=240,hl=90)              +1.368    2.213  0.127   -0.063
+  CorrSelAdaptive(mw=0.02,mc=0.4,lb=280,n=6)      +1.360    1.987  0.155   -0.111
+  CorrSelAdaptive(mw=0.02,mc=0.4,lb=280,n=6)      +1.360    1.987  0.155   -0.111
+  CorrSelAdaptive(mw=0.02,mc=0.4,lb=280,n=6)      +1.360    1.987  0.155   -0.111
+  CorrSelAdaptive(mw=0.02,mc=0.4,lb=280,n=6)      +1.360    1.987  0.155   -0.111
+  CorrSelAdaptive(mw=0.02,mc=0.4,lb=280,n=6)      +1.360    1.987  0.155   -0.111
+  ProperDecay(mw=0.05,lb=240,d=2,hl=30)           +1.346    2.229  0.154   -0.083
+  ProperDecay(mw=0.03,lb=240,d=2,hl=90)           +1.339    2.144  0.127   -0.063
+  ProperAdaptive(mw=0.02,lb=180)                  +1.339    2.041  0.122   -0.055
+  ProperDecay(mw=0.05,lb=280,d=3,hl=30)           +1.334    2.391  0.132   -0.083
+  CorrSelAdaptive(mw=0.02,mc=0.4,lb=240,n=6)      +1.329    2.012  0.154   -0.137
+  CorrSelAdaptive(mw=0.02,mc=0.4,lb=240,n=6)      +1.329    2.012  0.154   -0.137
+  CorrSelAdaptive(mw=0.02,mc=0.4,lb=240,n=6)      +1.329    2.012  0.154   -0.137
+  CorrSelAdaptive(mw=0.02,mc=0.4,lb=240,n=6)      +1.329    2.012  0.154   -0.137
+  CorrSelAdaptive(mw=0.02,mc=0.4,lb=240,n=6)      +1.329    2.012  0.154   -0.137
+  CorrSelAdaptive(mw=0.03,mc=0.4,lb=240,n=6)      +1.326    1.843  0.207   -0.145
+  CorrSelAdaptive(mw=0.03,mc=0.4,lb=240,n=6)      +1.326    1.843  0.207   -0.145
+  CorrSelAdaptive(mw=0.03,mc=0.4,lb=240,n=6)      +1.326    1.843  0.207   -0.145
+  CorrSelAdaptive(mw=0.03,mc=0.4,lb=240,n=6)      +1.326    1.843  0.207   -0.145
+  CorrSelAdaptive(mw=0.03,mc=0.4,lb=240,n=6)      +1.326    1.843  0.207   -0.145
+  SelectSharpe(n=15,d=2)                          +1.309    2.490  0.124   -0.143
+  CorrSelect(mw=0.08,mc=0.4,n=7)                  +1.302    1.699  0.239   -0.114
+  CorrSelect(mw=0.08,mc=0.4,n=7)                  +1.302    1.699  0.239   -0.114
+  CorrSelect(mw=0.08,mc=0.4,n=7)                  +1.302    1.699  0.239   -0.114
+  CorrSelect(mw=0.08,mc=0.4,n=7)                  +1.302    1.699  0.239   -0.114
+  CorrSelect(mw=0.08,mc=0.4,n=7)                  +1.302    1.699  0.239   -0.114
+  CorrSelect(mw=0.08,mc=0.4,n=7)                  +1.302    1.699  0.239   -0.114
+  ProperAdaptive(mw=0.05,lb=180)                  +1.284    1.801  0.205   -0.089
+  RegimeScaled(mw=0.03,lb=240,hl=60)              +1.277    2.023  0.123   -0.064
+  ProperDDControl(mw=0.02,lb=280,mdd=0.03)        +1.268    1.713  0.089   -0.054
+  CorrSelAdaptive(mw=0.03,mc=0.5,lb=240,n=6)      +1.265    1.722  0.204   -0.140
+  CorrSelAdaptive(mw=0.03,mc=0.5,lb=240,n=6)      +1.265    1.722  0.204   -0.140
+  CorrSelAdaptive(mw=0.03,mc=0.5,lb=240,n=6)      +1.265    1.722  0.204   -0.140
+  CorrSelAdaptive(mw=0.03,mc=0.5,lb=240,n=6)      +1.265    1.722  0.204   -0.140
+  CorrSelAdaptive(mw=0.03,mc=0.5,lb=240,n=6)      +1.265    1.722  0.204   -0.140
+  ProperAdaptive(mw=0.03,lb=280)                  +1.256    1.707  0.165   -0.064
+  CorrSelAdaptive(mw=0.03,mc=0.4,lb=180,n=6)      +1.254    1.733  0.207   -0.149
+  CorrSelAdaptive(mw=0.03,mc=0.4,lb=180,n=6)      +1.254    1.733  0.207   -0.149
+  CorrSelAdaptive(mw=0.03,mc=0.4,lb=180,n=6)      +1.254    1.733  0.207   -0.149
+  CorrSelAdaptive(mw=0.03,mc=0.4,lb=180,n=6)      +1.254    1.733  0.207   -0.149
+  CorrSelAdaptive(mw=0.03,mc=0.4,lb=180,n=6)      +1.254    1.733  0.207   -0.149
+  SelectSharpe(n=13,d=3)                          +1.251    2.331  0.099   -0.152
+  ProperDecay(mw=0.05,lb=240,d=2,hl=90)           +1.250    1.952  0.160   -0.078
+  CorrSelect(mw=0.03,mc=0.6,n=8)                  +1.249    1.739  0.139   -0.084
+  CorrSelect(mw=0.03,mc=0.6,n=8)                  +1.249    1.739  0.139   -0.084
+  CorrSelect(mw=0.03,mc=0.6,n=8)                  +1.249    1.739  0.139   -0.084
+  CorrSelect(mw=0.03,mc=0.6,n=8)                  +1.249    1.739  0.139   -0.084
+  CorrSelect(mw=0.03,mc=0.6,n=8)                  +1.249    1.739  0.139   -0.084
+  CorrSelect(mw=0.03,mc=0.6,n=8)                  +1.249    1.739  0.139   -0.084
+  ProperDecay(mw=0.03,lb=240,d=2,hl=60)           +1.249    1.957  0.123   -0.064
+  CorrSelAdaptive(mw=0.02,mc=0.5,lb=180,n=7)      +1.247    1.908  0.147   -0.146
+  CorrSelAdaptive(mw=0.02,mc=0.5,lb=180,n=7)      +1.247    1.908  0.147   -0.146
+  CorrSelAdaptive(mw=0.02,mc=0.5,lb=180,n=7)      +1.247    1.908  0.147   -0.146
+  CorrSelAdaptive(mw=0.02,mc=0.5,lb=180,n=7)      +1.247    1.908  0.147   -0.146
+  CorrSelAdaptive(mw=0.02,mc=0.5,lb=180,n=7)      +1.247    1.908  0.147   -0.146
+  ProperAdaptive(mw=0.05,lb=280)                  +1.243    1.694  0.209   -0.083
+  ProperDecay(mw=0.03,lb=280,d=4,hl=90)           +1.240    1.905  0.097   -0.074
+  ProperDecay(mw=0.03,lb=280,d=4,hl=30)           +1.240    1.917  0.092   -0.080
+  ProperDecay(mw=0.03,lb=280,d=4,hl=60)           +1.233    1.893  0.094   -0.077
+  CorrSelAdaptive(mw=0.03,mc=0.6,lb=180,n=8)      +1.230    1.702  0.195   -0.123
+  CorrSelAdaptive(mw=0.03,mc=0.6,lb=180,n=8)      +1.230    1.702  0.195   -0.123
+  CorrSelAdaptive(mw=0.03,mc=0.6,lb=180,n=8)      +1.230    1.702  0.195   -0.123
+  CorrSelAdaptive(mw=0.03,mc=0.6,lb=180,n=8)      +1.230    1.702  0.195   -0.123
+  CorrSelAdaptive(mw=0.03,mc=0.6,lb=180,n=8)      +1.230    1.702  0.195   -0.123
+  CorrSelAdaptive(mw=0.02,mc=0.6,lb=240,n=10)     +1.219    1.788  0.141   -0.135
+  CorrSelAdaptive(mw=0.02,mc=0.6,lb=240,n=10)     +1.219    1.788  0.141   -0.135
+  CorrSelAdaptive(mw=0.02,mc=0.6,lb=240,n=10)     +1.219    1.788  0.141   -0.135
+  CorrSelAdaptive(mw=0.02,mc=0.6,lb=240,n=10)     +1.219    1.788  0.141   -0.135
+  CorrSelAdaptive(mw=0.02,mc=0.6,lb=240,n=10)     +1.219    1.788  0.141   -0.135
+  ProperEqual(mw=0.08)                            +1.217    1.968  0.159   -0.148
+  ProperAdaptive(mw=0.05,lb=240)                  +1.211    1.641  0.206   -0.093
+  ProperDecay(mw=0.05,lb=280,d=4,hl=30)           +1.197    2.080  0.116   -0.091
+  CorrSelAdaptive(mw=0.02,mc=0.4,lb=180,n=6)      +1.188    1.789  0.152   -0.145
+  CorrSelAdaptive(mw=0.02,mc=0.4,lb=180,n=6)      +1.188    1.789  0.152   -0.145
+  CorrSelAdaptive(mw=0.02,mc=0.4,lb=180,n=6)      +1.188    1.789  0.152   -0.145
+  CorrSelAdaptive(mw=0.02,mc=0.4,lb=180,n=6)      +1.188    1.789  0.152   -0.145
+  CorrSelAdaptive(mw=0.02,mc=0.4,lb=180,n=6)      +1.188    1.789  0.152   -0.145
+  ProperDecay(mw=0.05,lb=280,d=2,hl=90)           +1.186    1.789  0.163   -0.078
+  ProperDDControl(mw=0.02,lb=240,mdd=0.08)        +1.178    1.640  0.092   -0.065
+  RegimeScaled(mw=0.03,lb=240,hl=30)              +1.174    1.813  0.120   -0.065
+  ProperAdaptive(mw=0.05,lb=180)                  +1.163    1.566  0.201   -0.088
+  CorrSelect(mw=0.03,mc=0.4,n=6)                  +1.161    1.441  0.158   -0.079
+  CorrSelect(mw=0.03,mc=0.4,n=6)                  +1.161    1.441  0.158   -0.079
+  CorrSelect(mw=0.03,mc=0.4,n=6)                  +1.161    1.441  0.158   -0.079
+  CorrSelect(mw=0.03,mc=0.4,n=6)                  +1.161    1.441  0.158   -0.079
+  CorrSelect(mw=0.03,mc=0.4,n=6)                  +1.161    1.441  0.158   -0.079
+  CorrSelect(mw=0.03,mc=0.4,n=6)                  +1.161    1.441  0.158   -0.079
+  CorrSelAdaptive(mw=0.03,mc=0.5,lb=180,n=6)      +1.161    1.557  0.202   -0.145
+  CorrSelAdaptive(mw=0.03,mc=0.5,lb=180,n=6)      +1.161    1.557  0.202   -0.145
+  CorrSelAdaptive(mw=0.03,mc=0.5,lb=180,n=6)      +1.161    1.557  0.202   -0.145
+  CorrSelAdaptive(mw=0.03,mc=0.5,lb=180,n=6)      +1.161    1.557  0.202   -0.145
+  CorrSelAdaptive(mw=0.03,mc=0.5,lb=180,n=6)      +1.161    1.557  0.202   -0.145
+  ProperAdaptive(mw=0.03,lb=240)                  +1.159    1.549  0.161   -0.067
+  ProperAdaptive(mw=0.05,lb=240)                  +1.156    1.551  0.201   -0.087
+  ProperDecay(mw=0.03,lb=240,d=2,hl=30)           +1.147    1.751  0.120   -0.065
+  ProperDecay(mw=0.03,lb=280,d=3,hl=90)           +1.131    1.670  0.110   -0.068
+  ProperAdaptive(mw=0.02,lb=240)                  +1.129    1.601  0.120   -0.065
+  ProperDecay(mw=0.03,lb=280,d=3,hl=30)           +1.110    1.635  0.104   -0.074
+  ProperDecay(mw=0.05,lb=280,d=3,hl=60)           +1.104    1.775  0.135   -0.086
+  ProperDecay(mw=0.03,lb=280,d=3,hl=60)           +1.087    1.578  0.107   -0.070
+  CorrSelect(mw=0.02,mc=0.3,n=5)                  +1.084    1.319  0.103   -0.071
+  CorrSelect(mw=0.02,mc=0.3,n=5)                  +1.084    1.319  0.103   -0.071
+  CorrSelect(mw=0.02,mc=0.3,n=5)                  +1.084    1.319  0.103   -0.071
+  CorrSelect(mw=0.02,mc=0.3,n=5)                  +1.084    1.319  0.103   -0.071
+  CorrSelect(mw=0.02,mc=0.3,n=5)                  +1.084    1.319  0.103   -0.071
+  CorrSelect(mw=0.02,mc=0.3,n=5)                  +1.084    1.319  0.103   -0.071
+  QPOptimal(mw=0.05,lb=120,rb=60)                 +1.078    1.410  0.191   -0.103
+  ProperDDControl(mw=0.03,lb=280,mdd=0.05)        +1.074    1.533  0.120   -0.062
+  ProperDecay(mw=0.05,lb=240,d=3,hl=30)           +1.072    1.735  0.129   -0.086
+  ProperDDControl(mw=0.02,lb=240,mdd=0.05)        +1.072    1.351  0.089   -0.057
+  SmoothAdaptive(lb=240,hl=30)                    +1.064    1.227  0.266   -0.093
+  SmoothAdaptive(lb=240,hl=30)                    +1.064    1.227  0.266   -0.093
+  ProperDecay(mw=0.02,lb=240,d=3,hl=30)           +1.060    1.407  0.079   -0.066
+  ProperEqual(mw=0.02)                            +1.059    1.268  0.063   -0.062
+  ProperAdaptive(mw=0.03,lb=180)                  +1.053    1.366  0.159   -0.064
+  ProperDecay(mw=0.05,lb=240,d=3,hl=60)           +1.053    1.670  0.132   -0.093
+  ProperDDControl(mw=0.02,lb=240,mdd=0.03)        +1.044    1.279  0.087   -0.054
+  SmoothAdaptive(lb=300,hl=30)                    +1.032    1.177  0.264   -0.094
+  ProperDecay(mw=0.03,lb=240,d=4,hl=90)           +1.020    1.432  0.094   -0.075
+  QPOptimal(mw=0.02,lb=240,rb=60)                 +1.018    1.168  0.086   -0.058
+  CorrSelect(mw=0.02,mc=0.5,n=7)                  +1.013    1.180  0.099   -0.064
+  CorrSelect(mw=0.02,mc=0.5,n=7)                  +1.013    1.180  0.099   -0.064
+  CorrSelect(mw=0.02,mc=0.5,n=7)                  +1.013    1.180  0.099   -0.064
+  CorrSelect(mw=0.02,mc=0.5,n=7)                  +1.013    1.180  0.099   -0.064
+  CorrSelect(mw=0.02,mc=0.5,n=7)                  +1.013    1.180  0.099   -0.064
+  CorrSelect(mw=0.02,mc=0.5,n=7)                  +1.013    1.180  0.099   -0.064
+  ProperDecay(mw=0.02,lb=240,d=4,hl=30)           +1.008    1.280  0.070   -0.054
+  ProperAdaptive(mw=0.03,lb=240)                  +1.001    1.292  0.156   -0.063
+  ProperDecay(mw=0.05,lb=280,d=4,hl=60)           +1.000    1.584  0.119   -0.096
+  ProperDDControl(mw=0.03,lb=240,mdd=0.08)        +0.991    1.392  0.119   -0.065
+  RiskParity(lb=240)                              +0.969    1.083  0.267   -0.097
+  ProperDecay(mw=0.03,lb=240,d=4,hl=60)           +0.950    1.292  0.092   -0.078
+  ProperDecay(mw=0.03,lb=240,d=3,hl=90)           +0.925    1.245  0.107   -0.069
+  ProperDecay(mw=0.05,lb=240,d=3,hl=90)           +0.920    1.350  0.134   -0.097
+  SmoothAdaptive(lb=240,hl=60)                    +0.918    0.976  0.268   -0.095
+  ProperAdaptive(mw=0.02,lb=180)                  +0.913    1.173  0.120   -0.072
+  ProperDecay(mw=0.05,lb=280,d=3,hl=90)           +0.913    1.317  0.137   -0.088
+  ProperDecay(mw=0.05,lb=240,d=4,hl=60)           +0.903    1.357  0.116   -0.108
+  Equal-weight                                    +0.884    1.072  0.204   -0.148
+  ProperAdaptive(mw=0.03,lb=180)                  +0.872    1.042  0.156   -0.062
+  ProperEqual(mw=0.03)                            +0.862    1.095  0.087   -0.085
+  ProperDecay(mw=0.03,lb=240,d=3,hl=60)           +0.860    1.122  0.104   -0.072
+  CorrSelAdaptive(mw=0.02,mc=0.6,lb=180,n=10)     +0.858    1.084  0.138   -0.139
+  CorrSelAdaptive(mw=0.02,mc=0.6,lb=180,n=10)     +0.858    1.084  0.138   -0.139
+  CorrSelAdaptive(mw=0.02,mc=0.6,lb=180,n=10)     +0.858    1.084  0.138   -0.139
+  CorrSelAdaptive(mw=0.02,mc=0.6,lb=180,n=10)     +0.858    1.084  0.138   -0.139
+  CorrSelAdaptive(mw=0.02,mc=0.6,lb=180,n=10)     +0.858    1.084  0.138   -0.139
+  ProperDecay(mw=0.05,lb=240,d=4,hl=30)           +0.854    1.244  0.113   -0.103
+  ProperDecay(mw=0.03,lb=240,d=3,hl=30)           +0.847    1.104  0.101   -0.073
+  ProperDecay(mw=0.05,lb=280,d=4,hl=90)           +0.842    1.219  0.121   -0.099
+  ProperDecay(mw=0.03,lb=240,d=4,hl=30)           +0.816    1.034  0.090   -0.078
+  CorrSelect(mw=0.03,mc=0.7,n=12)                 +0.803    0.942  0.106   -0.099
+  CorrSelect(mw=0.03,mc=0.7,n=12)                 +0.803    0.942  0.106   -0.099
+  CorrSelect(mw=0.03,mc=0.7,n=12)                 +0.803    0.942  0.106   -0.099
+  CorrSelect(mw=0.03,mc=0.7,n=12)                 +0.803    0.942  0.106   -0.099
+  CorrSelect(mw=0.03,mc=0.7,n=12)                 +0.803    0.942  0.106   -0.099
+  CorrSelect(mw=0.03,mc=0.7,n=12)                 +0.803    0.942  0.106   -0.099
+  ProperDecay(mw=0.05,lb=240,d=4,hl=90)           +0.802    1.136  0.118   -0.110
+  SmoothAdaptive(lb=300,hl=60)                    +0.801    0.797  0.267   -0.096
+  Shrinkage(lb=240,s=0.5)                         +0.790    0.832  0.250   -0.124
+  QPOptimal(mw=0.05,lb=120,rb=30)                 +0.788    0.873  0.198   -0.111
+  QPOptimal(mw=0.05,lb=240,rb=60)                 +0.785    0.887  0.188   -0.104
+  QPOptimal(mw=0.05,lb=180,rb=30)                 +0.744    0.824  0.193   -0.113
+  ProperDDControl(mw=0.03,lb=240,mdd=0.05)        +0.735    0.869  0.117   -0.062
+  ProperDDControl(mw=0.03,lb=280,mdd=0.03)        +0.734    0.858  0.117   -0.065
+  ProperEqual(mw=0.05)                            +0.715    0.955  0.127   -0.133
+  CorrSelect(mw=0.02,mc=0.7,n=12)                 +0.714    0.681  0.075   -0.072
+  CorrSelect(mw=0.02,mc=0.7,n=12)                 +0.714    0.681  0.075   -0.072
+  CorrSelect(mw=0.02,mc=0.7,n=12)                 +0.714    0.681  0.075   -0.072
+  CorrSelect(mw=0.02,mc=0.7,n=12)                 +0.714    0.681  0.075   -0.072
+  CorrSelect(mw=0.02,mc=0.7,n=12)                 +0.714    0.681  0.075   -0.072
+  CorrSelect(mw=0.02,mc=0.7,n=12)                 +0.714    0.681  0.075   -0.072
+  QPOptimal(mw=0.03,lb=240,rb=60)                 +0.711    0.790  0.124   -0.077
+  QPOptimal(mw=0.05,lb=300,rb=30)                 +0.710    0.772  0.181   -0.144
+  QPOptimal(mw=0.03,lb=300,rb=15)                 +0.708    0.768  0.121   -0.092
+  Top-5(lb=240)                                   +0.665    0.562  0.331   -0.101
+  QPOptimal(mw=0.05,lb=300,rb=15)                 +0.634    0.641  0.182   -0.142
+  Adaptive(lb=240)                                +0.621    0.550  0.281   -0.101
+  Momentum(lb=240)                                +0.621    0.550  0.281   -0.101
+  CorrSelect(mw=0.02,mc=0.6,n=10)                 +0.587    0.500  0.081   -0.057
+  CorrSelect(mw=0.02,mc=0.6,n=10)                 +0.587    0.500  0.081   -0.057
+  CorrSelect(mw=0.02,mc=0.6,n=10)                 +0.587    0.500  0.081   -0.057
+  CorrSelect(mw=0.02,mc=0.6,n=10)                 +0.587    0.500  0.081   -0.057
+  CorrSelect(mw=0.02,mc=0.6,n=10)                 +0.587    0.500  0.081   -0.057
+  CorrSelect(mw=0.02,mc=0.6,n=10)                 +0.587    0.500  0.081   -0.057
+  QPOptimal(mw=0.03,lb=300,rb=30)                 +0.578    0.567  0.120   -0.098
+  QPOptimal(mw=0.03,lb=120,rb=60)                 +0.529    0.516  0.123   -0.091
+  QPOptimal(mw=0.03,lb=240,rb=30)                 +0.527    0.517  0.122   -0.080
+  QPOptimal(mw=0.02,lb=300,rb=15)                 +0.504    0.404  0.085   -0.073
+  QPOptimal(mw=0.03,lb=240,rb=15)                 +0.481    0.455  0.123   -0.084
+  RankDecay(d=3)                                  +0.469    0.513  0.133   -0.156
+  ProperDDControl(mw=0.03,lb=240,mdd=0.03)        +0.462    0.428  0.115   -0.065
+  CorrSelect(mw=0.02,mc=0.4,n=6)                  +0.453    0.349  0.116   -0.068
+  CorrSelect(mw=0.02,mc=0.4,n=6)                  +0.453    0.349  0.116   -0.068
+  CorrSelect(mw=0.02,mc=0.4,n=6)                  +0.453    0.349  0.116   -0.068
+  CorrSelect(mw=0.02,mc=0.4,n=6)                  +0.453    0.349  0.116   -0.068
+  CorrSelect(mw=0.02,mc=0.4,n=6)                  +0.453    0.349  0.116   -0.068
+  CorrSelect(mw=0.02,mc=0.4,n=6)                  +0.453    0.349  0.116   -0.068
+  QPOptimal(mw=0.05,lb=300,rb=60)                 +0.445    0.382  0.182   -0.144
+  QPOptimal(mw=0.05,lb=180,rb=15)                 +0.422    0.338  0.198   -0.106
+  QPOptimal(mw=0.05,lb=180,rb=60)                 +0.412    0.344  0.189   -0.121
+  QPOptimal(mw=0.02,lb=240,rb=30)                 +0.409    0.302  0.083   -0.064
+  QPOptimal(mw=0.03,lb=180,rb=60)                 +0.409    0.342  0.130   -0.075
+  QPOptimal(mw=0.03,lb=300,rb=60)                 +0.394    0.324  0.123   -0.096
+  IC-weighted(lb=60)                              +0.382    0.266  0.289   -0.129
+  QPOptimal(mw=0.05,lb=240,rb=30)                 +0.355    0.278  0.184   -0.117
+  QPOptimal(mw=0.03,lb=180,rb=30)                 +0.352    0.268  0.135   -0.075
+  QPOptimal(mw=0.02,lb=300,rb=30)                 +0.291    0.177  0.084   -0.077
+  QPOptimal(mw=0.03,lb=180,rb=15)                 +0.198    0.113  0.136   -0.076
+  QPOptimal(mw=0.02,lb=240,rb=15)                 +0.183    0.091  0.083   -0.063
+  QPOptimal(mw=0.02,lb=300,rb=60)                 +0.150    0.066  0.086   -0.071
+  QPOptimal(mw=0.03,lb=120,rb=30)                 +0.145    0.072  0.131   -0.113
+  QPOptimal(mw=0.05,lb=120,rb=15)                 +0.144    0.067  0.199   -0.121
+  QPOptimal(mw=0.02,lb=120,rb=60)                 +0.120    0.048  0.085   -0.072
+  QPOptimal(mw=0.05,lb=240,rb=15)                 +0.035    0.008  0.186   -0.110
+  RegimeDeadband(mw=0.02,lb=240,hl=30,db=0.001)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.02,lb=240,hl=30,db=0.002)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.02,lb=240,hl=30,db=0.004)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.02,lb=240,hl=60,db=0.001)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.02,lb=240,hl=60,db=0.002)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.02,lb=240,hl=60,db=0.004)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.02,lb=280,hl=30,db=0.001)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.02,lb=280,hl=30,db=0.002)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.02,lb=280,hl=30,db=0.004)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.02,lb=280,hl=60,db=0.001)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.02,lb=280,hl=60,db=0.002)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.02,lb=280,hl=60,db=0.004)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.02,lb=360,hl=30,db=0.001)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.02,lb=360,hl=30,db=0.002)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.02,lb=360,hl=30,db=0.004)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.02,lb=360,hl=60,db=0.001)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.02,lb=360,hl=60,db=0.002)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.02,lb=360,hl=60,db=0.004)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.03,lb=240,hl=30,db=0.001)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.03,lb=240,hl=30,db=0.002)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.03,lb=240,hl=30,db=0.004)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.03,lb=240,hl=60,db=0.001)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.03,lb=240,hl=60,db=0.002)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.03,lb=240,hl=60,db=0.004)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.03,lb=280,hl=30,db=0.001)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.03,lb=280,hl=30,db=0.002)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.03,lb=280,hl=30,db=0.004)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.03,lb=280,hl=60,db=0.001)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.03,lb=280,hl=60,db=0.002)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.03,lb=280,hl=60,db=0.004)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.03,lb=360,hl=30,db=0.001)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.03,lb=360,hl=30,db=0.002)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.03,lb=360,hl=30,db=0.004)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.03,lb=360,hl=60,db=0.001)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.03,lb=360,hl=60,db=0.002)   +0.000    0.000  0.000    0.000
+  RegimeDeadband(mw=0.03,lb=360,hl=60,db=0.004)   +0.000    0.000  0.000    0.000
+  QPOptimal(mw=0.02,lb=120,rb=30)                 -0.061   -0.018  0.090   -0.088
+  QPOptimal(mw=0.02,lb=180,rb=60)                 -0.115   -0.043  0.091   -0.071
+  QPOptimal(mw=0.03,lb=120,rb=15)                 -0.155   -0.079  0.131   -0.111
+  QPOptimal(mw=0.02,lb=120,rb=15)                 -0.285   -0.176  0.090   -0.085
+  QPOptimal(mw=0.02,lb=180,rb=15)                 -0.329   -0.215  0.093   -0.061
+  QPOptimal(mw=0.02,lb=180,rb=30)                 -0.357   -0.244  0.093   -0.070

@@ -1716,6 +1716,612 @@ def strategy_curated_adaptive(raw_signals, returns_pct, close, universe,
                     decay=decay), f"CuratedAdaptive(mw={max_wt},n={n_str},lb={lookback},hl={ema_halflife},d={decay})"
 
 
+# ============================================================================
+# BOOK-INSPIRED CVXPY QP STRATEGIES (Isichenko — Quantitative Portfolio Mgmt)
+# ============================================================================
+
+def _ledoit_wolf_shrink(cov: np.ndarray) -> np.ndarray:
+    """Ledoit-Wolf analytical shrinkage toward scaled identity.
+    Reduces noise in sample covariance for small-sample regimes.
+    Formula: C* = (1-rho)*C + rho*mu_hat*I  where mu_hat = tr(C)/n
+    Uses Oracle Approximating Shrinkage (OAS) approximation."""
+    n = cov.shape[0]
+    tr_c = np.trace(cov)
+    tr_c2 = np.trace(cov @ cov)
+    mu_hat = tr_c / n
+    # OAS shrinkage intensity
+    rho_num = (1.0 - 2.0 / n) * tr_c2 + tr_c ** 2
+    rho_den = (n + 1.0 - 2.0 / n) * (tr_c2 - tr_c ** 2 / n)
+    rho = np.clip(rho_num / (rho_den + 1e-16), 0.0, 1.0)
+    return (1.0 - rho) * cov + rho * mu_hat * np.eye(n)
+
+
+def strategy_cvxpy_mv_utility(raw_signals, returns_pct, close, universe,
+                               max_wt=0.02, lookback=280, rebal_every=12,
+                               risk_aversion=2.0, tc_penalty=0.5,
+                               decay=2, ema_halflife=60, **kwargs):
+    """
+    CVXPY Mean-Variance Utility Optimizer (Isichenko Eq 6.1 / Fig 3.2)
+
+    Implements the canonical institutional QP:
+      max_alpha  alpha'*mu - (k/2)*alpha'*C*alpha - lambda_tc * ||alpha - alpha_prev||_1
+
+    Where:
+      mu    = rolling mean factor return vector (expected PnL)
+      C     = rolling factor PnL covariance (Ledoit-Wolf shrunk)
+      k     = risk_aversion  (controls Sharpe vs raw return tradeoff)
+      lambda_tc = tc_penalty (L1 cost on changes, equivalent to bid-ask spread)
+
+    Non-negativity enforced (long-only alpha weights per Isichenko Fig 3.2).
+    Solved via CVXPY with CLARABEL (or ECOS/SCS/OSQP fallback).
+    """
+    import cvxpy as cp
+
+    normed_signals = {}
+    for alpha_id, raw_signal in raw_signals.items():
+        normed_signals[alpha_id] = proper_normalize_alpha(raw_signal, universe, max_wt=max_wt)
+
+    fr_df = compute_factor_returns(normed_signals, returns_pct)
+    alpha_ids = list(fr_df.columns)
+    K = len(alpha_ids)
+    T = len(fr_df)
+    dates = fr_df.index
+
+    weights_arr = np.zeros((T, K))
+    prev_w = np.ones(K) / K
+
+    for t in range(lookback, T, rebal_every):
+        window = fr_df.iloc[max(0, t - lookback):t].dropna(axis=1, how='all')
+        if len(window) < 30 or window.shape[1] < 2:
+            weights_arr[t:min(t + rebal_every, T)] = prev_w
+            continue
+
+        # Align active columns
+        active_ids = list(window.columns)
+        K_a = len(active_ids)
+        mu = window.mean().values              # (K_a,)
+        cov_raw = window.cov().values          # (K_a, K_a)
+        cov = _ledoit_wolf_shrink(cov_raw) + 1e-8 * np.eye(K_a)
+
+        alpha_prev_active = np.array([prev_w[alpha_ids.index(aid)] for aid in active_ids])
+
+        # CVXPY formulation: Isichenko Eq 6.1
+        alpha = cp.Variable(K_a, nonneg=True)   # long-only factor weights
+        delta = cp.Variable(K_a)                 # trade vector = alpha - alpha_prev
+
+        expected_return = mu @ alpha
+        risk_term = 0.5 * risk_aversion * cp.quad_form(alpha, cov)
+        tc_term = tc_penalty * cp.norm1(delta)   # L1 transaction cost
+
+        objective = cp.Maximize(expected_return - risk_term - tc_term)
+        constraints = [
+            cp.sum(alpha) == 1.0,
+            alpha <= 0.5,               # max 50% in one factor
+            delta == alpha - alpha_prev_active,
+        ]
+
+        prob = cp.Problem(objective, constraints)
+        try:
+            # Try solvers in order of preference: CLARABEL > ECOS > SCS
+            for solver in [cp.CLARABEL, cp.ECOS, cp.SCS]:
+                try:
+                    prob.solve(solver=solver, warm_start=True)
+                    if prob.status in ['optimal', 'optimal_inaccurate'] and alpha.value is not None:
+                        break
+                except Exception:
+                    continue
+
+            w = alpha.value
+            if w is None or not np.all(np.isfinite(w)):
+                w = alpha_prev_active
+            w = np.clip(w, 0, None)
+            wsum = w.sum()
+            w = w / wsum if wsum > 1e-10 else alpha_prev_active
+        except Exception:
+            w = alpha_prev_active
+
+        # Map back to full factor set
+        w_full = np.zeros(K)
+        for i, aid in enumerate(active_ids):
+            w_full[alpha_ids.index(aid)] = w[i]
+        prev_w = w_full
+        weights_arr[t:min(t + rebal_every, T)] = w_full
+
+    # Fill initial lookback
+    weights_arr[:lookback] = 1.0 / K
+
+    # EMA smooth to reduce weight churn
+    weights_df = pd.DataFrame(weights_arr, index=dates, columns=alpha_ids)
+    weights_smooth = weights_df.ewm(halflife=ema_halflife, min_periods=1).mean()
+    wsum = weights_smooth.sum(axis=1).replace(0, np.nan)
+    weights_norm = weights_smooth.div(wsum, axis=0).fillna(0)
+
+    combined = None
+    for alpha_id, normed in normed_signals.items():
+        w = weights_norm[alpha_id].values
+        ws = normed.multiply(w, axis=0)
+        combined = ws if combined is None else combined.add(ws, fill_value=0)
+
+    return simulate(combined, returns_pct, close, universe, max_wt=max_wt,
+                    decay=decay), f"CVXPYMVUtility(mw={max_wt},lb={lookback},k={risk_aversion},tc={tc_penalty},hl={ema_halflife})"
+
+
+def strategy_cvxpy_ledoit_sharpe(raw_signals, returns_pct, close, universe,
+                                  max_wt=0.02, lookback=280, rebal_every=12,
+                                  l2_lambda=0.01, decay=2, ema_halflife=60, **kwargs):
+    """
+    CVXPY Max-Sharpe with Ledoit-Wolf Covariance Shrinkage
+
+    Maximizes the Sharpe ratio of alpha combination weights:
+      max  mu'w / sqrt(w'Cw)  s.t. w >= 0, sum(w) = 1, max_wt per factor
+
+    Reformulated as equivalent convex QP (Cornuejols & Tutuncu, 2006):
+      min  y'Cy  s.t. mu'y = 1, y >= 0  then normalize: w = y / sum(y)
+
+    Covariance C is Ledoit-Wolf shrunk for stability.
+    L2 regularization lambda added to prevent degenerate concentrated bets.
+    Uses OSQP/CLARABEL (suitable for large-scale per Isichenko Chapter 6).
+    """
+    import cvxpy as cp
+
+    normed_signals = {}
+    for alpha_id, raw_signal in raw_signals.items():
+        normed_signals[alpha_id] = proper_normalize_alpha(raw_signal, universe, max_wt=max_wt)
+
+    fr_df = compute_factor_returns(normed_signals, returns_pct)
+    alpha_ids = list(fr_df.columns)
+    K = len(alpha_ids)
+    T = len(fr_df)
+    dates = fr_df.index
+
+    weights_arr = np.ones((T, K)) / K
+    prev_w = np.ones(K) / K
+
+    for t in range(lookback, T, rebal_every):
+        window = fr_df.iloc[max(0, t - lookback):t].dropna(axis=1, how='all')
+        if len(window) < 30 or window.shape[1] < 2:
+            weights_arr[t:min(t + rebal_every, T)] = prev_w
+            continue
+
+        active_ids = list(window.columns)
+        K_a = len(active_ids)
+        mu = window.mean().values
+
+        # Only proceed if at least some positive expected returns
+        if np.all(mu <= 0):
+            weights_arr[t:min(t + rebal_every, T)] = prev_w
+            continue
+
+        cov_raw = window.cov().values
+        # Ledoit-Wolf shrinkage
+        cov = _ledoit_wolf_shrink(cov_raw)
+        # L2 regularization (prevents ill-conditioning)
+        cov = cov + l2_lambda * np.eye(K_a) + 1e-8 * np.eye(K_a)
+
+        # Max-Sharpe reformulation: min y'Cy s.t. mu'y = 1, y >= 0
+        y = cp.Variable(K_a, nonneg=True)
+        objective = cp.Minimize(cp.quad_form(y, cov))
+        constraints = [mu @ y == 1.0]
+
+        prob = cp.Problem(objective, constraints)
+        try:
+            for solver in [cp.CLARABEL, cp.OSQP, cp.ECOS, cp.SCS]:
+                try:
+                    prob.solve(solver=solver)
+                    if prob.status in ['optimal', 'optimal_inaccurate'] and y.value is not None:
+                        break
+                except Exception:
+                    continue
+
+            y_val = y.value
+            if y_val is None or not np.all(np.isfinite(y_val)) or y_val.sum() < 1e-10:
+                raise ValueError('Solver failed')
+
+            # Normalize to get portfolio weights
+            w = np.clip(y_val, 0, None)
+            w = w / w.sum()
+        except Exception:
+            w = np.ones(K_a) / K_a
+
+        # Map back
+        w_full = np.zeros(K)
+        for i, aid in enumerate(active_ids):
+            w_full[alpha_ids.index(aid)] = w[i]
+        prev_w = w_full
+        weights_arr[t:min(t + rebal_every, T)] = w_full
+
+    weights_arr[:lookback] = 1.0 / K
+
+    weights_df = pd.DataFrame(weights_arr, index=dates, columns=alpha_ids)
+    weights_smooth = weights_df.ewm(halflife=ema_halflife, min_periods=1).mean()
+    wsum = weights_smooth.sum(axis=1).replace(0, np.nan)
+    weights_norm = weights_smooth.div(wsum, axis=0).fillna(0)
+
+    combined = None
+    for alpha_id, normed in normed_signals.items():
+        w = weights_norm[alpha_id].values
+        ws = normed.multiply(w, axis=0)
+        combined = ws if combined is None else combined.add(ws, fill_value=0)
+
+    return simulate(combined, returns_pct, close, universe, max_wt=max_wt,
+                    decay=decay), f"CVXPYLedoitSharpe(mw={max_wt},lb={lookback},l2={l2_lambda},hl={ema_halflife})"
+
+
+def strategy_cvxpy_regime_utility(raw_signals, returns_pct, close, universe,
+                                   max_wt=0.02, lookback=280, rebal_every=12,
+                                   base_risk_aversion=1.5, regime_scale=3.0,
+                                   decay=2, ema_halflife=60, **kwargs):
+    """
+    CVXPY Regime-Adaptive MV Utility (Isichenko + Regime Insight)
+
+    Fuses the book's MV utility formulation with the project's RegimeScaled insight:
+      Increases risk_aversion k proportionally to market volatility stress,
+      so the optimizer naturally reduces factor bets in volatile periods.
+
+      k(t) = base_k * (vol(t) / median_vol(t)) * regime_scale
+
+    At each rebalance, solves:
+      max_alpha  alpha'*mu - (k(t)/2)*alpha'*C*alpha
+      s.t. alpha >= 0, sum(alpha) = 1
+
+    This is equivalent to Isichenko's portfolio utility but with a time-varying
+    risk aversion that acts like a dynamic leverage control — raising it during
+    stress (like RegimeScaled vol_scalar) and lowering it during calm markets.
+    """
+    import cvxpy as cp
+
+    normed_signals = {}
+    for alpha_id, raw_signal in raw_signals.items():
+        normed_signals[alpha_id] = proper_normalize_alpha(raw_signal, universe, max_wt=max_wt)
+
+    fr_df = compute_factor_returns(normed_signals, returns_pct)
+    alpha_ids = list(fr_df.columns)
+    K = len(alpha_ids)
+    T = len(fr_df)
+    dates = fr_df.index
+
+    # Compute regime vol scalar (same as RegimeScaled)
+    market_returns = returns_pct.mean(axis=1)
+    market_vol = market_returns.rolling(window=84, min_periods=20).std()
+    market_vol_smooth = market_vol.ewm(halflife=42).mean()
+    median_vol = market_vol_smooth.expanding().median().clip(lower=1e-4)
+    # vol_ratio > 1 means high stress → increase risk aversion → reduce bets
+    vol_ratio = (market_vol_smooth / median_vol).clip(lower=0.4, upper=4.0)
+    vol_ratio = vol_ratio.ewm(halflife=30).mean()
+    # Align to fr_df index
+    vol_ratio = vol_ratio.reindex(dates).ffill().fillna(1.0)
+
+    weights_arr = np.ones((T, K)) / K
+    prev_w = np.ones(K) / K
+
+    for t in range(lookback, T, rebal_every):
+        window = fr_df.iloc[max(0, t - lookback):t].dropna(axis=1, how='all')
+        if len(window) < 30 or window.shape[1] < 2:
+            weights_arr[t:min(t + rebal_every, T)] = prev_w
+            continue
+
+        active_ids = list(window.columns)
+        K_a = len(active_ids)
+        mu = window.mean().values
+        cov_raw = window.cov().values
+        cov = _ledoit_wolf_shrink(cov_raw) + 1e-8 * np.eye(K_a)
+
+        # Time-varying risk aversion: higher during vol stress
+        k_t = base_risk_aversion * vol_ratio.iloc[t] * regime_scale
+
+        alpha = cp.Variable(K_a, nonneg=True)
+        objective = cp.Maximize(mu @ alpha - 0.5 * k_t * cp.quad_form(alpha, cov))
+        constraints = [cp.sum(alpha) == 1.0, alpha <= 0.5]
+
+        prob = cp.Problem(objective, constraints)
+        try:
+            for solver in [cp.CLARABEL, cp.ECOS, cp.SCS]:
+                try:
+                    prob.solve(solver=solver)
+                    if prob.status in ['optimal', 'optimal_inaccurate'] and alpha.value is not None:
+                        break
+                except Exception:
+                    continue
+
+            w = alpha.value
+            if w is None or not np.all(np.isfinite(w)):
+                w = prev_w[[alpha_ids.index(aid) for aid in active_ids]]
+            w = np.clip(w, 0, None)
+            wsum = w.sum()
+            w = w / wsum if wsum > 1e-10 else np.ones(K_a) / K_a
+        except Exception:
+            w = np.ones(K_a) / K_a
+
+        w_full = np.zeros(K)
+        for i, aid in enumerate(active_ids):
+            w_full[alpha_ids.index(aid)] = w[i]
+        prev_w = w_full
+        weights_arr[t:min(t + rebal_every, T)] = w_full
+
+    weights_arr[:lookback] = 1.0 / K
+
+    weights_df = pd.DataFrame(weights_arr, index=dates, columns=alpha_ids)
+    weights_smooth = weights_df.ewm(halflife=ema_halflife, min_periods=1).mean()
+    wsum = weights_smooth.sum(axis=1).replace(0, np.nan)
+    weights_norm = weights_smooth.div(wsum, axis=0).fillna(0)
+
+    combined = None
+    for alpha_id, normed in normed_signals.items():
+        w = weights_norm[alpha_id].values
+        ws = normed.multiply(w, axis=0)
+        combined = ws if combined is None else combined.add(ws, fill_value=0)
+
+    return simulate(combined, returns_pct, close, universe, max_wt=max_wt,
+                    decay=decay), f"CVXPYRegimeUtil(mw={max_wt},lb={lookback},k={base_risk_aversion},rs={regime_scale},hl={ema_halflife})"
+
+
+# ============================================================================
+# MORE BOOK-INSPIRED STRATEGIES (Isichenko Chs 3, 4, 6, 7)
+# ============================================================================
+
+def strategy_kelly_optimal(raw_signals, returns_pct, close, universe,
+                            max_wt=0.02, lookback=280, rebal_every=12,
+                            kelly_fraction=0.5, decay=2, ema_halflife=60, **kwargs):
+    """
+    Kelly-Optimal Factor Weights (Isichenko Sec 6.9)
+
+    Unconstrained Kelly-optimal: alpha* = Sigma^{-1} * mu
+    Maximises E[log(wealth)] — the long-run compound growth rate.
+
+    Practical implementation uses 'half-Kelly' (kelly_fraction=0.5) to
+    account for parameter estimation error (standard institutional practice).
+    Non-negativity constraint applied; weights normalised to sum to 1.
+    Covariance uses Ledoit-Wolf shrinkage for numerical stability.
+    """
+    normed_signals = {}
+    for alpha_id, raw_signal in raw_signals.items():
+        normed_signals[alpha_id] = proper_normalize_alpha(raw_signal, universe, max_wt=max_wt)
+
+    fr_df = compute_factor_returns(normed_signals, returns_pct)
+    alpha_ids = list(fr_df.columns)
+    K = len(alpha_ids)
+    T = len(fr_df)
+    dates = fr_df.index
+
+    weights_arr = np.ones((T, K)) / K
+    prev_w = np.ones(K) / K
+
+    for t in range(lookback, T, rebal_every):
+        window = fr_df.iloc[max(0, t - lookback):t].dropna(axis=1, how='all')
+        if len(window) < 30 or window.shape[1] < 2:
+            weights_arr[t:min(t + rebal_every, T)] = prev_w
+            continue
+
+        active_ids = list(window.columns)
+        K_a = len(active_ids)
+        mu = window.mean().values
+        cov_raw = window.cov().values
+        cov = _ledoit_wolf_shrink(cov_raw) + 1e-8 * np.eye(K_a)
+
+        try:
+            # Kelly: alpha* = Sigma^{-1} * mu
+            kelly_w = np.linalg.solve(cov, mu)      # more stable than inv(C)*mu
+            kelly_w = kelly_fraction * kelly_w
+            kelly_w = np.clip(kelly_w, 0, None)      # long-only projection
+            wsum = kelly_w.sum()
+            w = kelly_w / wsum if wsum > 1e-10 else np.ones(K_a) / K_a
+        except np.linalg.LinAlgError:
+            w = np.ones(K_a) / K_a
+
+        w_full = np.zeros(K)
+        for i, aid in enumerate(active_ids):
+            w_full[alpha_ids.index(aid)] = w[i]
+        prev_w = w_full
+        weights_arr[t:min(t + rebal_every, T)] = w_full
+
+    weights_arr[:lookback] = 1.0 / K
+    weights_df = pd.DataFrame(weights_arr, index=dates, columns=alpha_ids)
+    weights_smooth = weights_df.ewm(halflife=ema_halflife, min_periods=1).mean()
+    wsum = weights_smooth.sum(axis=1).replace(0, np.nan)
+    weights_norm = weights_smooth.div(wsum, axis=0).fillna(0)
+
+    combined = None
+    for alpha_id, normed in normed_signals.items():
+        w = weights_norm[alpha_id].values
+        ws = normed.multiply(w, axis=0)
+        combined = ws if combined is None else combined.add(ws, fill_value=0)
+
+    return simulate(combined, returns_pct, close, universe, max_wt=max_wt,
+                    decay=decay), f"KellyOptimal(mw={max_wt},lb={lookback},kf={kelly_fraction},hl={ema_halflife})"
+
+
+def strategy_min_variance_bayesian(raw_signals, returns_pct, close, universe,
+                                    max_wt=0.02, lookback=280, rebal_every=12,
+                                    decay=2, ema_halflife=60, **kwargs):
+    """
+    Minimum-Variance Bayesian Combination (Isichenko Sec 3.3)
+
+    Optimal Bayesian combination when expected returns are uncertain:
+    weight by inverse forecast covariance (precision weighting).
+
+      w* = Sigma^{-1} * 1 / (1' * Sigma^{-1} * 1)
+
+    Purely risk-driven — minimises portfolio variance regardless of mu.
+    Extremely robust to mean estimation error. Uses Ledoit-Wolf covariance.
+    """
+    normed_signals = {}
+    for alpha_id, raw_signal in raw_signals.items():
+        normed_signals[alpha_id] = proper_normalize_alpha(raw_signal, universe, max_wt=max_wt)
+
+    fr_df = compute_factor_returns(normed_signals, returns_pct)
+    alpha_ids = list(fr_df.columns)
+    K = len(alpha_ids)
+    T = len(fr_df)
+    dates = fr_df.index
+
+    weights_arr = np.ones((T, K)) / K
+    prev_w = np.ones(K) / K
+
+    for t in range(lookback, T, rebal_every):
+        window = fr_df.iloc[max(0, t - lookback):t].dropna(axis=1, how='all')
+        if len(window) < 30 or window.shape[1] < 2:
+            weights_arr[t:min(t + rebal_every, T)] = prev_w
+            continue
+
+        active_ids = list(window.columns)
+        K_a = len(active_ids)
+        cov_raw = window.cov().values
+        cov = _ledoit_wolf_shrink(cov_raw) + 1e-8 * np.eye(K_a)
+
+        try:
+            ones = np.ones(K_a)
+            # w* = Sigma^{-1} * 1 / (1' * Sigma^{-1} * 1)
+            cov_inv_ones = np.linalg.solve(cov, ones)
+            w_raw = cov_inv_ones / (ones @ cov_inv_ones)
+            w = np.clip(w_raw, 0, None)           # long-only projection
+            wsum = w.sum()
+            w = w / wsum if wsum > 1e-10 else ones / K_a
+        except np.linalg.LinAlgError:
+            w = np.ones(K_a) / K_a
+
+        w_full = np.zeros(K)
+        for i, aid in enumerate(active_ids):
+            w_full[alpha_ids.index(aid)] = w[i]
+        prev_w = w_full
+        weights_arr[t:min(t + rebal_every, T)] = w_full
+
+    weights_arr[:lookback] = 1.0 / K
+    weights_df = pd.DataFrame(weights_arr, index=dates, columns=alpha_ids)
+    weights_smooth = weights_df.ewm(halflife=ema_halflife, min_periods=1).mean()
+    wsum = weights_smooth.sum(axis=1).replace(0, np.nan)
+    weights_norm = weights_smooth.div(wsum, axis=0).fillna(0)
+
+    combined = None
+    for alpha_id, normed in normed_signals.items():
+        w = weights_norm[alpha_id].values
+        ws = normed.multiply(w, axis=0)
+        combined = ws if combined is None else combined.add(ws, fill_value=0)
+
+    return simulate(combined, returns_pct, close, universe, max_wt=max_wt,
+                    decay=decay), f"MinVarBayesian(mw={max_wt},lb={lookback},hl={ema_halflife})"
+
+
+def strategy_hrp(raw_signals, returns_pct, close, universe,
+                 max_wt=0.02, lookback=280, rebal_every=24,
+                 decay=2, ema_halflife=60, **kwargs):
+    """
+    Hierarchical Risk Parity (de Prado 2016, Isichenko Sec 3.5.3)
+
+    Allocates risk equal-weight across a hierarchical clustering of alphas.
+    Unlike MV optimisation, HRP:
+      1. Requires NO matrix inversion (numerically stable with 21 factors)
+      2. Naturally handles correlated alphas via clustering
+      3. Robust to covariance estimation error
+
+    Algorithm:
+      1. Build correlation-based distance matrix D_ij = sqrt(0.5*(1 - rho_ij))
+      2. Hierarchical clustering (single linkage) -> seriation order
+      3. Recursive bisection: at each split allocate proportional to inverse
+         cluster variance (equal risk contribution)
+    """
+    from scipy.cluster.hierarchy import linkage, leaves_list
+    from scipy.spatial.distance import squareform
+
+    normed_signals = {}
+    for alpha_id, raw_signal in raw_signals.items():
+        normed_signals[alpha_id] = proper_normalize_alpha(raw_signal, universe, max_wt=max_wt)
+
+    fr_df = compute_factor_returns(normed_signals, returns_pct)
+    alpha_ids = list(fr_df.columns)
+    K = len(alpha_ids)
+    T = len(fr_df)
+    dates = fr_df.index
+
+    def _hrp_weights(cov: np.ndarray, corr: np.ndarray) -> np.ndarray:
+        """Compute HRP weights from cov + corr matrices."""
+        n = cov.shape[0]
+        # Distance matrix from correlation: D = sqrt(0.5*(1 - rho))
+        dist = np.sqrt(np.clip(0.5 * (1.0 - corr), 0.0, 1.0))
+        np.fill_diagonal(dist, 0.0)
+
+        try:
+            condensed = squareform(dist, checks=False)
+            Z = linkage(condensed, method='single')
+            sort_ix = leaves_list(Z)       # seriation: quasi-diagonalise
+        except Exception:
+            sort_ix = np.arange(n)
+
+        # Recursive bisection over the seriated index
+        w = np.ones(n)
+        items = [list(sort_ix)]  # start with all items as one cluster
+
+        while items:
+            items = [i[j:k] for i in items
+                     for j, k in ((0, len(i) // 2), (len(i) // 2, len(i)))
+                     if len(i) > 1]         # split each cluster in half
+            for item in items:
+                item_arr = list(item)
+                left = item_arr[:len(item_arr) // 2]
+                right = item_arr[len(item_arr) // 2:]
+
+                # Cluster variance = w'Cw for each half
+                def _cluster_var(indices):
+                    sub_cov = cov[np.ix_(indices, indices)]
+                    sub_w = w[indices] / (w[indices].sum() + 1e-16)
+                    return float(sub_w @ sub_cov @ sub_w)
+
+                var_l = _cluster_var(left)
+                var_r = _cluster_var(right)
+
+                # Allocate inversely proportional to cluster variance
+                alpha_ = 1.0 - var_l / (var_l + var_r + 1e-16)
+                w[left] *= alpha_
+                w[right] *= (1.0 - alpha_)
+
+        w = np.clip(w, 0, None)
+        total = w.sum()
+        return w / total if total > 1e-10 else np.ones(n) / n
+
+    weights_arr = np.ones((T, K)) / K
+    prev_w = np.ones(K) / K
+
+    for t in range(lookback, T, rebal_every):
+        window = fr_df.iloc[max(0, t - lookback):t].dropna(axis=1, how='all')
+        if len(window) < 30 or window.shape[1] < 2:
+            weights_arr[t:min(t + rebal_every, T)] = prev_w
+            continue
+
+        active_ids = list(window.columns)
+        K_a = len(active_ids)
+        cov_raw = window.cov().values
+        cov = _ledoit_wolf_shrink(cov_raw) + 1e-8 * np.eye(K_a)
+        # Correlation from shrunk cov
+        std_diag = np.sqrt(np.diag(cov))
+        corr = cov / np.outer(std_diag, std_diag)
+        corr = np.clip(corr, -1.0, 1.0)
+
+        try:
+            w = _hrp_weights(cov, corr)
+        except Exception:
+            w = np.ones(K_a) / K_a
+
+        w_full = np.zeros(K)
+        for i, aid in enumerate(active_ids):
+            w_full[alpha_ids.index(aid)] = w[i]
+        prev_w = w_full
+        weights_arr[t:min(t + rebal_every, T)] = w_full
+
+    weights_arr[:lookback] = 1.0 / K
+    weights_df = pd.DataFrame(weights_arr, index=dates, columns=alpha_ids)
+    weights_smooth = weights_df.ewm(halflife=ema_halflife, min_periods=1).mean()
+    wsum = weights_smooth.sum(axis=1).replace(0, np.nan)
+    weights_norm = weights_smooth.div(wsum, axis=0).fillna(0)
+
+    combined = None
+    for alpha_id, normed in normed_signals.items():
+        w = weights_norm[alpha_id].values
+        ws = normed.multiply(w, axis=0)
+        combined = ws if combined is None else combined.add(ws, fill_value=0)
+
+    return simulate(combined, returns_pct, close, universe, max_wt=max_wt,
+                    decay=decay), f"HRP(mw={max_wt},lb={lookback},rb={rebal_every},hl={ema_halflife})"
+
+
 PROPER_STRATEGIES = {
     "proper_equal": strategy_proper_equal,
     "proper_adaptive": strategy_proper_adaptive,
@@ -1738,6 +2344,14 @@ PROPER_STRATEGIES = {
     "ridge_combine": strategy_ridge_combine,
     "qp_pnl_combine": strategy_qp_pnl_combine,
     "hierarchical_combine": strategy_hierarchical_combine,
+    # Book-inspired CVXPY strategies
+    "cvxpy_mv_utility": strategy_cvxpy_mv_utility,
+    "cvxpy_ledoit_sharpe": strategy_cvxpy_ledoit_sharpe,
+    "cvxpy_regime_utility": strategy_cvxpy_regime_utility,
+    # Isichenko Ch 3/4/6: Kelly, MinVar Bayesian, HRP
+    "kelly_optimal": strategy_kelly_optimal,
+    "min_var_bayesian": strategy_min_variance_bayesian,
+    "hrp": strategy_hrp,
 }
 
 # ============================================================================
@@ -1959,12 +2573,304 @@ def compare_all():
                         except Exception as e:
                             print(f"  ProperDD(mw={mw},lb={lb},mdd={mdd}) failed: {e}")
 
+        # ── CVXPY Book-Inspired Strategies (Isichenko) ─────────────────────────
+        # CVXPYMVUtility: Mean-variance utility with L1 turnover penalty
+        for mw in [0.02, 0.03]:
+            for lb in [240, 280]:
+                for k in [1.0, 2.0, 4.0]:
+                    for tc in [0.1, 0.5, 1.0]:
+                        for hl in [45, 90]:
+                            try:
+                                result, label = strategy_cvxpy_mv_utility(
+                                    raw_signals, returns_pct, close, universe,
+                                    max_wt=mw, lookback=lb, rebal_every=12,
+                                    risk_aversion=k, tc_penalty=tc,
+                                    decay=2, ema_halflife=hl)
+                                results.append((label, result.sharpe, result.fitness, result.turnover, result.max_drawdown))
+                            except Exception as e:
+                                print(f"  CVXPYMVUtil(mw={mw},lb={lb},k={k},tc={tc}) failed: {e}")
+
+        # CVXPYLedoitSharpe: Max-Sharpe with Ledoit-Wolf shrinkage
+        for mw in [0.02, 0.03]:
+            for lb in [240, 280]:
+                for l2 in [0.001, 0.01, 0.05]:
+                    for hl in [45, 90]:
+                        try:
+                            result, label = strategy_cvxpy_ledoit_sharpe(
+                                raw_signals, returns_pct, close, universe,
+                                max_wt=mw, lookback=lb, rebal_every=12,
+                                l2_lambda=l2, decay=2, ema_halflife=hl)
+                            results.append((label, result.sharpe, result.fitness, result.turnover, result.max_drawdown))
+                        except Exception as e:
+                            print(f"  CVXPYLedoitSharpe(mw={mw},lb={lb},l2={l2}) failed: {e}")
+
+        # CVXPYRegimeUtility: Regime-adaptive risk aversion (fuses MV utility + RegimeScaled)
+        for mw in [0.02, 0.03]:
+            for lb in [240, 280]:
+                for base_k in [1.0, 2.0]:
+                    for rs in [2.0, 3.0, 5.0]:
+                        for hl in [45, 90]:
+                            try:
+                                result, label = strategy_cvxpy_regime_utility(
+                                    raw_signals, returns_pct, close, universe,
+                                    max_wt=mw, lookback=lb, rebal_every=12,
+                                    base_risk_aversion=base_k, regime_scale=rs,
+                                    decay=2, ema_halflife=hl)
+                                results.append((label, result.sharpe, result.fitness, result.turnover, result.max_drawdown))
+                            except Exception as e:
+                                print(f"  CVXPYRegimeUtil(mw={mw},lb={lb},k={base_k},rs={rs}) failed: {e}")
+
+        # ── Kelly, MinVar Bayesian, HRP ───────────────────────────────────────
+        for mw in [0.02, 0.03]:
+            for lb in [240, 280]:
+                for kf in [0.3, 0.5, 0.7]:
+                    for hl in [45, 90]:
+                        try:
+                            result, label = strategy_kelly_optimal(
+                                raw_signals, returns_pct, close, universe,
+                                max_wt=mw, lookback=lb, rebal_every=12,
+                                kelly_fraction=kf, decay=2, ema_halflife=hl)
+                            results.append((label, result.sharpe, result.fitness, result.turnover, result.max_drawdown))
+                        except Exception as e:
+                            print(f"  KellyOptimal(mw={mw},lb={lb},kf={kf}) failed: {e}")
+
+        for mw in [0.02, 0.03]:
+            for lb in [240, 280]:
+                for hl in [45, 90]:
+                    try:
+                        result, label = strategy_min_variance_bayesian(
+                            raw_signals, returns_pct, close, universe,
+                            max_wt=mw, lookback=lb, rebal_every=12,
+                            decay=2, ema_halflife=hl)
+                        results.append((label, result.sharpe, result.fitness, result.turnover, result.max_drawdown))
+                    except Exception as e:
+                        print(f"  MinVarBayesian(mw={mw},lb={lb}) failed: {e}")
+
+        for mw in [0.02, 0.03]:
+            for lb in [240, 280]:
+                for rb in [12, 24]:
+                    for hl in [45, 90]:
+                        try:
+                            result, label = strategy_hrp(
+                                raw_signals, returns_pct, close, universe,
+                                max_wt=mw, lookback=lb, rebal_every=rb,
+                                decay=2, ema_halflife=hl)
+                            results.append((label, result.sharpe, result.fitness, result.turnover, result.max_drawdown))
+                        except Exception as e:
+                            print(f"  HRP(mw={mw},lb={lb},rb={rb}) failed: {e}")
+
     # Sort by Sharpe
     results.sort(key=lambda x: x[1], reverse=True)
     print(f"\n  {'Strategy':<45} {'Sharpe':>8} {'Fitness':>8} {'TO':>6} {'DD':>8}")
     print(f"  {'-'*80}")
     for label, sr, fit, to, dd in results:
         print(f"  {label:<45} {sr:+8.3f} {fit:8.3f} {to:6.3f} {dd:8.3f}")
+
+
+# ============================================================================
+# VALIDATION FRAMEWORK  (no test set — Isichenko Ch.7 + de Prado CPCV)
+# ============================================================================
+
+def _bootstrap_sharpe_ci(daily_pnl: pd.Series, n_boot: int = 2000,
+                          block_size: int = 5, ci: float = 0.90) -> tuple:
+    """
+    Circular block bootstrap 90% CI for annualised Sharpe ratio.
+    Block bootstrap (not IID) preserves autocorrelation structure.
+    block_size=5 days ~ 30 bars at 4h — captures weekly seasonality.
+    """
+    arr = daily_pnl.values
+    n = len(arr)
+    if n < 10:
+        return float('nan'), float('nan')
+
+    boot_srs = []
+    rng = np.random.default_rng(42)
+    for _ in range(n_boot):
+        # Circular block bootstrap
+        starts = rng.integers(0, n, size=(n // block_size) + 2)
+        idx = np.concatenate([np.arange(s, s + block_size) % n for s in starts])[:n]
+        sample = arr[idx]
+        m, s = sample.mean(), sample.std(ddof=1)
+        boot_srs.append((m / s * np.sqrt(252)) if s > 1e-12 else 0.0)
+
+    boot_srs = np.array(boot_srs)
+    lo = float(np.percentile(boot_srs, (1 - ci) / 2 * 100))
+    hi = float(np.percentile(boot_srs, (1 + ci) / 2 * 100))
+    return lo, hi
+
+
+def _deflated_sharpe(observed_sr: float, n_trials: int, n_obs: int,
+                     pnl_skew: float = 0.0, pnl_kurt_excess: float = 0.0) -> float:
+    """
+    Probabilistic / Deflated Sharpe Ratio (Bailey & López de Prado 2012,
+    Isichenko Eq 7.x).
+
+    Computes P(true SR > 0 | observed SR, T, N_trials) after adjusting
+    for non-normality (skew/kurtosis) and multiple testing.
+
+    Expected max SR under H0 (all strategies noise):
+      SR* ≈ sqrt(2 * log(N) / T)  [Isichenko simplified form]
+    """
+    from scipy.stats import norm
+    if n_obs < 5 or n_trials < 1:
+        return float('nan')
+
+    # Benchmark: expected max SR from N independent noise strategies
+    sr_bench = np.sqrt(2.0 * np.log(max(n_trials, 2)) / n_obs) if n_trials >= 2 else 0.0
+
+    # SR estimator variance adjusted for non-normality (Mertens 2002)
+    sr_var = (1.0
+              + 0.5 * observed_sr ** 2
+              - pnl_skew * observed_sr
+              + (pnl_kurt_excess / 4.0) * observed_sr ** 2
+              ) / max(n_obs, 1)
+    sr_se = np.sqrt(max(sr_var, 1e-12))
+
+    # P(true SR > benchmark)
+    z = (observed_sr - sr_bench) / sr_se
+    return float(norm.cdf(z))
+
+
+def walk_forward_validate(strategy_name: str, n_folds: int = 4,
+                           n_trials: int = 300, **kwargs):
+    """
+    Walk-forward validation within the validation set — NO test set used.
+
+    Design (Isichenko Leave-Future-Out CV):
+      The full validation period (VAL_START → VAL_END) is divided into
+      n_folds equal time bands. Each band's performance is measured on its
+      own PnL, giving an honest sub-period decomposition.
+
+    Reported metrics:
+      • Per-fold Sharpe ratio and its std (consistency)
+      • 90% bootstrap CI for full-period Sharpe (block bootstrap)
+      • Deflated SR: P(true edge > 0) after correcting for N strategy trials
+      • OOS decay estimate: E[SR_out] ≈ SR_in / sqrt(1 + N/T)
+        (Isichenko Ch.7 over-optimisation decay formula)
+
+    Usage:
+      python eval_portfolio.py --validate regime_scaled --n-trials 400
+    """
+    # ── Load signals and run strategy ──
+    use_raw = strategy_name in PROPER_STRATEGIES
+    if use_raw:
+        raw_signals, returns_pct, close, universe = load_raw_alpha_signals()
+        if raw_signals is None: return
+        result, label = PROPER_STRATEGIES[strategy_name](
+            raw_signals, returns_pct, close, universe, **kwargs)
+    else:
+        signals, returns_pct, close, universe = load_alpha_signals()
+        if signals is None: return
+        fn = STRATEGIES.get(strategy_name)
+        if fn is None:
+            print(f"Unknown strategy: {strategy_name}")
+            return
+        result, label = fn(signals, returns_pct, close, universe, **kwargs)
+
+    daily_pnl = result.daily_pnl
+    if daily_pnl is None or len(daily_pnl) < 20:
+        print("Insufficient PnL data for validation.")
+        return
+
+    n_days = len(daily_pnl)
+    fold_size = n_days // n_folds
+
+    print(f"\n{'='*72}")
+    print(f"  WALK-FORWARD VALIDATION  (no test set)")
+    print(f"  Strategy : {label}")
+    print(f"  Period   : {VAL_START} → {VAL_END}  ({n_days} days)")
+    print(f"  Folds    : {n_folds}  ({fold_size} days each)")
+    print(f"{'='*72}")
+
+    # ── Sub-period fold analysis ──
+    fold_srs = []
+    print(f"\n  {'Fold':<6} {'Period':<30} {'SR':>7} {'Ann Ret':>9} {'DD':>8}")
+    print(f"  {'-'*62}")
+    for k in range(n_folds):
+        s = k * fold_size
+        e = (k + 1) * fold_size if k < n_folds - 1 else n_days
+        fold = daily_pnl.iloc[s:e]
+        if len(fold) < 5: continue
+
+        m = fold.mean()
+        v = fold.std(ddof=1)
+        sr = (m / v * np.sqrt(252)) if v > 1e-12 else 0.0
+        ann_ret = m * 252 / (result.fitness / (result.sharpe + 1e-8) if abs(result.sharpe) > 0.01 else 1.0)
+        # Drawdown in this fold
+        cum = fold.cumsum()
+        dd = float((cum - cum.cummax()).min())
+
+        d0 = fold.index[0].strftime('%y-%m-%d') if hasattr(fold.index[0], 'strftime') else str(fold.index[0])[:10]
+        d1 = fold.index[-1].strftime('%y-%m-%d') if hasattr(fold.index[-1], 'strftime') else str(fold.index[-1])[:10]
+        print(f"  Fold {k+1:<3}  {d0} → {d1}   {sr:>+7.3f}   {'N/A':>9}  {dd:>8.4f}")
+        fold_srs.append(sr)
+
+    if not fold_srs:
+        print("  Not enough fold data.")
+        return
+
+    fold_arr = np.array(fold_srs)
+    n_pos = int((fold_arr > 0).sum())
+    sr_mu = float(fold_arr.mean())
+    sr_sd = float(fold_arr.std(ddof=1)) if len(fold_arr) > 1 else 0.0
+    consistency = max(0.0, 1.0 - sr_sd / (abs(sr_mu) + 1e-6))
+
+    print(f"\n  ── Fold Consistency ──────────────────────────────────────────")
+    print(f"  Mean fold SR   : {sr_mu:+.3f}")
+    print(f"  Std  fold SR   : {sr_sd:.3f}  (↓ = more consistent)")
+    print(f"  Positive folds : {n_pos} / {len(fold_arr)}")
+    print(f"  Consistency    : {consistency:.3f}  (1.0 = perfectly flat PnL)")
+
+    # ── Full-period summary ──
+    print(f"\n  ── Full-Period Metrics ───────────────────────────────────────")
+    print(f"  Sharpe         : {result.sharpe:+.3f}")
+    print(f"  Fitness        : {result.fitness:.3f}")
+    print(f"  Turnover       : {result.turnover:.3f}")
+    print(f"  Max Drawdown   : {result.max_drawdown:.3f}")
+
+    # ── Bootstrap CI ──
+    lo, hi = _bootstrap_sharpe_ci(daily_pnl, n_boot=2000, block_size=5)
+    sig_str = "✓ SIGNIFICANT" if lo > 0 else "✗ overlaps zero"
+    print(f"\n  ── 90% Bootstrap CI for Sharpe (block bootstrap) ─────────")
+    print(f"  [{lo:+.3f}, {hi:+.3f}]  →  {sig_str}")
+
+    # ── Deflated SR / Multiple-Testing Adjustment ──
+    pnl_skew   = float(daily_pnl.skew())
+    pnl_kurt_x = float(daily_pnl.kurtosis())   # pandas returns excess kurtosis
+    p_edge = _deflated_sharpe(
+        observed_sr=result.sharpe,
+        n_trials=n_trials,
+        n_obs=n_days,
+        pnl_skew=pnl_skew,
+        pnl_kurt_excess=pnl_kurt_x,
+    )
+    sr_benchmark = np.sqrt(2.0 * np.log(max(n_trials, 2)) / n_days)
+    print(f"\n  ── Multiple-Testing Adjustment  (N={n_trials} trials tested) ──")
+    print(f"  SR benchmark from chance : {sr_benchmark:+.3f}  [SR* = sqrt(2*ln(N)/T)]")
+    print(f"  P(true edge > 0)         : {p_edge:.3f}  ",
+          end="")
+    print("← STRONG" if p_edge > 0.95 else "← MODERATE" if p_edge > 0.80 else "← WEAK")
+
+    # ── OOS decay (Isichenko Eq 7: E[SR_out] ≈ SR_in/sqrt(1+N/T)) ──
+    sr_oos = result.sharpe / np.sqrt(1.0 + n_trials / n_days)
+    print(f"\n  ── OOS Decay Estimate  [Isichenko Eq 7.x] ────────────────")
+    print(f"  E[SR_out] ≈ {sr_oos:+.3f}   (expected true OOS Sharpe)")
+
+    # ── Final verdict ──
+    grade = ("EXCELLENT" if p_edge > 0.95 and consistency > 0.5 and lo > 0
+             else "GOOD"    if p_edge > 0.80 and n_pos > len(fold_arr) // 2
+             else "MARGINAL" if p_edge > 0.60
+             else "WEAK")
+    print(f"\n  ── VALIDATION VERDICT ────────────────────────────────────")
+    print(f"  Grade : {grade}")
+    print(f"  (SR={result.sharpe:.2f}, P(edge)={p_edge:.2f}, "
+          f"Consistency={consistency:.2f}, 90%CI=[{lo:.2f},{hi:.2f}], "
+          f"E[OOS SR]={sr_oos:.2f})")
+    print(f"{'='*72}\n")
+
+    return dict(label=label, full_sr=result.sharpe, fold_srs=fold_srs,
+                sr_mean=sr_mu, sr_std=sr_sd, consistency=consistency,
+                ci_lo=lo, ci_hi=hi, p_edge=p_edge, sr_oos=sr_oos, grade=grade)
 
 
 def main():
@@ -1975,21 +2881,42 @@ def main():
                         help="Combination strategy")
     parser.add_argument("--compare", action="store_true", help="Compare all strategies")
     parser.add_argument("--scoreboard", action="store_true", help="Show portfolio scoreboard")
+    parser.add_argument("--validate", type=str, default=None, metavar="STRATEGY",
+                        help="Walk-forward validate a strategy within the val set (no test set used)")
+    parser.add_argument("--n-trials", type=int, default=300,
+                        help="Number of strategy configs tried (for Deflated Sharpe). Default 300.")
+    parser.add_argument("--n-folds", type=int, default=4,
+                        help="Number of walk-forward folds for --validate. Default 4.")
     parser.add_argument("--lookback", type=int, default=LOOKBACK, help="Rolling lookback window")
     parser.add_argument("--top", type=int, default=TOP_N, help="Top N factors for top_n strategy")
-    parser.add_argument("--decay", type=int, default=SIM_DECAY, help="Decay parameter for strategies like select_sharpe or proper_decay")
+    parser.add_argument("--decay", type=int, default=SIM_DECAY, help="Decay parameter")
     parser.add_argument("--mw", type=float, default=MAX_WEIGHT, help="Max weight for proper strategies")
     parser.add_argument("--hl", type=int, default=30, help="EMA halflife")
-    parser.add_argument("--mc", type=float, default=0.3, help="Max corr (default 0.3 — best from compare)")
-    parser.add_argument("--fees", type=float, default=VAL_FEES, help="Fees in bps to simulate")
+    parser.add_argument("--mc", type=float, default=0.3, help="Max corr (default 0.3)")
+    parser.add_argument("--fees", type=float, default=VAL_FEES, help="Fees in bps")
     parser.add_argument("--db", type=float, default=0.01, help="Deadband threshold")
     args = parser.parse_args()
+
+    strat_kwargs = dict(
+        lookback=args.lookback, top_n=args.top, decay=args.decay,
+        max_wt=args.mw, ema_halflife=args.hl, max_corr=args.mc,
+        fee_bps=args.fees, deadband=args.db,
+    )
+
+    if args.validate:
+        walk_forward_validate(
+            args.validate,
+            n_folds=args.n_folds,
+            n_trials=args.n_trials,
+            **strat_kwargs,
+        )
+        return
 
     if args.compare or args.scoreboard:
         compare_all()
         return
 
-    run_strategy(args.strategy, lookback=args.lookback, top_n=args.top, decay=args.decay, max_wt=args.mw, ema_halflife=args.hl, max_corr=args.mc, fee_bps=args.fees, deadband=args.db)
+    run_strategy(args.strategy, **strat_kwargs)
 
 
 if __name__ == "__main__":

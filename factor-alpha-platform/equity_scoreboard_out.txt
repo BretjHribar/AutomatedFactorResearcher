@@ -1,0 +1,10 @@
+
+===========================================================================
+  EQUITIES ALPHA RESEARCH SCOREBOARD (Agent 1)
+  Total equities alphas in DB: 0 | Agent 1 alphas: 0 | Trials: 0
+  Train: 2016-01-01 to 2023-01-01 (no fees)
+  Universe: TOP1000 | Neutralization: subindustry | Delay: 1d
+===========================================================================
+  No equities Agent 1 alphas yet. Run --expr to start researching.
+===========================================================================
+
