@@ -1,14 +1,16 @@
 ---
-description: Run autonomous alpha research - LLM discovers crypto alpha factors in a loop
+description: Run autonomous crypto alpha research - LLM discovers Binance perpetual futures alpha factors in a loop
 ---
 
-# Alpha Research Agent (Agent 1 — Discovery)
+# Crypto Alpha Research Agent (Agent 1 — Discovery)
 
 You are Agent 1: an autonomous alpha researcher for **Binance crypto perpetual futures** (4h bars, TOP50 universe). You discover cross-sectional alpha factors using ONLY the train set. You NEVER see validation or test data — that's Agent 2's job.
 
 **Agent 2 (Portfolio Construction) is running in parallel.** It reads your alphas from the shared DB (`data/alphas.db`) and optimizes how to combine them on the validation set. As you add more diverse alphas, Agent 2 automatically benefits. This means:
 - **Diversity is critical** — redundant alphas (signal corr > 0.70) are automatically REJECTED
 - The DB is live and shared — both agents read/write concurrently
+
+> ⚠️ This is the **CRYPTO** workflow. A separate equities workflow (`equities-alpha-research.md`) exists. Do NOT mix them — they use different data sources, scripts, databases, and quality gates.
 
 ## STRICT RULES — DO NOT VIOLATE
 
@@ -18,13 +20,15 @@ You are Agent 1: an autonomous alpha researcher for **Binance crypto perpetual f
 - **Do NOT run any script other than** `eval_alpha.py`
 - **Do NOT modify the database directly** — only use `--save` to add alphas
 - **Do NOT look at validation or test data** — you only see train results
+- **Do NOT use equities data** (`data/fmp_cache/`) — this workflow exclusively uses `data/binance_cache/`
+- **Do NOT run the equities backtest** (`run_full_pipeline.py`) — wrong asset class
 
 ## Setup (run once at start)
 
 // turbo
 1. Check current state: `python eval_alpha.py --scoreboard`
 
-> **📖 Before hypothesizing, read [`.agents/alpha-templates.md`](./../alpha-templates.md)**
+> **📖 Before hypothesizing, read [`.agents/crypto-alpha-templates.md`](./../crypto-alpha-templates.md)**
 > This file contains:
 > - Proven passing alpha templates (copy-paste ready)
 > - Sub-signal H1/H2 profiles (which signals anchor bear vs bull regimes)
@@ -39,13 +43,13 @@ Repeat this loop indefinitely. Each iteration = one alpha hypothesis.
 ### Step 1: Hypothesize
 You must formulate a hypothesis for a predictive signal and explain your logic. Every alpha must have a clearly stated reason for why it is expected to work.
 
-**Before hypothesizing:** consult `.agents/alpha-templates.md` to check:
+**Before hypothesizing:** consult `.agents/crypto-alpha-templates.md` to check:
 - Which sub-signals are already profiled (avoid re-testing known weak signals)
 - What regime gaps exist in the current DB (need more H1-strong or H2-strong signals?)
 - Whether you can build a new composite by substituting one component from a proven template
 
 ### Step 2: Implement and Test
-Use `eval_alpha.py` to test your expression. 
+Use `eval_alpha.py` to test your expression.
 
 ```bash
 # Example syntax
@@ -91,7 +95,7 @@ After every 5-10 new alphas, print the scoreboard to the user:
 5. `python eval_alpha.py --scoreboard`
 
 ## Available Data Fields (42 terminals)
-All DataFrames of shape (dates × tickers):
+All DataFrames of shape (dates × tickers). Source: `data/binance_cache/`:
 
 **Price/OHLCV**: `close`, `open`, `high`, `low`, `volume`, `quote_volume`
 **Returns**: `returns` (dollar-diff), `log_returns`
@@ -123,13 +127,13 @@ All DataFrames of shape (dates × tickers):
 1. **Simple > complex**: `ts_delta(close, 60)` beats nested 5-operator chains
 2. **Signal Combination via rank/zscore_cs + add**: When a single signal fails gates due to H1/H2 regime imbalance, combine multiple sub-signals. Wrap each in `rank()` or `zscore_cs()` for uniform scaling, then `add()` them together. Sub-signals that are strong in *different* regimes are complementary — their sum achieves balanced H1 and H2 Sharpe. Apply `df_min(df_max(..., -1.5), 1.5)` clipping to control kurtosis and rolling SR std. `multiply()` can also be used for interaction effects (e.g., sign-filtered amplification).
 3. **Round lookbacks**: Use 30, 60, 120 (real timeframes), not 47 or 83
-3. **Test sensitivity**: If it works at 60, check 30 and 120. If it breaks → discard
-4. **DSR tracks your trial count**: The more you test, the more likely any single discovery is noise. Keep this in mind.
-5. **Orthogonality > magnitude**: A Sharpe 1.5 uncorrelated alpha adds more to the portfolio than a Sharpe 3.0 redundant one. Signal correlation > 0.70 = automatic rejection.
-6. **IC matters**: A positive mean IC means the signal actually predicts cross-sectional returns
-7. **Stability matters**: Must work in H1 AND H2 — if it only works in one sub-period, it's regime-specific noise
-8. **Diversity is the goal**: Agent 2 benefits most from MANY uncorrelated signals. Explore different data fields, different operators, different economic mechanisms.
-9. **Target Low Turnover**: Our fee model is aggressively punitive at 10bps per trade. A fast-flipping alpha with high Sharpe will fail once transaction costs are fully modeled. You must exclusively discover structural, slow-moving alphas that produce a mean Turnover < 0.05 per 4-hour bar.
+4. **Test sensitivity**: If it works at 60, check 30 and 120. If it breaks → discard
+5. **DSR tracks your trial count**: The more you test, the more likely any single discovery is noise. Keep this in mind.
+6. **Orthogonality > magnitude**: A Sharpe 1.5 uncorrelated alpha adds more to the portfolio than a Sharpe 3.0 redundant one. Signal correlation > 0.70 = automatic rejection.
+7. **IC matters**: A positive mean IC means the signal actually predicts cross-sectional returns
+8. **Stability matters**: Must work in H1 AND H2 — if it only works in one sub-period, it's regime-specific noise
+9. **Diversity is the goal**: Agent 2 benefits most from MANY uncorrelated signals. Explore different data fields, different operators, different economic mechanisms.
+10. **Target Low Turnover**: Our fee model is aggressively punitive at 10bps per trade. A fast-flipping alpha with high Sharpe will fail once transaction costs are fully modeled. You must exclusively discover structural, slow-moving alphas that produce a mean Turnover < 0.05 per 4-hour bar.
 
 ## Metrics Reference
 - **IS Sharpe**: In-sample annualized Sharpe. Gate: ≥ 1.5

@@ -1,0 +1,16 @@
+
+===========================================================================
+  EQUITIES ALPHA RESEARCH SCOREBOARD (Agent 1)
+  Total equities alphas in DB: 2 | Agent 1 alphas: 2 | Trials: 68
+  Train: 2016-01-01 to 2023-01-01 (no fees)
+  Universe: TOP1000 | Neutralization: subindustry | Delay: 1d | Decay: 0
+===========================================================================
+  Avg IS Sharpe:  +1.577
+  Avg Mean IC:    +0.0042
+  Avg Turnover:   0.0662
+
+  Agent 1 equities alphas (top 15):
+     1. SR=+1.62 Fit=1.09 IC=+0.0046 TO=0.0635 DSR=0.00 | rank(add(negative(rank(subtract(true_divide(net_income, assets), true_divide(cas
+     2. SR=+1.53 Fit=1.00 IC=+0.0039 TO=0.0689 DSR=0.00 | rank(add(rank(ts_delta(roe, 63)), rank(add(rank(ts_delta(ebitda_margin, 63)), ra
+===========================================================================
+
