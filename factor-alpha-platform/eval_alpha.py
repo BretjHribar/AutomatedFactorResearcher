@@ -45,10 +45,11 @@ BARS_PER_DAY = 6
 COVERAGE_CUTOFF = 0.3
 
 # Quality gates
-MIN_IS_SHARPE  = 1.5
+MIN_IS_SHARPE  = 2.0
+MIN_FITNESS    = 5.0
 MIN_IC_MEAN    = -0.05       # Loose IC gate — Sharpe/stability/DSR are the real filters
 CORR_CUTOFF    = 0.70
-MAX_TURNOVER   = 0.40        # Reject high-turnover alphas — ρ=-0.62 with val Sharpe
+MAX_TURNOVER   = 0.30        # Reject high-turnover alphas — ρ=-0.62 with val Sharpe
 MIN_SUB_SHARPE = 1.0         # Each sub-period must have meaningful Sharpe (not just > 0)
 MAX_PNL_KURTOSIS = 20        # Reject fat-tailed PnL distributions — ρ=-0.51 with val Sharpe
 MAX_ROLLING_SR_STD = 0.05    # Reject inconsistent performers — ρ=-0.40 with val Sharpe
@@ -94,9 +95,10 @@ def check_diversity(conn, expression, new_alpha_raw):
     """Check signal correlation against all existing alphas on train data.
     Rejects if expression already exists OR if signal correlation > CORR_CUTOFF.
     new_alpha_raw should be the RAW expression output (before process_signal)."""
-    # Check exact duplicate
-    existing = conn.execute("SELECT id FROM alphas WHERE expression=? AND archived=0",
-                            (expression,)).fetchone()
+    # Check exact duplicate (scoped to interval + universe)
+    existing = conn.execute(
+        "SELECT id FROM alphas WHERE expression=? AND archived=0 AND interval=? AND universe=?",
+        (expression, INTERVAL, UNIVERSE)).fetchone()
     if existing:
         print(f"  REJECTED: Expression already exists as alpha #{existing[0]}")
         return False
@@ -104,8 +106,10 @@ def check_diversity(conn, expression, new_alpha_raw):
     if new_alpha_raw is None:
         return True
 
-    # Check signal correlation against all existing alphas
-    rows = conn.execute("SELECT id, expression FROM alphas WHERE archived=0").fetchall()
+    # Check signal correlation against all existing alphas (same interval + universe)
+    rows = conn.execute(
+        "SELECT id, expression FROM alphas WHERE archived=0 AND interval=? AND universe=?",
+        (INTERVAL, UNIVERSE)).fetchall()
     if not rows:
         return True
 
@@ -149,22 +153,23 @@ def save_alpha(conn, expression, reasoning, metrics):
         return False
 
     c = conn.cursor()
-    c.execute("""INSERT INTO alphas (expression, name, category, asset_class, interval, source, notes)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)""",
+    c.execute("""INSERT INTO alphas (expression, name, category, asset_class, interval, source, notes, universe)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
               (expression,
                expression[:80],              # name = shortened expression
                metrics.get('category', ''),   # category from reasoning
                'crypto',                      # asset_class
                INTERVAL,                      # interval
                'agent1_research',             # source
-               reasoning))
+               reasoning,
+               UNIVERSE))
     alpha_id = c.lastrowid
 
     # Also save evaluation metrics
     c.execute("""INSERT INTO evaluations (alpha_id, sharpe_is, sharpe_train, return_ann,
                  max_drawdown, turnover, fitness, ic_mean, ic_ir, psr,
-                 train_start, train_end, n_bars, evaluated_at)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))""",
+                 train_start, train_end, n_bars, evaluated_at, interval, universe)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),?,?)""",
               (alpha_id,
                metrics['is_sharpe'], metrics['is_sharpe'],
                metrics.get('returns_ann', 0),
@@ -173,7 +178,8 @@ def save_alpha(conn, expression, reasoning, metrics):
                metrics['ic_mean'], metrics['icir'],
                metrics['deflated_sharpe'],
                TRAIN_START, TRAIN_END,
-               metrics.get('n_bars', 0)))
+               metrics.get('n_bars', 0),
+               INTERVAL, UNIVERSE))
     conn.commit()
     print(f"  SAVED as alpha #{alpha_id}")
     return True
@@ -524,6 +530,7 @@ def main():
     min_sub = min(result['stability_h1'], result['stability_h2'])
     gates = [
         (result['is_sharpe'] >= MIN_IS_SHARPE, f"IS Sharpe >= {MIN_IS_SHARPE}: {result['is_sharpe']:+.3f}"),
+        (result['is_fitness'] >= MIN_FITNESS, f"Fitness >= {MIN_FITNESS}: {result['is_fitness']:.3f}"),
         (result['ic_mean'] >= MIN_IC_MEAN, f"Mean IC >= {MIN_IC_MEAN}: {result['ic_mean']:+.4f}"),
         (both_pos, f"Sub-period stability: H1={result['stability_h1']:+.2f} H2={result['stability_h2']:+.2f}"),
         (result['turnover'] <= MAX_TURNOVER, f"Turnover <= {MAX_TURNOVER}: {result['turnover']:.3f}"),
