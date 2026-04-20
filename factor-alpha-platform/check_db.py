@@ -1,6 +1,10 @@
 import sqlite3
-import pandas as pd
-
-conn = sqlite3.connect('c:/Users/breth/PycharmProjects/AutomatedFactorResearcher/factor-alpha-platform/data/alphas_5m.db')
-df = pd.read_sql_query("SELECT id, expression, notes FROM alphas WHERE source='agent1_research' ORDER BY id DESC LIMIT 10", conn)
-print(df.to_string())
+conn = sqlite3.connect("data/alphas.db")
+cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+tables = cursor.fetchall()
+print("Tables:", [t[0] for t in tables])
+for t in tables[:5]:
+    cursor = conn.execute(f"PRAGMA table_info('{t[0]}')")
+    cols = cursor.fetchall()
+    print(f"  {t[0]} columns:", [c[1] for c in cols])
+conn.close()

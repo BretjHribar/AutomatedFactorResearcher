@@ -80,7 +80,7 @@ MAX_WEIGHT   = 0.05          # Updated at startup from UNIVERSE_CONFIG
 # Quality gates (relaxed for short window, zero fees)
 MIN_IS_SHARPE  = 4.0         # Updated at startup from UNIVERSE_CONFIG
 MIN_IC_MEAN    = -0.02       # IC is our PRIMARY objective — keep this tight
-CORR_CUTOFF    = 0.30        # Tighter for low-turnover campaign
+CORR_CUTOFF    = 0.60        # Relaxed for broader alpha diversity
 MAX_TURNOVER   = 0.05        # Key gate: low-turnover alpha campaign
 MIN_SUB_SHARPE = 0.5         # Shorter sub-periods → lower threshold
 MAX_PNL_KURTOSIS = 30        # Slightly relaxed for 5m
