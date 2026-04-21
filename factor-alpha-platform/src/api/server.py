@@ -196,6 +196,7 @@ class EvalRequest(BaseModel):
     decay: int = 0
     neutralization: str = "subindustry"
     booksize: float = 10_000_000
+    universe: str = "TOP3000"
 
 class BatchEvalRequest(BaseModel):
     expressions: list[str]

@@ -190,6 +190,20 @@ function initSimulate() {
     // Simulate
     $('#btnSimulate').addEventListener('click', runSimulation);
 
+    // IB Mode preset button
+    const ibBtn = $('#btnIBMode');
+    if (ibBtn) {
+        ibBtn.addEventListener('click', () => {
+            $('#paramDelay').value = 0;
+            $('#paramDecay').value = 0;
+            $('#paramNeutralize').value = 'sector';
+            $('#paramUniverse').value = 'TOP2000TOP3000';
+            $('#paramTruncation').value = 0.01;
+            ibBtn.classList.toggle('active');
+            toast('IB Mode: delay=0, sector neutral, TOP2000-3000, fee-free', 'success');
+        });
+    }
+
     // Ctrl+Enter
     $('#exprInput').addEventListener('keydown', (e) => {
         if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
@@ -231,6 +245,7 @@ async function runSimulation() {
                 delay: parseInt($('#paramDelay').value) || 1,
                 decay: parseInt($('#paramDecay').value) || 0,
                 neutralization: $('#paramNeutralize').value,
+                universe: $('#paramUniverse').value || 'TOP3000',
             }),
         });
 
