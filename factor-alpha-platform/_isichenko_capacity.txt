@@ -1,0 +1,1756 @@
+
+================================================================================
+PDF PAGE 209
+================================================================================
+Trading Costs and Market Elasticity
+173
+As we shall see, trading costs are uncertain, just as forecasts are. In
+an efficient market, the predictability of returns is close to the costs of
+trading. For a ballpark estimate, one can forecast stock returns at the
+level of the order of 1 bps per day (Sec. 2.3.3), and the cost of trading
+is of the same order of magnitude. It takes a better than average skill in
+both forecasting and execution to keep the difference between the two
+numbers consistently positive.
+For a meaningful portfolio construction process (Chapter 6), one
+needs to distinguish, at least mathematically, between two kinds of trad-
+ing costs per share or dollar traded: those independent of the trade size
+and those increasing with the trade size. These two kinds are usually
+referred to as slippage and impact costs, respectively.
+5.1
+Slippage
+The average Parisian has 150,000 hairs on his or her head. Prove
+that there are at least two persons in Paris who have exactly the same
+number of hairs.
+From a quant interview
+One can think of slippage as half the cost of a roundtrip trade per
+share, when the trade size is too small to move the stock price. Slippage
+depends on the bid-ask spread, the stock’s liquidity and volatility, and
+the execution algorithm used by the portfolio. Slippage also depends
+on the evolving market ecology, meaning the number and the types
+of market participants and their trading algorithms.1 Slippage is a noisy
+instrument-dependent quantity that needs periodic recalibration by trad-
+ing cost analysis (TCA). For backtest and portfolio optimization, an
+approximation like
+slippage = c1 × mean_spread + c2
+(5.1)
+is usually used, with coefficients fitted from production data.
+Broker fees, exchange liquidity fees/rebates, and any transaction
+taxes are normally fixed amounts per share traded and can be treated as
+components of slippage.
+1 J.D. Farmer, Market force, ecology and evolution, arXiv:adap-org/9812005, 2000.
+
+================================================================================
+PDF PAGE 210
+================================================================================
+174
+Q U A N T I TAT I V E P O RT F O L I O M A N A G E M E N T
+5.2
+Impact
+A billiard ball at rest is hit by an identical moving ball. Assuming
+elastic collision and no friction, find the angle between the trajectories
+of the two balls after the collision.
+From a quant interview
+Impact costs, per share traded, increase with the trade size due to
+impacting the stock price. The price impact is a result of demand/supply
+forces playing out in the exchange order book. Market microstructure2,3
+studies how exchange rules and different kinds of trade orders affect price
+formation. Market impact is a serious consideration for mid-frequency
+statistical arbitrage US portfolios starting with GMV size of $100M or
+less, depending on turnover and distribution of alpha by liquidity.
+Price impact, as an effect with meaningful underlying mechanisms
+not foreign to physicists, has been a subject of active theoretical and
+empirical research.4 Starting with Kyle,5 various theoretical models of
+price impact have been proposed predicting linear or sublinear depen-
+dence of impact I vs trade size T. Impact I(T) is defined as part of
+security return following, and attributable to, a trade of size T. This gen-
+eral definition is extremely vague, requires clarification, and raises a few
+important questions.
+1. First, one must specify time scales for (a) the trade, which can be
+a single market order of 100 shares executed instantly or a large
+block processed by an execution algo over the whole day, and (b) the
+post-trade horizon over which the impact is measured. It is more or
+less a consensus that impact, once caused by a trade, will decay over
+time.6 If a trade is broken up into multiple small trades spread in
+time, one has to deal with trade and impact overlapping in time.
+2 M. O’Hara, Market Microstructure Theory. Wiley, 1998.
+3 J.-P. Bouchaud, J. Bonart, J. Donier, M. Gould, Trades, Quotes and Prices. Financial
+Markets Under the Microscope, Cambridge University Press, 2018.
+4 J.-P. Bouchaud, Price Impact, arXiv:0903.2428v1 [q-fin.TR], 2009.
+5 A.S. Kyle, Continuous Auctions and Insider Trading, Econometrica, 53(6), pp. 1315–1336,
+1985.
+6 It is plausible, if immeasurable, that a trade’s price impact decays down to a certain
+level, with a small persistent component explaining long-term evolution of asset prices
+driven by the forces of supply and demand. See Sec. 5.4.
+
+================================================================================
+PDF PAGE 211
+================================================================================
+Trading Costs and Market Elasticity
+175
+2. Next comes the question of attribution. If the price has gone up
+after Alice bought 1000 shares of CAT, did it go up because of the
+trade or because the machine maker stock would go up anyway, as
+Alice skillfully predicted? There is no way to know for sure, because
+there are no two realities in one of which Alice traded and in the
+other she did not. The only relatively inexpensive7 way to connect
+trade and price change is by running statistical inference on a large
+dataset of trades vs price returns immediately following the trades,
+while also controlling for broad market moves and forecasts. More
+on this below.
+3. The next good question is whose trades are we looking at. In the grand
+market picture, each trade has two sides, a buyer and a seller, who
+are matched anonymously via broker intermediaries at an exchange.
+Without distinguishing the sides, any impact would cancel out
+because all trades come in pairs, T and −T. For impact study, trade
+aggression level, or whether liquidity is taken or provided, is more
+relevant than the trade sign. An aggressive liquidity taker is expected
+to make a positive (negative) price impact by a buy (sell). A market
+maker, the likely other side of the trade, will have it the other way
+around. Impact study is further complicated by more advanced quant
+portfolios trading with a mix of aggressive and passive orders.8 In
+short, impact models cannot be universal. Impact is portfolio-specific
+and depends on its algorithmic execution capabilities.
+4. When analyzing trade data of a mature quant portfolio for price
+impact, there is a chance that other quant portfolios have been gener-
+ating similar trades at the same time due to alpha crowding (Sec. 4.7).
+This effect would lead to an overestimate of impact by the subject
+portfolio.
+That said, one could hope there is a reasonably universal impact formula
+for most actively managed portfolios, with a few portfolio-specific
+7 There are also costly ways to measure costs. Some large quant funds are rumored
+to periodically generate random, i.e., unrelated to forecasts, trades of various sizes in
+multiple securities for unbiased TCA studies. On several bug-related occasions, this
+author had also created, and then analyzed, shock impact by unintended large trades.
+One order management system incident (Sec. 7.5) involved a 15-minute-long roundtrip
+in AAPL sized at a significant portion of ADV. It showed a clear price response well
+outside normal intraday volatility. That TCA cost the portfolio an estimated $5M.
+8 F. Guilbaud, H. Pham, Optimal High Frequency Trading with limit and market orders,
+arXiv:1106.5040 [q-fin.TR], 2011.
+
+================================================================================
+PDF PAGE 212
+================================================================================
+176
+Q U A N T I TAT I V E P O RT F O L I O M A N A G E M E N T
+parameters to be calibrated by the portfolio manager. While the Kyle
+model predicts linear impact I ∝T, a sublinear dependence was reported
+more frequently, especially for smaller trades. A square root impact
+I ∝T1∕2 was proposed based on order book dynamics9, empirical
+data,10,11 and even pure dimensional analysis.12
+5.2.1
+Empirical observations
+High tide in Montauk, NY was at 6 am today. When will it be there
+next time?
+From a quant interview
+This author has run empirical studies of price impact specific to his
+portfolios. The studies were run on large datasets of direct market access
+(DMA) limit orders, each resulting in a series of executions filling the
+order partially or in full, often followed by a cancel for the remaining
+volume. An important observation is that impact is created not only by
+fills, but also by orders,13 even by those never filled. This is understand-
+able from the viewpoint of HFT traders or market makers running their
+trading algorithms on the full view of the order book (Sec. 6.10.3). In
+general, the more buy orders are sitting on the order book, the more
+likely the market is driven by buyers—a bullish HFT signal.14
+If a portfolio execution algo is set up in a way to buy more (less) if
+the price goes down (up), then running TCA on executions only can
+result in a negative impact, because buy trades more likely executed on
+a downtick can be followed by more price drops due to a momentum.
+9 J. Donier, J. Bonart, I. Mastromatteo, J.-P. Bouchaud, A fully consistent, minimal model
+for non-linear market impact, arXiv:1412.0141v4 [q-fin.TR], 2014.
+10 R. Almgren, C. Thum, E. Hauptmann, H. Li, Direct Estimation of Equity Market
+Impact, doi:10.1.1.146.1241, 2005.
+11 B. Tóth, Y. Lempérière, C. Deremble, J. de Lataillade, J. Kockelkoren, J.-P. Bouchaud,
+Anomalous price impact and the critical nature of liquidity in financial markets, arXiv:1105.1694
+[q-fin.TR], 2018.
+12 M. Pohl, A. Ristig, W. Schachermayer, L. Tangpi, The amazing power of dimensional
+analysis: Quantifying market impact, arXiv:1702.05434v2 [q-fin.TR], 2017.
+13 R. Cont, A. Kukanov, S. Stoikov, The Price Impact of Order Book Events, arXiv:
+1011.6402 [q-fin.TR], 2011.
+14 M. Avellaneda, J. Reed, S. Stoikov, Forecasting Prices from Level-I Quotes in the Presence of
+Hidden Liquidity, Algorithmic Finance, Vol. 1, No. 1, 2011, Available at SSRN: https://
+ssrn.com/abstract=1691401.
+
+================================================================================
+PDF PAGE 213
+================================================================================
+Trading Costs and Market Elasticity
+177
+A way out of this, and let me be vague here, could be replacing cancel
+in the order-trade- … -trade-cancel chain by a hypothetical fill, even
+at unfavorable price, instead of the cancel. Running thus modified
+TCA gives more reasonable results that are roughly in agreement with
+abnormal shock impact, which was observed after occasional erroneous
+trades mentioned on p. 175. Another, more lightweight approach used
+by this author as a supplemental sanity check was a poll of several
+professional non-quant traders on expected price change if they were
+to execute sizable trades in a few familiar names of varying liquidity.15
+A recent poll of financial economists about permanent price impact in a
+macro setting of moving funds from bonds to stocks resulted in a larger
+variance and a stronger bias.16
+Price impact data is very noisy and should also be adjusted for broad
+market moves explaining a good part of stock variance, as well as han-
+dling a forecast-based trade bias. In the simplest form, this means sub-
+tracting from stock returns contemporaneous market return and any
+short-term forecast used in contemplating the trade. In the experience
+of this author, it is difficult to separate slippage from impact and to distin-
+guish between various exponents 𝜓in the impact model I(T) ∝|T|𝜓.
+Measuring the rate of impact decay is even more difficult and can result
+in an estimate off by an order of magnitude.
+5.2.2
+Linear impact model
+The price p(t) of a stock is known in advance for all t ∈[0, T]. You
+can trade the stock without restriction using unlimited capital but your
+broker charges you a fee, per second, proportional to the square trading
+rate. What maximum pnl can be made starting with zero position at
+t = 0 and liquidating by t = T?
+From a quant interview17
+15 Before order management was fully automated, larger trades would be placed by
+human traders over the phone. Ensuring good execution required advanced commu-
+nication skills. These professionals cheerfully exposed ESL-educated quants like this
+author to the intricacies of the English language you won’t hear on NPR.
+16 X. Gabaix, R.S.J. Koijen, In Search of the Origins of Financial Fluctuations: The Inelastic
+Markets Hypothesis, Swiss Finance Institute Research Paper No. 20-91, Available at
+SSRN: https://ssrn.com/abstract=3686935, 2021.
+17 A self-assured quant candidate worked out an explicit answer to this question. When
+asked why his formula gives a non-zero pnl for p(t) = const, the candidate challenged
+the author to find an error in his math.
+
+================================================================================
+PDF PAGE 214
+================================================================================
+178
+Q U A N T I TAT I V E P O RT F O L I O M A N A G E M E N T
+It is not inconsistent with data, as far as this author’s TCA is con-
+cerned, to use a simple linear impact model with an exponential decay.
+Written in continuous time,18 the model reads
+̇I = λ ̇P −𝜈I,
+or
+I(t) = ∫
+t
+0
+λ ̇P(t′)e−𝜈(t−t′)dt′,
+(5.2)
+assuming zero position and impact for t < 0. Here I(t) is the impact part
+of the stock return R(t), P(t) is the portfolio position in this stock, and
+dot stands for time derivative so ̇P is trading rate. The impact coefficient
+λ is inversely proportional to the stock’s average or median dollar volume
+(ADV or MDV) and is possibly a function of stock volatility. The impact
+decay time 𝜈−1 can be anywhere between a few hours and a few days.
+In this simple model, if a trade T is made over time much shorter
+than impact decay, the cost of the trade is
+Cost(T) = λT2
+2 .
+(5.3)
+It is due to buying the asset at an increased price, and the cost can be
+undone (in the absence of slippage) by immediately making an opposite
+trade. Otherwise, the cost is realized later (but can be booked in a sim-
+ulator immediately) as the impact wears out and the price reverts back.
+The combined effect of fixed slippage and linear impact makes trade
+cost per dollar traded a concave nonlinear function of the trade size
+T ≥0:
+Cost(T)
+T
+= c Sign(T) + λ
+2T,
+(5.4)
+which, given low TCA accuracy, is not that different from a square root
+function (Fig. 5.1).
+18 Continuous time is an approximation for multiple trades smoothed over time. The fact
+that time t includes both trading and non-trading hours while impact decays overnight
+can be accounted for by introducing an effective time, or horizon, coordinate measured
+in days. The effective time changes faster during trading hours, slower otherwise, and
+increases by 1 when moving from an intraday time point to the same point on the next
+trading day. Impact model in the effective continuous time is more concise than the
+case of discrete trades, which is also straightforward.
+
+================================================================================
+PDF PAGE 215
+================================================================================
+Trading Costs and Market Elasticity
+179
+Figure 5.1
+Linear impact cost plus slippage vs square root impact cost.
+Adoption of the linear structure of price impact response and its
+exponential decay makes it possible to solve a multi-period optimization
+problem for a single security in a closed form (Sec. 6.4), which, other
+things equal, is a significant advantage over nonlinear impact models.
+For position P(t) evolving in continuous time, the impact cost is
+Cost(0, t) = −∫
+t
+0
+P(t′) ̇I(t′)dt′.
+(5.5)
+Integrating (5.5) by parts, we have
+Cost(0, t) = −P(t)I(t) + ∫
+t
+0
+̇P(t′)I(t′)dt′
+= −P(t)I(t) + λ
+2 ∬
+t
+0
+̇P(t′) ̇P(t′′)e−𝜈|t′−t′′|dt′dt′′.
+(5.6)
+This formula expresses the fact that a trade made at one time t′ affects the
+cost of a trade made at a later time t′′. This is due to the finite post-trade
+impact life time.
+
+================================================================================
+PDF PAGE 216
+================================================================================
+180
+Q U A N T I TAT I V E P O RT F O L I O M A N A G E M E N T
+5.2.3
+Instantaneous impact cost model
+In the limit of a fast impact decay, 𝜈→∞, which is relevant for a port-
+folio turnover rate much slower than 𝜈, we can approximate the expo-
+nential impact kernel in (5.6) by a delta function:
+e−𝜈|t′−t′′| →2
+𝜈𝛿(t′ −t′′).
+(5.7)
+Assuming a finite ratio
+𝜇= λ
+𝜈,
+(5.8)
+we arrive at the simplified impact model with an instantaneous cost of
+trading:
+I = 𝜇̇P,
+dCost
+dt
+= 𝜇̇P2(t).
+(5.9)
+This time-local impact cost model is useful for developing multi-period
+optimization intuition (Sec. 6.4.1).
+5.2.4
+Impact arbitrage
+It is useful to differentiate functions and to solve differential equations.
+Isaac Newton19
+The first term in (5.6) is the terminal loss sustained by the final
+position P(t) after the impact I(t) decays. As a function of time, this
+term is bounded. The second term grows linearly with time t and
+describes interaction of trades made at different times. As a quadratic
+form with Laplacian kernel, it is positive definite (Sec. A3), so impact
+arbitrage, i.e., generating a consistent pnl by affecting stock price by
+trading, is impossible.
+If the impact coefficient λ is a function of time, e.g., due to fluc-
+tuating intraday trading activity levels (which tends to be higher near
+19 A know-how considered by Newton as his most valuable secret. As a proof of priority,
+an encrypted anagram “6accdae13eff7i3l9n4o4qrr4s8t12ux,” for Latin Data aequatione
+quotcunque fluentes quantitae involvente fluxiones invenire et vice versa, was sent to G.W.
+Leibniz, considered as a competitor, in 1677.
+
+================================================================================
+PDF PAGE 217
+================================================================================
+Trading Costs and Market Elasticity
+181
+the market open and just before the market close), an impact arbitrage
+becomes theoretically possible by moving up the price by a buy during
+an illiquid period and selling back during a liquid period. Expressing
+from (5.2) the trading rate
+̇P = ̇I + 𝜈I
+λ
+,
+(5.10)
+impact cost can be rewritten by repeatedly integrating by parts and omit-
+ting boundary values:
+∫P ̇Idt = −∫I ̇Pdt = −∫I ̇I + 𝜈I
+λ
+dt
+= −∫
+I2
+2λ2(̇λ + 2𝜈λ)dt.
+(5.11)
+A negative impact cost can be generated during time periods when
+̇λ < −2𝜈λ,
+(5.12)
+and could be potentially exploited by a portfolio.
+Trying to benefit from impact arbitrage would be risky and possibly
+illegal.20 We will assume that λ is (nearly) constant.
+5.3
+Cost of carry
+Finally, just holding a position can involve its own cost known for phys-
+ical commodities as cost of carry. For equities traded on a margin, this
+is interest on borrowed funds minus interest proceeds on stock sold
+short. For a market-neutral portfolio this is expressed in terms of a fixed
+cost of capital, which is usually insignificant in comparison with trad-
+ing costs. An exception are hard-to-borrow equities, whose shorting
+involves additional broker fees.
+20 Theoretically, active management of price impact could be construed as market
+manipulation. The U.S. Securities Exchange Act of 1934 prohibits transactions affecting
+the price of a publicly traded security “for the purpose of inducing the purchase or sale
+of such security by others.”
+
+================================================================================
+PDF PAGE 218
+================================================================================
+182
+Q U A N T I TAT I V E P O RT F O L I O M A N A G E M E N T
+5.4
+Market-wide impact and elasticity
+Theocritus and Homer he disparaged,
+but read, in compensation, Adam Smith,
+and was a deep economist:
+that is, he could assess the way
+a state grows rich,
+what it subsists upon, and why
+it needs not gold
+when it has got the simple product.
+Alexander Pushkin21
+The market impact of trades (Sec. 5.2) is not just a cost to a port-
+folio manager. It is the very reason why asset prices evolve, something
+the PM would very much like to understand and predict. Given that
+each stock is subject to the price impact, it is logical to ask what drives
+the equity market at a macro scale—in case the PM wants to manage
+exposures to SPY or other broad indices. The question is also of interest
+to economists, central bankers, regulators, and IRA account holders, to
+name a few.
+One could argue that the trade impact, or supply and demand mar-
+ket pressure exerted by homo economicus investors, is ultimately motivated
+by rational fundamental analysis or the value of future dividend streams
+attached to equity holdings. Rational investing is neither the only nor
+the main effect driving the markets. There are also political, environ-
+mental, and public health events, government monetary policies, and
+fads and fashions of investing as a social activity.22
+Another important part of the supply and demand landscape
+includes liquidity traders, i.e., those who trade not because they have
+specific bullish or bearish views of the assets but because they must.
+Pension plans and mutual funds continuously allocate participants’
+contributions according to their mandates and prospectuses. Pay-
+ment of annuities and lump sum distributions requires selling assets
+regardless of any forecast. Holdings of pension and mutual funds
+account for a large portion of outstanding equity shares, and they
+are often positioned as liquidity traders. Over 50% of global pension
+21 A.S. Pushkin, Eugene Onegin, 1833. Translated by Vladimir Nabokov (1964).
+22 R.J. Shiller, Stock Prices and Social Dynamics, Brookings Papers on Economic
+Activity, 1984(2), pp. 457–510, 1984.
+
+================================================================================
+PDF PAGE 219
+================================================================================
+Trading Costs and Market Elasticity
+183
+fund holdings are in equities,23 even though the Social Security
+Trust Fund, the world’s largest pension fund managing $2.9 × 1012
+in assets,24 invests only in government bonds.
+Public and private pension funds, mutual funds, and insurance com-
+panies are the biggest institutional investors.25 When large institutions
+manage flows of funds under certain constraints, there are market-wide
+consequences. An influential recent paper26 analyzes the effect of institu-
+tional fixed equity share mandate on the aggregate market price elasticity.
+Price elasticity is defined as the sensitivity of a tradable item’s supply or
+demand to its price. The trade curve of Sec. 6.10.1 is an example of
+real-time elastic supply or demand for shares of stock. The inverse of the
+elasticity describes the price sensitivity to demand or supply and has a
+meaning similar to market impact. Gabaix and Koijen estimate that an
+inflow of $1 into the stock market results in an aggregate market value
+increase of about $5, an illustration of what they term the inelastic market
+hypothesis.
+The author, by no means an expert in macroeconomics, will take a
+risk of offering a simple explanation of the inelastic market effect. Let’s
+assume that there is only one publicly traded stock with N shares out-
+standing, currently at price p, and only one institutional fund, Incumbent
+Investments Inc., holding all (or most) of those shares.27 The fund has a
+mandate to maintain a certain percentage 𝛼, e.g., 80%, of its total assets
+A in stock and the rest, (1 −𝛼)A, in cash. To meet the requirement, the
+fund’s cash holdings must be
+C = 1 −𝛼
+𝛼
+Np.
+(5.13)
+Now there is an inflow of funds to the market: a new fund, The Surplus
+Group, wants to buy 𝛿N shares of the stock. If Incumbent sold the shares
+to Surplus at the current price p, Incumbent’s stock holdings percentage
+would drop below 𝛼, which is unacceptable. But Incumbent would agree
+23 https://www.oecd.org/pensions/Pension-Funds-in-Figures-2020.pdf.
+24 https://www.swfinstitute.org/profile/598cdaa60124e9fd2d05beb4.
+25 A. De La Cruz, A. Medina, Y. Tang, Owners of the World’s Listed Companies, OECD
+Capital Market Series, Paris, 2019.
+26 X. Gabaix, R.S.J. Koijen, In Search of the Origins of Financial Fluctuations: The Inelastic
+Markets Hypothesis, Swiss Finance Institute Research Paper No. 20-91, Available at
+SSRN: https://ssrn.com/abstract=3686935, 2021.
+27 The idea being that a large institutional investor is the likely ultimate counterparty
+for any net market flow.
+
+================================================================================
+PDF PAGE 220
+================================================================================
+184
+Q U A N T I TAT I V E P O RT F O L I O M A N A G E M E N T
+to sell at a higher price. If the after-trade price is p + 𝛿p, and the average
+trade price is in the middle, p + 𝛿p∕2, the Incumbent’s holdings mandate,
+stock
+stock + cash =
+(N −𝛿N)(p + 𝛿p)
+(N −𝛿N)(p + 𝛿p) + C + 𝛿N(p + 𝛿p∕2) = 𝛼,
+(5.14)
+is solved by the price increase
+𝛿p
+p =
+𝛿N
+(1 −𝛼)N −(1 −𝛼∕2)𝛿N ≈
+1
+1 −𝛼
+𝛿N
+N .
+(5.15)
+The factor (1 −𝛼)−1 > 1 indicates a permanent market-wide impact
+due to the flow of funds. For 𝛼= 0.8, the total market value increase,
+N𝛿p = 5p𝛿N, is a large multiple of the additional investment.
+Conversely, if Incumbent faces an outflow of funds, the fund must
+initiate a sale in the market with few willing buyers, thus driving the
+stock price down until the holdings mandate is met again. The algebra
+for this case is the same as above up to the change of sign of 𝛿p.
+In this simplified, spherical-cow-type model, the aggregate stock mar-
+ket value would behave like a bubble inflated by pension and other
+investible savings and deflated by redemptions and accelerated retire-
+ment of the workforce. Imagine a magic $5 bill in your wallet which
+turns into $1 when you want to actually spend the money.
+The inelastic market impact of equity sales needed to fund growing
+pension payments could be one of the reasons for the crash of Japan’s
+stock market bubble.28 The crash was followed by the Lost Decade
+(1991–2001) of economic stagnation amid an aging population and
+increasing number of retirees, a distinctive feature of Japan’s demo-
+graphics.29 A liquidity trap30 and a unique inefficiency of common fiscal
+policies31 are cited as being among the causes of the Lost Decade(s).
+Notwithstanding performance and solvency concerns,32 it may be
+good, after all, that the U.S. Social Security Trust Fund stays away from
+the stock market.
+28 Vladimir V. Yankov pointed out this possible connection.
+29 https://data.worldbank.org/indicator/SL.TLF.CACT.NE.ZS?locations=JP.
+30 P.R. Krugman, It’s Baaack: Japan’s Slump and the Return of the Liquidity Trap, Brookings
+Papers in Economic Activity, 1998(2), 1998.
+31 N. Yoshino, F. Taghizadeh-Hesary, Japan’s Lost Decade: Lessons for Other Economies,
+Asian Development Bank Institute Working Paper No. 521, 2015.
+32 B.F. Huston, Social Security: The Trust Funds and Alternative Investments, Congressional
+Research Service report R45709, 2019. Available at https://crsreports.congress.gov.
+
+================================================================================
+PDF PAGE 221
+================================================================================
+Chapter 6
+Portfolio Construction
+T
+o trade a profitable portfolio, one generally wants to buy low
+and sell high. To systematically follow through on this, we need
+a forecast of future returns, a risk model, a trading cost model,
+and a portfolio construction algorithm using all of the above.
+6.1
+Hedged allocation
+Ms. Three, Ms. Five, and Ms. Eight are making a cake. For this
+project Ms. Three contributes 3 lbs of flour, Ms. Five contributes 5 lbs
+of flour, and Ms. Eight, who has no flour, pays $8 cash. If the deal
+is fair, how much cash do Ms. Three and Ms. Five get back?
+From a quant interview
+Perhaps the simplest, and therefore fairly popular, portfolio con-
+struction method is signal-based allocation. A “signal” is either a fore-
+cast or a number proportional to, or altogether replacing, the forecast.
+185
+
+================================================================================
+PDF PAGE 222
+================================================================================
+186
+Q U A N T I TAT I V E P O RT F O L I O M A N A G E M E N T
+Given signals fs, one computes portfolio positions Ps proportional to fs. If
+there is only one risk factor to avoid, such as the market, one adds to the
+portfolio a hedge, a liquid ETF instrument such as SPY for US equities,
+as a market proxy with beta close to 1, in the amount computed to kill
+the market exposure of the portfolio. If there are industrial sector risk
+factors, they can be handled likewise by hedging by several broad sector
+ETFs such as XLK for technology, XLV for healthcare, XLU for utilities,
+and so forth. Signal-based allocation largely ignores trading costs, whose
+effect is then tested by a trading simulation (Chapter 7).
+For more general risk factors specified by their loadings Li,
+i = 1,…, K, one can orthogonalize the raw position P = af with
+respect to the risk factors,
+P = P|| + P⟂,
+P⟂⋅Li = 0.
+(6.1)
+This decomposition is unique and given by standard linear algebra.
+Equivalently, we could orthogonalize the signals WRT risk factors,
+f →f⟂, to start with.
+In practice, the position vector P cannot be arbitrary and must be
+confined in a box Ps ∈Bs = [Pmin
+s
+, Pma𝑥
+s
+]. The constraints can include
+both firm-wide legal requirements and self-imposed limits, such as max-
+imum daily trade size and position in terms of percentages of each name’s
+ADV. Trade size is constrained to control impact costs (Sec. 5.2). Position
+size is constrained for potentially better portfolio diversification (Sec. 3.1)
+and to limit time to liquidate if necessary (Sec. 4.8). Linear algebra does
+not fit in a box. Constrained allocation can be handled using penalties
+by maximizing a utility function such as
+F(P) = f ⋅P −1
+2aP2 −k
+∑
+i
+(Li ⋅P)2,
+P ∈B.
+(6.2)
+In the absence of risk factors and constraints, this results in P = af.
+Maximizing (6.2) subject to applicable box constraints and high enough
+factor exposure penalty k will result in a position almost orthogonal to
+all risk factors, and the regularizing scale a can be chosen iteratively to
+meet desired portfolio size. This is a convex quadratic programming (QP)
+optimization problem, which can be handled efficiently with many
+
+================================================================================
+PDF PAGE 223
+================================================================================
+Portfolio Construction
+187
+available QP solvers. Among those, the Barzilai-Borwein algorithm1 is
+one of the easiest to implement. By empirical observations, it converges
+in O(N2 log(N)) FLOPs.
+Alternatively, one can use a QP algorithm with K linear equality
+constraints P ⋅Li = 0. There is no guarantee these are compatible with
+the box constraints, so one should be prepared to handle infeasible QP
+exceptions.
+6.2
+Forecast from rule-based strategy
+Some event-based trading strategies (Sec. 2.1.7) may not use forecasts
+explicitly. Instead, there are trade rules specifying conditions for entering
+and exiting positions. A trade-rule-based strategy is formulated in terms
+of a target position as a prescribed function of time:
+P = P∗(t).
+(6.3)
+To combine such strategy with other, forecast-based strategies, the trade
+rules need to be translated into a forecast, a process opposite to portfolio
+construction. One way to do so is to form a utility function penalizing
+for deviations from the strategy target P∗. We can also include in the
+utility a penalty for risk factor exposure and apply constraints:
+F(P) = −A(P −P∗)2 −k
+∑
+i
+(Li ⋅P)2,
+P ∈B.
+(6.4)
+Up to a constant independent of the position P, Eq. (6.4) is equivalent
+to (6.2) with the forecast
+f(t) = 2AP∗(t).
+(6.5)
+The constant A (or, generally, a vector A) needs to be suitably normalized
+for a correct forecast scale. This is required for comparing expected port-
+folio returns with trading costs, as discussed later in this chapter. A pos-
+sibly complicated term structure of the trade-rule-based forecast f(t),
+1 J. Barzilai, J.M. Borwein, Two-Point Step Size Gradient Methods, IMA Journal of
+Numerical Analysis, 8(1), pp. 141–148, 1988.
+
+================================================================================
+PDF PAGE 224
+================================================================================
+188
+Q U A N T I TAT I V E P O RT F O L I O M A N A G E M E N T
+either in isolation or combined with other forecasts, can be handled by
+a multi-period optimizer (Sec. 6.5).
+6.3
+Single-period vs multi-period
+mean-variance utility
+A singly linked list is a data structure defined by its head node con-
+taining a pointer to the next node or null if the node is the tail of the
+list. What algorithm, linear in list size and with fixed memory, can
+be used to determine whether the list has a tail?
+From a quant interview
+Allocation utility (6.2), while reflecting forecast and risk loadings,
+still appears somewhat arbitrary. It would be better if the utility expressed
+our goals and preferences more explicitly. If the forecast fs is meant as an
+expectation of the stock’s daily return, then f ⋅P is the expectation of
+daily pnl. This pnl term appears in Eq. (6.2) and makes sense for a utility
+function. A regularization term can be made more precise by expressing
+risk aversion as a penalty for the expected pnl variance. With a factor
+risk model, the covariance matrix (4.7) is positive definite and takes care
+of both regularization and factor risk. The expected pnl should be also
+adjusted for trading costs associated with transitioning from the current
+position P0 to the new position P. With slippage cs and impact cost (5.4),
+the portfolio utility is
+F(P) = f ⋅P −I ⋅T −c ⋅|T| −kPCP,
+(6.6)
+where
+Is = I0s + λs
+2 Ts
+(6.7)
+is the trade impact in security s and
+T = P −P0
+(6.8)
+is the vector of trades. In Eq. in (6.6), the absolute value of a vector is
+understood component-wise and C is the return covariance matrix such
+as in Eq. (4.7). To use impact cost as written, the time period must be
+shorter than the impact decay time 𝜈−1.
+
+================================================================================
+PDF PAGE 225
+================================================================================
+Portfolio Construction
+189
+Eq. (6.6), as a single-period utility, is insufficient for nonlocal impact
+costs when earlier trades affect the cost of later trades (Sec. 5.2.2). To
+tackle multi-period, aka multi-horizon or multi-step, optimization, it
+is convenient to use continuous time. Let the current time point at
+which the forecast is produced and portfolio optimization is run be t = 0.
+Instead of a one-day forecast, we use forecast f(t) a function of horizon.
+This combined forecast can include shorter technical and longer funda-
+mental forecasts. The function fs(t) starts with fs(0) = 0, is not monotone
+in general, but it will approach a constant at t →∞, i.e., beyond the
+longest available prediction. We are looking for the position path P(t)
+maximizing a time-integrated utility as a functional of P(t):
+F[P(t)] = ∫
+∞
+0
+(P ⋅̇f −c ⋅| ̇P| −̇PΛ ̇P −kPCP)dt.
+(6.9)
+In Eq. (6.9), Λ is a linear integral operator appearing in the impact model
+(5.2). It appears quite plausible2 that trades in one stock cause impact
+in other stocks as well, so Λss′ is a matrix integral operator. Since fit-
+ting a cross-impact matrix to execution data looks difficult, we normally
+assume this matrix diagonal.3 The impact operator is defined by
+Is(t) = Λ ̇Ps(t) = λs ∫
+t
+0
+e−𝜈s|t−t′| ̇Ps(t′)dt′.
+(6.10)
+Finite-life-time impact couples each asset position serially (by time)
+and requires optimizing for position paths Ps(t)—functions rather than
+numbers.
+The last, variance-penalty term in (6.9) consists of risk aversion by
+asset (residual, or idiosyncratic, risk) and factor exposure risk:
+PCP =
+∑
+s
+𝜎2
+s P2
+s +
+∑
+ij
+Uij(Li ⋅P)(Lj ⋅P)
+(6.11)
+The factor risk couples assets cross-sectionally via the loadings Li and
+requires optimizing for all assets simultaneously. Given some estima-
+tion uncertainty in the factor covariance Uij, even after asset covariance
+shrinkage by the factor model (Sec. 4.2), it is not unreasonable to use
+2 M. Benzaquen, I. Mastromatteo, Z. Eisler, J.-P. Bouchaud, Dissecting cross-impact on
+stock markets: An empirical analysis, arXiv:1609.02395v2 [q-fin.TR], 2016.
+3 A more general symmetric Λss′ matrix is considered in Sec. 6.5.1.
+
+================================================================================
+PDF PAGE 226
+================================================================================
+190
+Q U A N T I TAT I V E P O RT F O L I O M A N A G E M E N T
+different penalties for the diagonal and the factor risk in (6.11) instead
+of the single risk aversion coefficient k.
+Any costs of carry (Sec. 5.3) are linear in the dollar position and can
+be absorbed in the forecast ̇f, along with the projected decay of the initial
+impact I0e−𝜈t.
+Utility (6.9) must be maximized with respect to all possible posi-
+tion paths P(t) starting with the current position P(0) = P0. Given that
+̇f(∞) = 0 (no forecast beyond a max horizon), the position must go to
+zero as t →∞to avoid risk with no reward. After the optimal path P(t)
+is solved for, much of the solution will be discarded though because after
+trading down the initial part of the path, new information becomes avail-
+able, forecasts are updated, and the process repeats.4 One can optionally
+discount future utility (6.9) by an exponential factor e−Γt.
+Numerical maximization of the multi-period utility (6.9) or its dis-
+crete versions is challenging due to the additional time dimension, but
+there are ways to simplify it by doing part of the work analytically. In the
+following sections this is demonstrated in several special cases.
+6.4
+Single-name multi-period optimization
+If the off-diagonal (factor) part is omitted from the stock covariance
+(4.7), portfolio optimization splits into optimizations by individual stock.
+Single-name optimization, a useful building block of the full portfolio
+optimization, is the subject of this section.
+6.4.1
+Optimization with fast impact decay
+If you ever stirred tea with a teaspoon, you may have noticed that
+pieces of tea leaves accumulate at the center of the bottom of the cup.
+Why aren’t they drawn to the outside by centrifugal force?
+From a quant interview
+If trading rate is much slower than impact decay, we can use the
+local trading cost limit (5.9). Single name utility with this cost and no
+slippage is
+F[P(t)] = ∫
+∞
+0
+( ̇f P −kP2 −𝜇̇P2)dt.
+(6.12)
+4 Alternative approaches explicitly accounting for the forecast revision are discussed in
+Sec. 6.7.
+
+================================================================================
+PDF PAGE 227
+================================================================================
+Portfolio Construction
+191
+The variation5 of the utility,
+𝛿F = ∫
+∞
+0
+( ̇f 𝛿P −2kP𝛿P −2𝜇̇P𝛿̇P)dt,
+(6.13)
+upon integrating by parts gives the optimality condition
+(𝜕2
+t −𝜔2)P =
+̇f
+2𝜇,
+𝜔=
+(
+k
+𝜇
+)1∕2
+,
+(6.14)
+which is somewhat similar to the dynamics of a body of mass 𝜇immersed
+in a viscous fluid and acted upon by an external force ̇f . Rewriting
+this as
+(𝜕t + 𝜔)P = (𝜕t −𝜔)−1 ̇f
+2𝜇
+= 1
+2𝜇∫
+∞
+0
+̇f (t)e−𝜔tdt,
+(6.15)
+we obtain the initial trading rate
+̇P(0) = −𝜔P0 + 1
+2𝜇∫
+∞
+0
+̇f (t)e−𝜔tdt.
+(6.16)
+The full path can also be written in a closed form, but the knowledge of
+just ̇P(0) is sufficient to start trading. The first term in (6.16) reflects risk
+aversion. The second term is an exponential moving average of expected
+future price changes with time constant 𝜔−1 ∝𝜇1∕2 and plays the role
+of an effective forecast. The time constant is shorter (longer) for more (less)
+liquid stocks, expressing an inertia-like behavior. The result is intuitive
+in that liquid names can be traded on shorter signals and illiquid ones
+should only react to longer forecasts.
+Solution (6.16) can be also written in the form of future position
+target P∗and the optimal rate 𝜔of trading toward the target:
+̇P(0) = 𝜔(P∗−P0),
+P∗= (2k𝜇)−1∕2
+∫
+∞
+0
+̇f (t)e−𝜔tdt.
+(6.17)
+5 A.R. Forsyth, Calculus of Variations, Dover, 1960.
+
+================================================================================
+PDF PAGE 228
+================================================================================
+192
+Q U A N T I TAT I V E P O RT F O L I O M A N A G E M E N T
+Result (6.17) is easy to generalize to an exponentially discounted
+future utility introduced by an addition time weight e−Γt in Eq. (6.12).
+As expected, discounting of future pnl results in an increased forecast
+EMA rate 𝜔:
+𝜔= Γ
+2 +
+(
+Γ2
+4 + k
+𝜇
+)1∕2
+.
+(6.18)
+6.4.2
+Optimization with exponentially decaying impact
+A parallel light beam is passing through a hollow pipe filled with
+suspended dust, so the total cross-sectional area of all dust particles in
+the pipe equals its cross-section. How much of the light energy will
+pass through the pipe?
+From a quant interview
+The model of Sec. 6.4.1 is a special limit, for large λ and 𝜈and finite
+𝜇= λ∕𝜈, of the exponentially decaying impact. Here we consider the
+more general single-name utility
+F[P(t)] = ∫
+∞
+0
+( ̇f P −kP2 −I ̇P)dt,
+̇I = λ ̇P −𝜈I.
+(6.19)
+Introducing the new variable6
+Q = P −I∕λ,
+(6.20)
+the position and the impact are expressed as
+P = Q + ̇Q∕𝜈,
+I = (λ∕𝜈) ̇Q.
+(6.21)
+Then the utility (6.19) transforms to
+F[Q(t)] = ∫
+∞
+0
+(
+gQ −kQ2 −k
+𝜔2 ̇Q2)
+dt,
+(6.22)
+where
+g(t) = ̇f (t) −𝜈−1̈f (t),
+𝜔= 𝛼𝜈,
+𝛼=
+(
+1 + λ𝜈
+k
+)−1∕2
+.
+(6.23)
+6 An elegant solution using this variable is due to Andrei Johansen (unpublished, 2005).
+Originally, the results of this section were obtained using a Laplace transform.
+
+================================================================================
+PDF PAGE 229
+================================================================================
+Portfolio Construction
+193
+The utility functional (6.22) is identical to (6.12) up to relabeling and
+can be maximized by a similar variational procedure. The optimal path
+for Q(t) is
+Q(t) = Q0e−𝜔t + 𝜔2
+2k ∫
+∞
+0
+g(t′)Qt′(t)dt′,
+(6.24)
+where
+Qt′(t) = 1
+2𝜔(e−𝜔|t−t′| −e−𝜔(t+t′))
+(6.25)
+is the Green’s function of the operator 𝜔2 −𝜕2
+t , or bounded solution of
+the linear equation
+(𝜔2 −𝜕2
+t )Qt′(t) = 𝛿(t −t′),
+s.t.
+Qt′(0) = 0.
+(6.26)
+Transforming back to
+P = Q +
+̇Q
+𝜈,
+(6.27)
+we observe that the optimal position path generally starts with a discon-
+tinuity, or a finite size trade, from the initial P0 to the target
+P∗= (1 −𝛼)Q0 + 𝛼2𝜈
+2k f eff
+𝜔.
+(6.28)
+The effective forecast introduced in (6.28) depends on the security liquidity
+relative to risk aversion:
+f eff
+𝜔= ∫
+∞
+0
+g(t)e−𝜔tdt
+=
+{ ̇f 0∕𝜈+ f∞,
+k ≪λ𝜈,
+̇f 0∕𝜈,
+k ≫λ𝜈.
+(6.29)
+Just like in the local impact model (6.16), the effective forecast is sen-
+sitive to shorter (longer) horizons for more (less) liquid names. Unlike
+the local impact cost model (6.12), a finite trade in model (6.19) incurs
+finite cost and is therefore allowed. If (6.17) gives an optimal rate of trad-
+ing to a target, (6.28) indicates an optimal position to take immediately.
+In the limit 𝜈≫k∕λ the targets (6.17) and (6.28) are the same.
+As a common feature of linear-quadratic functions, the optimum
+is reached at the point where quadratic penalties amount to one-half
+the linear term. This means that it is optimal to give away half of the
+forecast-driven gross pnl to impact cost and risk penalty.
+
+================================================================================
+PDF PAGE 230
+================================================================================
+194
+Q U A N T I TAT I V E P O RT F O L I O M A N A G E M E N T
+Figure 6.1
+Schematic of optimal position path with impact decay.
+After the initial trade T∗= P∗−P0, the optimal position path P(t)
+is continuous (Fig. 6.1). One can show that the continuous part is con-
+sistent with (6.28) applied to infinitesimal changes of the forecast f (t)
+due to time shifts.
+6.4.3
+Optimization conditional on a future position
+Having in mind portfolio optimization with factor risk introducing
+interaction among stocks, we need to consider single-stock solutions
+away from the optimum (6.28), so a deterioration in single-name utility
+(6.19) could be counterbalanced by a beneficial reduction of multi-asset
+factor risk. One way to introduce a single-name non-optimality is a
+constraint on a future position Pf . For intraday optimization, Pf could
+be an end-of-day position target, but that constraint would be too
+rigid near the market close. Given an abundance of exponentials in the
+solution of Sec. 6.4.2, it is convenient to introduce, instead of a fixed
+point in time, a constraint in terms of the future EMA position
+Pf = ∫
+∞
+0
+P(t)e−𝛾t𝛾dt,
+(6.30)
+with a horizon 𝛾−1 suitable for imposing factor risk penalties on Pf .
+
+================================================================================
+PDF PAGE 231
+================================================================================
+Portfolio Construction
+195
+Incorporating condition (6.30) in the utility (6.19) with a Lagrange
+multiplier m just redefines the forecast as
+̇f →̇f + m𝛾e−𝛾t,
+(6.31)
+without changing algebra. The maximum of the utility subject to the Pf
+constraint works out to a quadratic:
+F∗(Pf ) =
+max
+P∶EMA(P) = Pf
+F[P(t)] = −aP2
+f + bPf + c,
+(6.32)
+with the coefficients
+a = 2k(𝜔+ 𝛾)2
+𝛾(𝜔+ 𝛼𝛾)2,
+b = 4k(1 −𝛼)(𝜔+ 𝛾)
+(𝜔+ 𝛼𝛾)2
+Q0 −2𝜔(𝜔+ 𝛾)
+𝜔+ 𝛼𝛾
+f eff
+𝜔−f eff
+𝛾
+𝜔−𝛾,
+(6.33)
+and f eff
+𝑥
+given by Eq. (6.29). Under the EMA constraint (6.30), the opti-
+mal solution P(t) also starts with a finite trade to the target
+P∗(Pf ) = (1 −𝛼)𝜔−𝛼𝛾
+𝜔+ 𝛼𝛾Q0 + 𝛼2𝜈
+2k f eff
+𝜔
+−𝛼𝜔𝛾(𝜔+ 𝛾)
+k
+f eff
+𝜔−f eff
+𝛾
+𝜔2 −𝛾2 + 2𝛼𝜔+ 𝛾
+𝜔+ 𝛼𝛾Pf .
+(6.34)
+The maximum of (6.32) is reached at
+P∗
+f = b
+2a = 𝛾(1 −𝛼)
+𝜔+ 𝛾Q0 −𝛾𝜔(𝜔+ 𝛼𝛾)
+2k
+f eff
+𝜔−f eff
+𝛾
+𝜔2 −𝛾2 ,
+(6.35)
+which is a “harmless” constraint on (6.19). Correspondingly, in the
+immediate future limit 𝛾→∞, P∗
+f equals the optimal position P∗(6.28)
+as it should. The conditional single-name utility (6.32) for Pf ≠P∗
+f will
+be used in Sec. 6.5.3.
+6.4.4
+Position value and utility leak
+Given a steel pipe with an audible water flow, what would be the
+simplest nondestructive measurement of the direction of the flow?
+From a quant interview
+A utility function
+F[P(t), ̇f (t)] = ∫
+∞
+0
+(( ̇f + ̇I)P −kP2 −c| ̇P|) w(t)dt
+(6.36)
+
+================================================================================
+PDF PAGE 232
+================================================================================
+196
+Q U A N T I TAT I V E P O RT F O L I O M A N A G E M E N T
+can be used for more than just portfolio construction. Here a time
+discount factor w(t) (e.g., an exponential w(t) = Γe−Γt) is introduced to
+keep the utility finite. Consider a forecast consisting of two components,
+̇f = ̇f 1 + ̇f 2,
+(6.37)
+the second one with a very long horizon so ̇f 2 is almost constant. Then
+the slow forecast can be eliminated by observing that
+F[P(t), ̇f 1 + ̇f 2] = F
+[
+P(t) −
+̇f 2
+2k, ̇f 1
+]
++ ∫
+∞
+0
+w(t) ̇f
+2
+2
+4k
+dt.
+(6.38)
+The second term is independent of position and can be omitted. So
+when adding a very slow forecast f2, the position should be shifted by
+a constant ̇f 2∕(2k). This is a simple way of combining forecasts with
+disparate horizons at the portfolio construction level. The opposite case
+of utilizing a fast forecast is considered in Sec. 6.10.2.
+Some broker-dealers offer basket trading services to clients. A client
+may want to acquire or sell a sizable portfolio of securities,7 or basket,
+without worrying about a potentially lengthy execution and associated
+risks and transaction costs. The broker’s trading desk can take the basket
+on its balance sheet at the basket’s current market price and charge a fee
+for the trouble of unwinding the basket. Depending on existing position
+at the desk and possibly available forecasts, the basket can be more or less
+attractive to the desk manager thus affecting the fee she would charge
+the client.
+A measure of attractiveness of a position is position value expressed as
+the utility function assuming optimal execution:
+F∗(P0; ̇f (t)) =
+max
+P(t)∶P(0)=P0
+F[P(t), ̇f (t)].
+(6.39)
+The ansatz (6.21) suggests that, in the absence of slippage, the value
+of an initial position P depends on P and impact I only in the combi-
+nation
+Q = P −I
+λ,
+(6.40)
+meaning that position-impact states (P, I) and (P + T, I + λT) are
+equally valuable. This is seen from the fact that a trade T can be
+7 These can be actual shares or swap-like derivatives.
+
+================================================================================
+PDF PAGE 233
+================================================================================
+Portfolio Construction
+197
+reversed, and its impact undone, if the impact was given no chance to
+decay. This reversibility will disappear if we impose a time delay.
+Position value offers another view of a single-name solution away
+from the optimum. If trade to the optimal position (6.28) is not done
+immediately, and position P ≠P∗is held for a short period time 𝛿t,
+working out a second variation of the utility functional (6.19) indicates
+the utility, and position value, loss:
+𝛿F = −(k + λ𝜈)(P −P∗)2𝛿t.
+(6.41)
+We can therefore associate non-optimality of a single-name position with
+a utility leak at the rate
+̇f (P) = −(k + λ𝜈)(P −P∗)2,
+(6.42)
+where the optimum P∗is given by Eq. (6.28). Formula (6.42) will be
+used in Sec. 6.5.4.
+6.4.5
+Optimization with slippage
+Find the center of a given circle using only a compass.
+From a quant interview
+We now analyze the effect of slippage with impact cost omitted.
+Single-name utility in this limit is
+F[P(t)] = ∫
+∞
+0
+( ̇f P −kP2 −c| ̇P|)dt.
+(6.43)
+Integration by parts gives
+F[P(t)] = ∫
+∞
+0
+(−̇P[ f + c Sign( ̇P)] −kP2)dt,
+(6.44)
+indicating that slippage c is added to or subtracted from the forecast.
+A constant addition to f (t) would not affect the basic solution
+P(t) =
+̇f (t)
+2k .
+(6.45)
+However, due to changes in trading direction the problem is more com-
+plicated and depends on the initial condition and the shape of the forecast
+curve. It is more or less clear that the optimal solution consists of intervals
+
+================================================================================
+PDF PAGE 234
+================================================================================
+198
+Q U A N T I TAT I V E P O RT F O L I O M A N A G E M E N T
+Figure 6.2
+Left: Optimal position path with slippage (solid line). Right: Geo-
+metric solution of Eq. (6.47) for the plateau width 𝜏. The dashed line starting at
+(0, 2c) and tangent to the graph of f (t) is used to determine 𝜏. A rational forecast
+shape (6.49) was used for generating the chart.
+of constant position and trading according to (6.45). In fact, Eq. (6.43)
+is equivalent to the total variation denoising (TVD) of the slippage-free
+target (6.45) subject to the cost of round trips (Sec. 2.4.11.2).
+To be specific, assume an initial condition with 0 < P0 < ̇f 0∕(2k)
+and optimize for the single parameter 𝜏, a holding period after the initial
+trade P∗−P0, as shown in Fig. 6.2. Eq. (6.44) gives utility as a function
+of 𝜏. Dropping constants, we have
+F(𝜏) =
+̇f (𝜏)
+2k
+(
+f (𝜏) −2c −𝜏
+2
+̇f (𝜏)
+)
++ ∫
+∞
+𝜏
+̇f
+2(t)
+4k dt.
+(6.46)
+This function is maximized at
+f (𝜏) −𝜏̇f (𝜏) = 2c.
+(6.47)
+A graphical solution to (6.47) is shown in the right Fig. 6.2. For a positive
+concave f (t), the solution exists if the total forecast exceeds the cost of a
+roundtrip:
+f (∞) > 2c.
+(6.48)
+
+================================================================================
+PDF PAGE 235
+================================================================================
+Portfolio Construction
+199
+For c →0, we have 𝜏→0, and the optimal position path follows (6.45).
+The larger the slippage, the larger 𝜏and smaller the trade. For P0 >
+̇f 0∕(2k) > 0, the optimal solution is to trade to position ̇f 0∕(2k) and
+then follow the path (6.45).
+For a closed-form example, let forecast be a rational function of the
+horizon:
+f (t) = f∞𝛾t
+1 + 𝛾t.
+(6.49)
+Then, for f∞> 0 and P0 < P∗, the optimal position and the time to hold
+it are given by
+P∗= 𝛾f∞
+2k
+(
+1 −
+√
+2c
+f∞
+)2
+,
+𝜏= 𝛾−1
+(2c)1∕2
+f 1∕2
+∞
+−(2c)1∕2.
+(6.50)
+For a monotone ̇f (t), all other cases can be similarly written in a
+closed, if implicit, form. If forecast f (t) has inflection points, analysis
+along these lines is also doable but quickly gets complicated. The com-
+plexity is due to the non-analytic (absolute-value) nature of the slippage
+term in the utility functional (6.43).
+A general feature of optimal trading with slippage costs can be
+described in terms of a comfort range [P∗
+min(t), P∗
+max(t)] such as if position
+P is within the range, it should not be traded. If current position
+is outside the range, it should be traded to its nearest boundary.
+The boundaries P∗
+min,max depend on the slippage and on the forecast
+profile f (t). The larger the slippage, the wider the comfort range and
+more likely it includes zero position. A similar pattern of “No Trade”
+zone was described for optimal trading with slippage under a diffusive
+price process.8,9
+In the geometry of Fig. 6.2, the comfort range is [P∗, ̇f 0∕(2k)]. For
+̇f (t) changing sign one or more times, the range is wider due to potential
+cost of multiple roundtrips.
+8 J. de Lataillade, C. Deremble, M. Potters, J.-P. Bouchaud, Optimal Trading with Linear
+Costs, arXiv:1203.5957 [q-fin.PM], 2012.
+9 R.J. Martin, Universal trading under proportional transaction costs, arXiv:1603.06558
+[q-fin.TR], 2016.
+
+================================================================================
+PDF PAGE 236
+================================================================================
+200
+Q U A N T I TAT I V E P O RT F O L I O M A N A G E M E N T
+6.5
+Multi-period portfolio optimization
+In mathematics you don’t understand things. You just get used to
+them.
+John von Neumann
+The problem of optimizing a portfolio of correlated assets is solved,
+one way or another, by multiple portfolio managers on a daily basis
+and is clearly an important part of the trading business, quantitative and
+discretionary alike. The problem has been studied extensively starting
+with Markowitz,10 whose treatment did not include transaction costs or
+time-dependent return expectation. The problem becomes more dif-
+ficult, both analytically and computationally, when there is future time
+structure and non-local impact costs requiring a multi-period treatment.
+There are two principal directions to handle: cross-sectional (same time,
+different assets) and serial (same asset, different times). They need to be
+combined in a portfolio construction procedure.
+If trading costs are period-specific (localized in time), the periods
+decouple and the portfolio can be cross-sectionally optimized for each
+time period sequentially.11 In the presence of a multi-period price
+impact, all periods must be optimized simultaneously. In this section
+we discuss several ways to do it. We use a continuous-time approach
+adopted in Sec. 6.4. Discrete time algorithms also exist12 but are not
+covered here.
+6.5.1
+Unconstrained portfolio optimization with linear
+impact costs
+Here we apply the single-asset reasoning of Sec. 6.4.2 to the multi-asset
+utility (6.9) with slippage costs omitted. Switching from scalar notation
+10 H. Markowitz, The optimization of a quadratic function subject to linear constraints, Naval
+Research Logistics, 3(1–2), pp. 111–133, 1956.
+11 S. Boyd, E. Busseti, S. Diamond, R.N. Kahn, K. Koh, P. Nystrup, J. Speth, Multi-
+Period Trading via Convex Optimization, arXiv:1705.00109v1 [q-fin.PM], 2017.
+12 N.B. Gârleanu, L.H. Pedersen, Dynamic trading with predictable returns and transaction
+costs, The Journal of Finance, 68(6), pp. 2309–2340, 2013.
+
+================================================================================
+PDF PAGE 237
+================================================================================
+Portfolio Construction
+201
+to vectors and matrices, we write
+F[P(t)] = ∫
+∞
+0
+( ̇f P −kPCP −I ̇P)dt,
+̇I = Λ ̇P −𝜈I.
+(6.51)
+Here the impact matrix Λss′ may include non-diagonal elements describ-
+ing cross-impact of assets, but the impact decay rate 𝜈is assumed the same
+for all securities, an assumption that would be easy to relax. An arbitrage
+argument13,14 suggests that the the cross-impact matrix Λss′ is symmet-
+ric. A recent analysis15 questions the causality of empirical cross-impact
+estimation and suggests the impact matrix may as well be considered
+diagonal. For a symmetric or diagonal Λss′, integration by parts leads to
+a utility functional quadratic in Q:
+F[Q(t)] = ∫
+∞
+0
+(gQ −kQCQ −k ̇QΩ−2 ̇Q) dt,
+g = ̇f −1
+𝜈
+̈f.
+(6.52)
+Here Q is defined similarly to (6.21):
+P = Q +
+̇Q
+𝜈,
+I = 1
+𝜈Λ ̇Q.
+(6.53)
+The symmetric positive definite matrix Ω appearing in Eq. (6.52) via
+Ω−2 = 1
+𝜈2
+(
+C + 𝜈
+kΛ
+)
+(6.54)
+13 I. Mastromatteo, M. Benzaquen, Z. Eisler, J.-P. Bouchaud, Trading Lightly: Cross-
+Impact and Optimal Portfolio Execution, arXiv:1702.03838v3, 2017.
+14 M. Schneider, F. Lillo, Cross-impact and no-dynamic-arbitrage, arXiv:1612.07742
+[q-fin.TR], 2017.
+15 F. Capponi, R. Cont, Multi-Asset Market Impact and Order Flow Commonality, Available
+at SSRN: https://ssrn.com/abstract=3706390, October 6, 2020.
+
+================================================================================
+PDF PAGE 238
+================================================================================
+202
+Q U A N T I TAT I V E P O RT F O L I O M A N A G E M E N T
+can be computed using an N × N eigendecomposition or Denman-
+Beavers iteration.16 A matrix-form (portfolio) generalization of the result
+(6.28) for the optimal position is then
+P∗=
+(
+1 −1
+𝜈Ω
+)
+Q0 +
+1
+2k𝜈∫
+∞
+0
+Ω2e−Ωtg(t)dt.
+(6.55)
+The matrix exponential appearing in (6.55), as well as any other well-
+behaved function of a real symmetric matrix A, is computable via its
+eigendecomposition:17
+A = XΛX′ =⇒
+f (A) = X f (Λ)X′,
+(6.56)
+where Λ = Diag(λi) is the diagonal matrix of the eigenvalues of A, X
+is a unitary matrix whose columns are the eigenvectors of A, and
+f (Λ) = Diag( f (λi)).
+(6.57)
+A closed-form matrix solution (6.55) for the optimal portfolio posi-
+tions is nice to have, but its practicality is limited by the assumed lack of
+constraints, no obvious way of adding slippage, and the O(N3) complex-
+ity of eigendecomposition for a universe of N securities. However, if the
+impact matrix Λ is diagonal and the covariance C is factor-modeled as
+(4.7), the special diagonal plus low rank matrix structure allows eigen-
+decomposition in O(N2) FLOPs.18,19
+Below we provide a few approximations for multi-period portfolio
+optimization that are more flexible than the “final answer” (6.55).
+16 E.D. Denman, A.N. Beavers Jr, The matrix sign function and computations in systems,
+Applied Mathematics and Computation, 2(1), pp. 63–94, 1976.
+17 N.J. Higham, Functions of Matrices: Theory and Computation, University of Manchester,
+2008.
+18 P. Benner, S. Dolgov, V. Khoromskaia, B.N. Khoromskij, Fast iterative solution of
+the Bethe-Salpeter eigenvalue problem using low-rank and QTT tensor approximation, arXiv:
+1602.02646v1 [math.NA], 2016.
+19 R. Liang, Fast and Stable Low-Rank Symmetric Eigen-Update, Ph.D. thesis, University
+of California at Berkeley, 2018.
+
+================================================================================
+PDF PAGE 239
+================================================================================
+Portfolio Construction
+203
+6.5.2
+Iterative handling of factor risk
+Iterate over all vertices of a 32-dimensional cube so that each step is
+made along an edge and each vertex is visited exactly once.
+From a quant interview
+Given ways of solving a single-name multi-period optimization, one
+could try to account for asset interaction iteratively. Using the covariance
+structure (4.7), utility (6.9) can be written as
+F[P(t)] =
+∑
+s ∫
+(̃̇f sPs −k𝜎2
+s P2
+s −Is ̇Ps −cs| ̇Ps|
+)
+dt,
+(6.58)
+with forecasts for stock s adjusted for the “risk pressure” from other
+stocks:
+̃̇fs = ̇fs −k
+∑
+ijs′
+UijLisLjs′Ps′.
+(6.59)
+Using positions from previous iteration in the risk adjusted forecast
+(6.59), one can repeatedly optimize each single-asset term in (6.58).
+The convergence of such iterations depends on the initial approximation
+((6.55) being a good candidate), adaptive scaling of k in (6.59), the
+spectrum of the matrix L′UL, and several data-dependent factors,
+slippage being a stabilizing one.
+6.5.3
+Optimizing future EMA positions
+Among methods not subject to convergence concerns there is one based
+on a single-asset optimization conditional on future EMA positions Pf
+described in Sec. 6.4.3. A factor risk penalty P′L′ULP, instead of the
+instantaneous position P(t), could as well be applied to a future position
+Pf smoothed over a suitable horizon 𝛾−1. In addition to mathematical
+convenience, this smoothing can also decrease portfolio turnover.
+So we use the utility function (6.32) with the addition of the future
+factor risk:
+F(Pf ) =
+∑
+s
+(−asP2
+fs + bsPfs)
+−k
+𝛾
+∑
+ijss′
+UijLisLjs′PfsPfs′.
+(6.60)
+
+================================================================================
+PDF PAGE 240
+================================================================================
+204
+Q U A N T I TAT I V E P O RT F O L I O M A N A G E M E N T
+Without constraints, the maximum of (6.60) is reached at
+P∗
+f = 1
+2
+(
+A + k
+𝛾L′UL
+)−1
+b,
+A = Diag(as).
+(6.61)
+The inversion of the diagonal plus low rank matrix can be sped up by
+using the Woodbury formula (Sec. A2).
+Constraints on the quadratic problem (6.60) can be introduced by
+the known relation (6.34) between current vs future optimum.20 Simi-
+larly, slippage penalties can be added to the utility (6.60), but this will be
+an approximation because the results of Sec. 6.4.3 assumed no slippage.
+6.5.4
+Portfolio optimization using utility leak rate
+Here we use the results of Sec. 6.4.4 to balance single-asset position
+value against multi-asset risk. Once the forecast path has been used to
+derive an optimal position path, utility loss due to the position away from
+the single-asset optimum P∗
+s is given by the instantaneous rate (6.42).
+Adding multi-asset factor risk, we obtain an effectively single-period
+optimization problem for
+̇F(P) = −
+∑
+s
+(k𝜎2
+s + λs𝜈)(Ps −P∗
+s )2
+−k
+∑
+ijss′
+UijLisLjs′PsPs′,
+(6.62)
+with a structure similar to the future-position optimization of Sec. 6.5.3.
+Adding constraints to the QP problem (6.62) is straightforward.
+6.5.5
+Notes on portfolio optimization with slippage
+Unlike linear impact, a singular structure of the slippage cost makes ana-
+lytical optimization difficult. An exception is the closed-form solution of
+Sec. 6.4.5 obtained with a risk penalty but without impact costs. While
+providing an insight of the “comfort range” trading pattern, there is no
+obvious way to use it in the full multi-asset, multi-period optimization.
+20 One may wish to impose limits on both current P and future Pf leading to a narrower
+allowed box.
+
+================================================================================
+PDF PAGE 241
+================================================================================
+Portfolio Construction
+205
+A pragmatic approach is to add to utilities like (6.60) or (6.62) terms
+cs|Ps −P0s| penalizing for trading away from the current position P0 and
+tune heuristic scalings of cs by simulation with proper costs. One should
+be aware though that positions for high-slippage assets can get stuck
+away from zero, which is suboptimal and should be handled outside the
+optimizer.
+A wide class of portfolio optimization problems reduces to a modi-
+fied QP with absolute value penalties such as21
+max
+[
+∑
+s
+(bsPs −cs|Ps −P0s|) −
+∑
+ss′
+Css′PsPs′
+]
+(6.63)
+with applicable box constraints. Problem (6.63) is convex and can be
+solved in well under a second for a universe of a few thousand assets.
+Another option is to combine iterations of factor risk pressure
+in Eqs. (6.58)-(6.59) with an optimal control single-asset treatment,
+described in Sec. 6.7.
+In general, it is difficult to “overfit the optimizer” (Sec. 7.2). What-
+ever tractable approximation of the full intractable optimization problem
+is adopted, the result is testable and tunable by simulation (Sec. 7).
+6.6
+Portfolio capacity
+Estimate, with error bound, the number of molecules in the Earth’s
+atmosphere.
+From a quant interview
+An important parameter of a quantitative strategy is its capacity, or
+maximum gross market value (GMV) it can handle.22 Assuming a port-
+folio is performing at a certain size G, and the manager has calibrated
+the portfolio’s transaction costs including slippage and impact, can we
+predict how the performance would scale at different portfolio sizes and
+determine its size limit?
+21 One could also add a second absolute value penalty cs
+′|Ps| to make closing positions
+easier than opening them: |P| + |P −P0| is constant for P ∈[0, P0] and won’t penalize
+trades toward zero.
+22 GMV is normally higher than assets under management (AUM) due to leverage
+(Sec. 6.9.)
+
+================================================================================
+PDF PAGE 242
+================================================================================
+206
+Q U A N T I TAT I V E P O RT F O L I O M A N A G E M E N T
+A simple estimate can be done based on theory. Our trading cost
+model predicts the following structure of the mean daily pnl:
+pnl = Mean(PR −c| ̇P| −(1∕2) ̇PΛ ̇P).
+(6.64)
+As a function of GMV G, the dependence is parabolic with some coef-
+ficients A, B, and C:
+pnl(G) = BG −CG −AG2,
+(6.65)
+where the gross pnl part is hopefully larger than the slippage part: B > C.
+Expression (6.65) is maximized at
+G = B −C
+2A ,
+(6.66)
+although the rate of return
+ror(G) = pnl(G)
+G
+(6.67)
+is monotonously decreasing with the portfolio size G.
+If capacity G∗is defined as the size at which the expected net pnl is
+maximized, it can be estimated from the current size G, gross pnl, and
+costs as follows:
+G∗= G gross_pnl −slippage_cost
+2 × impact_cost
+.
+(6.68)
+Note that this estimate assumes a uniform scaling of all positions with
+size. An optimal portfolio scaling would involve a decrease of the risk
+aversion k and corresponding changes in the effective forecast (6.29).
+The capacity then also depends on the spectrum of forecast horizons.
+Other things equal, longer horizons result in higher capacities.
+The question of capacity for hedge funds as an industry was raised
+by Avellaneda and Besson,23 whose analysis of hedge fund AUM and
+performance data indicates a statistically significant decrease of returns
+with increasing industry size.
+23 M. Avellaneda, P. Besson, Hedge-funds: How big is big?, CIMS-NYU Working paper,
+August 2005, available at http://www.math.nyu.edu/faculty/avellane/ HFCapacity.pdf.
+
+================================================================================
+PDF PAGE 243
+================================================================================
+Portfolio Construction
+207
+6.7
+Portfolio optimization with forecast revision
+Four dogs are standing at the corners of a square field and are allowed
+to move only along the sides of the square. Their top speed is V.
+A wolf is located at the center of the square and can move anywhere.
+His top speed is 2V∕3. The wolf can kill one dog, but two dogs
+will kill the wolf. Prove that the dogs can coordinate to keep the wolf
+inside the square.
+From a quant interview
+In our portfolio optimization discussion so far, the forecast term
+structure—expected return as a function of horizon—was taken at face
+value, and the future position path P(t) was chosen to optimize a utility
+with multi-horizon impact costs. Using a terminology of control theory,
+we shall call this approach open-loop optimization.
+It is not immediately clear, however, how the open-loop portfo-
+lio optimization applies to the actual process of repeated, and therefore
+revised, forecasting, as new data becomes available.24 More generally, a
+forecast f (t, h) is a function of two variables: the time of forecasting t
+and the horizon h measured from point t forward. The future position
+path P(t, h) optimal for f (t, h) is used only for its initial part, and then the
+whole process repeats. We shall call this portfolio construction workflow
+a semi-open-loop optimization.
+Instead of computing the position path, which will be soon revised
+anyway, one could try a closed-loop approach. Closed-loop optimization
+explicitly incorporates a continuous feedback of the forecast revision.
+Instead of the future position path, one could seek an optimal trading
+strategy
+P∗(t) = S[ f (t, h), ̇R(t)],
+(6.69)
+a functional of past25 and current forecasts and returns, to maximize, in
+expectation, a utility such as
+F[S] = E[P∗(t) ̇R(t) −k(P∗(t))2].
+(6.70)
+24 An exception would be a forecast-free problem such as basket unwinding (Sec. 6.4.4).
+25 Using earlier forecasts is needed for learning the rate of forecast revision.
+
+================================================================================
+PDF PAGE 244
+================================================================================
+208
+Q U A N T I TAT I V E P O RT F O L I O M A N A G E M E N T
+A mathematical apparatus for maximizing in the space of functionals—
+strategies S in our case—doesn’t seem to exist. A closest available
+approach is that of optimal control.26
+An optimal control (OC) problem considers a system state space x(t)
+and a control variable u(t), possibly of a different dimension, which is
+used to minimize the cost function
+Jt0 = ∫
+T
+t0
+g(x(t), u(t), t) dt + Φ(x(T), T).
+(6.71)
+The state is evolved according to the controlled dynamics,
+̇x(t) = f(x(t), u(t), t),
+(6.72)
+and is possibly subject to inequality constraints on both state and control
+variables. The state dynamics function f can be stochastic, in which case
+the task is to minimize the cost in expectation. The control u(t) can
+depend only on the state x observed during [t0, t] either directly or via
+a noisy measurement y(x).
+An infinite-time, non-stochastic, unconstrained case with linear
+dynamics and quadratic cost g is called linear quadratic regulator (LQR):27
+min
+u(t) ∫
+∞
+t0
+(xQx + uRu) dt,
+̇x = Ax + Bu.
+(6.73)
+The matrix R must be positive definite and Q positive semidefinite. The
+optimal solution for LQR is linear in the system state:
+u∗(t) = −R−1B′Lx(t),
+(6.74)
+where the n × n optimal control matrix L satisfies the algebraic Riccati
+equation
+A′L + LA −LBR−1B′L + Q = 0.
+(6.75)
+Kalman filter,28 a close relative of LQR, is used for minimizing deviations
+from a wanted path generated by noisy dynamics and subject to possibly
+noisy measurements.
+26 D.P. Bertsekas, Dynamic Programming and Optimal Control. Belmont, Athena, 1995.
+27 In a more general formulation, the integrand in (6.73) can also contain a cross
+term xSu. It can be eliminated by changing the control variable u = v + Cx with
+C = −(1∕2)R−1S′.
+28 R. E. Kalman, A New Approach to Linear Filtering and Prediction Problems, Journal of
+Basic Engineering, 82(1), pp. 35–45, 1960.
+
+================================================================================
+PDF PAGE 245
+================================================================================
+Portfolio Construction
+209
+Linear Quadratic Gaussian control (LQG) is a stochastic optimal control
+model with a Gaussian white noise. The LQG problem has a solution
+combining the features of LQR and the Kalman filter. An LQG approach
+to optimal portfolio control is possible for linear impact and no slippage
+costs.29
+For nonlinear dynamics or non-quadratic loss, numerical solutions
+are used. A deterministic OC problem with T discrete time points can be
+solved in O(T) steps using the dynamic programming (DP) algorithm based
+on Bellman’s principle of optimality.30 Consider a discrete deterministic
+version of Eq. (6.71),
+J0 =
+T−1
+∑
+t=0
+gt(xt, ut) + Φ(xT),
+xt+1 = ft(xt, ut).
+(6.76)
+The principle of optimality says that a globally optimal solution has
+also optimal parts including cost to go from any intermediate time step t.
+Starting with the known terminal cost function,
+JT(x) = Φ(x),
+(6.77)
+we can compute optimal controls ut and cost to go functions backward
+in time:
+Jt(xt) = min
+ut
+[gt(xt, ut) + Jt+1(ft(xt, ut))],
+t = T −1,…, 0,
+(6.78)
+and then compute the states xt+1 = ft(xt, ut) by forward iteration for
+t = 0,…, T −1. Instead of (at best) a steep polynomial complexity of
+optimization in a T-dimensional space of controls ut, the DP algorithm
+of backward/forward propagation is linear in the number of time steps T.
+Non-stochastic optimal control can be used to investigate optimal
+trading sequences for realizations of revised forecasts
+vt = 𝜕f (t, h)
+𝜕h
+.
+(6.79)
+The state variables are the forecast, the position, and the impact:
+xt = (vt, Pt, It),
+(6.80)
+29 M. Abeille, E. Serie, A. Lazaric, X. Brokmann, LQG for portfolio optimization, arXiv:
+1611.00997 [q-fin.PM], 2016.
+30 R. Bellman, On the Theory of Dynamic Programming, Proceedings of the National
+Academy of Sciences, 38(8), pp. 716–719, 1952.

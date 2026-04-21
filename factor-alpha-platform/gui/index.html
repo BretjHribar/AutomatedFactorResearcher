@@ -92,10 +92,14 @@
                                 <option value="TOP1000">TOP1000</option>
                                 <option value="TOP500">TOP500</option>
                                 <option value="TOP200">TOP200</option>
+                                <option value="TOP2000TOP3000">TOP2000-3000 (IB Band)</option>
+                                <option value="TOP1500TOP2500">TOP1500-2500 (Band)</option>
+                                <option value="TOP2500TOP3500">TOP2500-3500 (Band)</option>
                             </select>
                         </label>
                         <label>Truncation <input type="number" id="paramTruncation" value="0.08" step="0.01" min="0"
                                 max="0.5" class="input-sm"></label>
+                        <button id="btnIBMode" class="btn-ib-mode" title="IB Closing Auction preset: delay=0, sector neutral, TOP2000-3000, fee-free">IB Mode</button>
                     </div>
                     <div class="toolbar-right">
                         <select id="exampleSelect" class="select-sm">

@@ -1,0 +1,50 @@
+204
+Q U A N T I TAT I V E P O RT F O L I O M A N A G E M E N T
+Without constraints, the maximum of (6.60) is reached at
+P∗
+f = 1
+2
+(
+A + k
+𝛾L′UL
+)−1
+b,
+A = Diag(as).
+(6.61)
+The inversion of the diagonal plus low rank matrix can be sped up by
+using the Woodbury formula (Sec. A2).
+Constraints on the quadratic problem (6.60) can be introduced by
+the known relation (6.34) between current vs future optimum.20 Simi-
+larly, slippage penalties can be added to the utility (6.60), but this will be
+an approximation because the results of Sec. 6.4.3 assumed no slippage.
+6.5.4
+Portfolio optimization using utility leak rate
+Here we use the results of Sec. 6.4.4 to balance single-asset position
+value against multi-asset risk. Once the forecast path has been used to
+derive an optimal position path, utility loss due to the position away from
+the single-asset optimum P∗
+s is given by the instantaneous rate (6.42).
+Adding multi-asset factor risk, we obtain an effectively single-period
+optimization problem for
+̇F(P) = −
+∑
+s
+(k𝜎2
+s + λs𝜈)(Ps −P∗
+s )2
+−k
+∑
+ijss′
+UijLisLjs′PsPs′,
+(6.62)
+with a structure similar to the future-position optimization of Sec. 6.5.3.
+Adding constraints to the QP problem (6.62) is straightforward.
+6.5.5
+Notes on portfolio optimization with slippage
+Unlike linear impact, a singular structure of the slippage cost makes ana-
+lytical optimization difficult. An exception is the closed-form solution of
+Sec. 6.4.5 obtained with a risk penalty but without impact costs. While
+providing an insight of the “comfort range” trading pattern, there is no
+obvious way to use it in the full multi-asset, multi-period optimization.
+20 One may wish to impose limits on both current P and future Pf leading to a narrower
+allowed box.
