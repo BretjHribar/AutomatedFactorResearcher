@@ -226,6 +226,8 @@ class PortfolioOptimizer:
             weights = self._min_variance(max_weight, min_weight)
         elif method == "sharpe_weighted":
             weights = self._sharpe_weighted()
+        elif method == "billions":
+            weights = self._billions()
         else:
             raise ValueError(f"Unknown optimization method: {method}")
 
@@ -235,7 +237,7 @@ class PortfolioOptimizer:
         """Run all optimization methods and return results."""
         results = {}
         for method in ["equal_weight", "risk_parity", "max_sharpe",
-                        "min_variance", "sharpe_weighted"]:
+                        "min_variance", "sharpe_weighted", "billions"]:
             try:
                 results[method] = self.optimize(method=method)
             except Exception as e:
@@ -271,6 +273,60 @@ class PortfolioOptimizer:
         if total == 0:
             return self._equal_weight()
         return {name: s / total for name, s in sharpes.items()}
+
+    def _billions(self, halflife: int = 120) -> Dict[str, float]:
+        """IC-weighted combination (Isichenko 'Billions' method).
+
+        Rank-normalizes each alpha's PnL stream, then weights by
+        trailing rolling IC (exponential moving average of per-bar
+        rank correlation between each alpha and the equal-weight
+        portfolio). Alphas with negative trailing IC get zero weight.
+
+        This makes the combiner adaptive and scale-invariant —
+        raw signal magnitude doesn't matter ('from 0-1 to billions').
+        """
+        pnl_df = self._build_pnl_df()
+        names = list(pnl_df.columns)
+        n = len(names)
+
+        if n <= 1:
+            return self._equal_weight()
+
+        # Rank-normalize each alpha's PnL cross-sectionally per bar
+        # This is the key 'Billions' insight: scale invariance
+        ranked = pnl_df.rank(axis=1, pct=True) - 0.5  # [-0.5, +0.5]
+
+        # Forward proxy: equal-weight portfolio return (next bar)
+        ew_pnl = pnl_df.mean(axis=1)
+
+        # Compute rolling IC for each alpha: rank-corr(alpha_pnl, ew_pnl)
+        ema_decay = np.log(2) / halflife
+        alpha_smooth = 1 - np.exp(-ema_decay)
+
+        running_ic = {name: 0.0 for name in names}
+        n_updates = 0
+
+        for t in range(1, len(pnl_df)):
+            fwd_ret = ew_pnl.iloc[t]
+            if not np.isfinite(fwd_ret) or fwd_ret == 0:
+                continue
+
+            for name in names:
+                val = ranked.iloc[t - 1][name]
+                if not np.isfinite(val):
+                    continue
+                # Simple product proxy for rank IC
+                ic_obs = val * np.sign(fwd_ret)
+                running_ic[name] = (alpha_smooth * ic_obs +
+                                    (1 - alpha_smooth) * running_ic[name])
+            n_updates += 1
+
+        # Weight = max(trailing_IC, 0)
+        raw_weights = {name: max(ic, 0.0) for name, ic in running_ic.items()}
+        total = sum(raw_weights.values())
+        if total == 0:
+            return self._equal_weight()
+        return {name: w / total for name, w in raw_weights.items()}
 
     def _max_sharpe(
         self, max_weight: float = 0.4, min_weight: float = 0.0

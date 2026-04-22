@@ -92,6 +92,7 @@ def simulate_vectorized_polars(
     min_price: float = -1.0,
     max_price: float = 1e7,
     bars_per_day: int = 1,
+    trading_days_per_year: int = 252,
 ) -> VectorizedSimResult:
     """
     Polars-based vectorized simulation — identical logic to pandas version.
@@ -231,8 +232,8 @@ def simulate_vectorized_polars(
     cumulative_pnl_arr = np.cumsum(daily_pnl_arr)
     total_pnl = float(np.sum(daily_pnl_arr))
 
-    # Annualization: bars_per_year = 252 trading days * bars_per_day
-    bars_per_year = 252 * bars_per_day
+    # Annualization: bars_per_year = trading_days * bars_per_day
+    bars_per_year = trading_days_per_year * bars_per_day
 
     # Sharpe (annualized)
     pnl_mean = float(np.nanmean(daily_pnl_arr))

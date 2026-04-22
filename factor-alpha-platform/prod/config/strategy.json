@@ -1,0 +1,76 @@
+{
+    "strategy": {
+        "name": "IB Closing Auction L/S Equity",
+        "version": "1.0.0",
+        "universe": "TOP2000TOP3000",
+        "neutralization": "subindustry",
+        "pre_neutralize_alphas": true,
+        "combiner": "equal_weight",
+        "max_stock_weight": 0.01,
+        "bars_per_day": 1,
+        "rebalance_frequency": "daily"
+    },
+    "account": {
+        "equity_seed": 110000,
+        "target_gmv": 500000,
+        "booksize": 500000,
+        "leverage_limit": 6.0,
+        "max_drawdown_halt_pct": 15.0
+    },
+    "execution": {
+        "order_type": "MOC",
+        "moc_deadline_et": "15:48:00",
+        "signal_compute_time_et": "15:30:00",
+        "submit_deadline_et": "15:45:00",
+        "min_order_value": 200,
+        "_min_order_value_note": "Skip orders below this $ amount to reduce commission drag. Set to 0 to disable.",
+        "exchange_cutoffs": {
+            "NYSE": "15:50:00",
+            "AMEX": "15:50:00",
+            "NASDAQ": "15:55:00"
+        }
+    },
+    "ibkr": {
+        "host": "127.0.0.1",
+        "port_paper": 7497,
+        "port_live": 7496,
+        "client_id": 10,
+        "gateway_version": "10.19+",
+        "api_type": "ib_insync",
+        "paper_username": "jogxzg790",
+        "paper_account": "DUQ372830",
+        "_note": "Password via env var IB_PASSWORD — never store in config"
+    },
+    "risk": {
+        "max_single_position_pct": 1.0,
+        "max_sector_exposure_pct": 25.0,
+        "min_borrow_availability": true,
+        "price_validation_tolerance_pct": 2.0,
+        "max_daily_turnover_pct": 200.0,
+        "stale_data_halt_hours": 48
+    },
+    "fees": {
+        "model": "ibkr_tiered",
+        "tiered_rates": {
+            "gt_100m": 0.0005,
+            "20m_100m": 0.0010,
+            "3m_20m": 0.0015,
+            "300k_3m": 0.0020,
+            "lt_300k": 0.0035
+        },
+        "fixed_rate": 0.0050,
+        "min_order_tiered": 0.35,
+        "min_order_fixed": 1.00,
+        "max_order_pct": 0.01
+    },
+    "paths": {
+        "db": "data/ib_alphas.db",
+        "matrices": "data/fmp_cache/matrices",
+        "universes": "data/fmp_cache/universes",
+        "classifications": "data/fmp_cache/classifications.json",
+        "trade_logs": "prod/logs/trades",
+        "fill_logs": "prod/logs/fills",
+        "performance_logs": "prod/logs/performance",
+        "borrow_logs": "prod/logs/borrow"
+    }
+}

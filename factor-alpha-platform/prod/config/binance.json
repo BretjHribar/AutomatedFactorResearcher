@@ -1,0 +1,70 @@
+{
+    "exchange": "binance",
+    "strategy": {
+        "name": "Binance Futures L/S Crypto",
+        "version": "1.0.0",
+        "universe": "TOP100",
+        "neutralization": "market",
+        "combiner": "risk_parity",
+        "max_position_weight": 0.10,
+        "bars_per_day": 6,
+        "rebalance_frequency": "4h"
+    },
+    "account": {
+        "target_gmv": 100000,
+        "leverage_limit": 2.0,
+        "max_drawdown_halt_pct": 15.0
+    },
+    "execution": {
+        "order_type": "TWAP",
+        "twap_slices": 30,
+        "min_order_value": 50,
+        "taker_fee_bps": 1.7,
+        "paper_mode": true,
+        "_paper_note": "Paper mode simulates fills at last close. Set to false for live."
+    },
+    "binance": {
+        "api_key_env": "BINANCE_API_KEY",
+        "api_secret_env": "BINANCE_API_SECRET",
+        "testnet": true,
+        "base_url": "https://fapi.binance.com"
+    },
+    "risk": {
+        "max_single_position_pct": 3.0,
+        "price_validation_tolerance_pct": 5.0,
+        "max_daily_turnover_pct": 300.0,
+        "stale_data_halt_hours": 12
+    },
+    "fees": {
+        "model": "binance_vip9",
+        "taker_bps": 1.7,
+        "maker_bps": 0.0,
+        "tick_slippage_multiplier": 1.0,
+        "_note": "Total cost per trade = taker_bps + tick_size_bps * multiplier"
+    },
+    "paths": {
+        "matrices": "data/binance_cache/matrices/4h/prod",
+        "tick_sizes": "data/binance_tick_sizes.json",
+        "trade_logs": "prod/logs/binance/trades",
+        "performance_logs": "prod/logs/binance/performance"
+    },
+    "alphas": [
+        {"id": "IB12", "expression": "rank((delay(close, 1) - open) + ts_rank(volume, 20))", "weight": 1.0},
+        {"id": "C10", "expression": "multiply(ts_delta(close, 6), ts_kurtosis(volume, 60))", "weight": 1.0},
+        {"id": "C11", "expression": "multiply(Sign(sma(returns, 120)), true_divide(volume_momentum_5_20, historical_volatility_60))", "weight": 1.0},
+        {"id": "C13", "expression": "multiply(Sign(momentum_60d), true_divide(volume_momentum_5_20, parkinson_volatility_20))", "weight": 1.0},
+        {"id": "C14", "expression": "Decay_exp(multiply(ts_delta(close, 24), ts_delta(beta_to_btc, 6)), 0.05)", "weight": 1.0},
+        {"id": "C15", "expression": "sma(multiply(ts_delta(close, 6), true_divide(high_low_range, open_close_range)), 6)", "weight": 1.0},
+        {"id": "C19", "expression": "df_min(df_max(add(add(zscore_cs(sma(taker_buy_ratio, 120)), zscore_cs(sma(ts_delta(s_log_1p(adv60), 30), 120))), zscore_cs(sma(funding_rate_avg_7d, 60))), -3), 3)", "weight": 1.0},
+        {"id": "C20", "expression": "df_min(df_max(add(add(add(zscore_cs(sma(vwap_deviation, 120)), zscore_cs(sma(taker_buy_ratio, 120))), zscore_cs(sma(ts_delta(s_log_1p(adv60), 30), 120))), zscore_cs(sma(funding_rate_avg_7d, 60))), -3), 3)", "weight": 1.0},
+        {"id": "C21", "expression": "df_min(df_max(add(add(add(zscore_cs(sma(ts_zscore(close_position_in_range, 60), 120)), zscore_cs(sma(taker_buy_ratio, 120))), zscore_cs(sma(ts_delta(s_log_1p(adv60), 30), 120))), zscore_cs(sma(funding_rate_avg_7d, 60))), -3), 3)", "weight": 1.0},
+        {"id": "C22", "expression": "df_min(df_max(add(add(zscore_cs(sma(funding_rate_zscore, 60)), zscore_cs(sma(taker_buy_ratio, 120))), zscore_cs(sma(ts_delta(s_log_1p(adv60), 30), 120))), -3), 3)", "weight": 1.0},
+        {"id": "C23", "expression": "df_min(df_max(add(add(add(zscore_cs(sma(true_divide(lower_shadow, df_max(high_low_range, 0.001)), 120)), zscore_cs(sma(taker_buy_ratio, 120))), zscore_cs(sma(ts_delta(s_log_1p(adv60), 30), 120))), zscore_cs(sma(funding_rate_avg_7d, 60))), -3), 3)", "weight": 1.0},
+        {"id": "C24", "expression": "df_min(df_max(add(add(add(zscore_cs(Decay_exp(ts_corr(log_returns, delay(log_returns, 6), 120), 0.02)), zscore_cs(sma(taker_buy_ratio, 120))), zscore_cs(sma(ts_delta(s_log_1p(adv60), 30), 120))), zscore_cs(sma(funding_rate_avg_7d, 60))), -3), 3)", "weight": 1.0},
+        {"id": "C25", "expression": "df_min(df_max(add(add(add(add(zscore_cs(sma(true_divide(lower_shadow, df_max(high_low_range, 0.001)), 120)), zscore_cs(sma(taker_buy_ratio, 120))), zscore_cs(sma(ts_delta(s_log_1p(adv60), 30), 120))), zscore_cs(sma(funding_rate_avg_7d, 60))), zscore_cs(Decay_exp(ts_corr(log_returns, delay(log_returns, 6), 120), 0.02))), -3), 3)", "weight": 1.0},
+        {"id": "C26", "expression": "df_min(df_max(add(add(add(add(zscore_cs(sma(true_divide(lower_shadow, df_max(high_low_range, 0.001)), 120)), zscore_cs(sma(taker_buy_ratio, 120))), zscore_cs(sma(ts_delta(s_log_1p(adv60), 30), 120))), zscore_cs(sma(funding_rate_avg_7d, 60))), zscore_cs(sma(vwap_deviation, 120))), -3), 3)", "weight": 1.0},
+        {"id": "C29", "expression": "df_min(df_max(add(add(add(add(zscore_cs(sma(ts_corr(log_returns, funding_rate_zscore, 60), 120)), zscore_cs(sma(taker_buy_ratio, 120))), zscore_cs(sma(ts_delta(s_log_1p(adv60), 30), 120))), zscore_cs(sma(funding_rate_avg_7d, 60))), zscore_cs(Decay_exp(ts_corr(log_returns, delay(log_returns, 6), 120), 0.02))), -3), 3)", "weight": 1.0},
+        {"id": "C30", "expression": "df_min(df_max(add(add(add(add(zscore_cs(sma(ts_corr(close_position_in_range, taker_buy_ratio, 60), 120)), zscore_cs(sma(taker_buy_ratio, 120))), zscore_cs(sma(ts_delta(s_log_1p(adv60), 30), 120))), zscore_cs(sma(funding_rate_avg_7d, 60))), zscore_cs(Decay_exp(ts_corr(log_returns, delay(log_returns, 6), 120), 0.02))), -3), 3)", "weight": 1.0},
+        {"id": "C31", "expression": "df_min(df_max(add(add(add(add(zscore_cs(sma(ts_corr(log_returns, trades_per_volume, 60), 120)), zscore_cs(sma(taker_buy_ratio, 120))), zscore_cs(sma(ts_delta(s_log_1p(adv60), 30), 120))), zscore_cs(sma(funding_rate_avg_7d, 60))), zscore_cs(Decay_exp(ts_corr(log_returns, delay(log_returns, 6), 120), 0.02))), -3), 3)", "weight": 1.0}
+    ]
+}

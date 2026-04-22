@@ -1,0 +1,59 @@
+name: CI — Alpha Trading Platform
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'factor-alpha-platform/prod/**'
+      - 'factor-alpha-platform/src/**'
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        working-directory: factor-alpha-platform
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy requests matplotlib pyarrow
+      
+      - name: Validate configs
+        working-directory: factor-alpha-platform
+        run: |
+          python -c "
+          import json
+          for cfg_file in ['prod/config/strategy.json', 'prod/config/binance.json', 'prod/config/kucoin.json']:
+              with open(cfg_file) as f:
+                  cfg = json.load(f)
+              print(f'{cfg_file}: OK ({len(cfg.get(\"alphas\", []))} alphas)')
+          "
+      
+      - name: Validate alpha expressions parse
+        working-directory: factor-alpha-platform
+        run: |
+          python -c "
+          import json, ast
+          for cfg_file in ['prod/config/binance.json', 'prod/config/kucoin.json']:
+              with open(cfg_file) as f:
+                  cfg = json.load(f)
+              for a in cfg.get('alphas', []):
+                  expr = a['expression']
+                  # Basic syntax check - ensure balanced parens
+                  assert expr.count('(') == expr.count(')'), f'{a[\"id\"]}: unbalanced parens'
+                  print(f'  {a[\"id\"]}: {len(expr)} chars, OK')
+          "
+      
+      - name: Check imports
+        working-directory: factor-alpha-platform
+        run: |
+          python -c "import pandas; import numpy; import requests; print('Core imports OK')"

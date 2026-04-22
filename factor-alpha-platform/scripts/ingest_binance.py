@@ -105,7 +105,7 @@ def download_klines(
             resp = requests.get(f"{BINANCE_BASE}/fapi/v1/klines", params=params)
             resp.raise_for_status()
         except requests.exceptions.RequestException as e:
-            log(f"    ⚠ Error fetching {symbol} {interval}: {e}")
+            log(f"    [!] Error fetching {symbol} {interval}: {e}")
             break
 
         rows = resp.json()
@@ -539,7 +539,7 @@ def build_matrices(interval: str = "1d"):
     if not tbqv.empty:
         tbqv.to_parquet(out_dir / "taker_buy_quote_volume.parquet")
 
-    log(f"  ✅ All matrices built for {interval}")
+    log(f"  [OK] All matrices built for {interval}")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -552,7 +552,7 @@ def compute_btc_beta(interval: str = "1d", window: int = 60):
     returns = pd.read_parquet(out_dir / "returns.parquet")
 
     if "BTCUSDT" not in returns.columns:
-        log("  ⚠ BTCUSDT not found, skipping beta computation")
+        log("  [!] BTCUSDT not found, skipping beta computation")
         return
 
     btc_ret = returns["BTCUSDT"]
@@ -606,7 +606,7 @@ def build_universes(symbols_df: pd.DataFrame, interval: str = "1d"):
     # Load ADV20 and check listing dates
     adv_path = out_dir / "adv20.parquet"
     if not adv_path.exists():
-        log("  ⚠ adv20 not found, skipping universe construction")
+        log("  [!] adv20 not found, skipping universe construction")
         return
 
     adv20 = pd.read_parquet(adv_path)
@@ -742,7 +742,7 @@ def main():
             log(f"  Universes built for {iv}")
 
     print("\n" + "=" * 60, flush=True)
-    print("✅ INGESTION COMPLETE", flush=True)
+    print("[OK] INGESTION COMPLETE", flush=True)
     print(f"  Data stored in: {DATA_DIR}", flush=True)
     print("=" * 60, flush=True)
 
