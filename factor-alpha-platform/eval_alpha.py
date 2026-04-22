@@ -248,6 +248,7 @@ def simulate(alpha_df, returns_df, close_df, universe_df, fees_bps=0.0):
         max_stock_weight=MAX_WEIGHT, decay=0, delay=0,
         neutralization=NEUTRALIZE, fees_bps=fees_bps,
         bars_per_day=BARS_PER_DAY,
+        trading_days_per_year=365,  # crypto trades 365 days/year
     )
 
 
