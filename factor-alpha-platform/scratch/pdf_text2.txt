@@ -1,0 +1,936 @@
+﻿
+=== PAGE 21 ===
+3
+Empirical Results
+3.1
+The Virtue of Complexity in Factor Pricing Models
+Our central empirical finding is that factor model performance is increasing in the number of
+factors. We illustrate this virtue of complexity by plotting out-of-sample model performance
+as a function of the number of model parameters (which, in our setting, corresponds to
+the number of factors).
+KMZ refer to such plots as ΓÇ£VoC curves.ΓÇ¥
+Each curve applies
+a different ridge penalty z = 10ΓêÆ5, 10ΓêÆ3, 10ΓêÆ1, 1, or 10.
+Along each curve, we vary the
+complexityΓÇöi.e., the number of factorsΓÇöin our SDF model. We consider specifications with
+P = 36, ..., 360,000 random Fourier factors, corresponding to c = 0.1, ..., 1,000. The VoC
+curves in Figure 2 show four out-of-sample properties of each SDF specification: expected
+return (Panel A), volatility (Panel B), Sharpe ratio (Panel C), and pricing error (Panel D).
+We find the following main patterns associated with model complexity. As we increase
+the number of factors, i) the average SDF return rises, ii) SDF volatility rises, iii) the SDF
+return increases faster than volatility, resulting in a rising SDF Sharpe ratio, iv) pricing
+errors decline, and v) performance gains accrue more quickly with less ridge shrinkage. The
+exceptions to these patterns occur when ridge shrinkage is small, and complexity is close to
+one, in which case we see a spike in out-of-sample SDF volatility that induces an abrupt dip
+in the Sharpe ratio and a spike in pricing error. This ΓÇ£double ascentΓÇ¥ in Sharpe ratio and
+ΓÇ£double descentΓÇ¥ in pricing error is reminiscent of previously documented phenomena in the
+machine learning literature (e.g. Hastie et al., 2019; Bartlett et al., 2020).
+Quantitatively, the differences in out-of-sample performance for high and low-complexity
+models are dramatic despite the fact that both model types use identical data inputs and
+differ only in the richness of their parameterizations. High-complexity models with light
+shrinkage earn out-of-sample Sharpe ratios near 3.7, roughly 2.6 times larger than the Sharpe
+ratios of low-complexity models with c < 1. Likewise, large factor models are much better
+20
+
+
+=== PAGE 22 ===
+Panel A: Expected Return
+Panel B: Standard Deviation
+Panel C: Sharpe Ratio
+Panel D: Pricing Error
+Figure 2: Out-of-sample Performance of Complex Factor Models
+Note. Realized out-of-sample SDF portfolio average return, standard deviation, Sharpe ratio, and pricing
+error (HJD). The horizontal axis shows model complexity c = P/T, with P ranging from 36 to 360,000
+and T = 360 months. Factors underlying the SDF are characteristic-managed portfolios constructed with
+random Fourier features derived from JKP stock characteristics. The test assets in Panel D are 153 anomaly
+factors from JKP.
+positioned to price our demanding test assets (153 anomaly portfolios collected from decades
+of finance research). Pricing errors for low-complexity models are more than twice as large
+as those for high-complexity models (0.54 vs 0.22).
+21
+
+
+=== PAGE 23 ===
+Panel A: Sharpe Ratio
+Panel B: Cumulative Return
+Panel C: Pricing Error
+Figure 3: Performance Comparison of Complex and Benchmark Factor Models
+Note. This figure reports the out-of-sample performance of SDF portfolios corresponding to various factor
+pricing models, including the complex model (P = 360, 000 and z = 10ΓêÆ5) as well as the simple benchmark
+models FF6, HXZ, SY, DHS, and BS. Panel A shows the out-of-sample Sharpe ratio for each modelΓÇÖs factor
+Markowitz portfolio. Panel B shows the simple cumulative sum of out-of-sample returns for each modelΓÇÖs
+factor Markowitz portfolio (we have standardized out-of-sample returns to 10% annualized volatility for all
+models in order to facilitate comparison in this panel). Panel C shows pricing errors (HJD) for four sets
+of test assets, including are the 360,000 random Fourier factors underlying the large factor model (denoted
+ΓÇ£complexΓÇ¥), the 153 JKP factors, the 13 JKP aggregate theme factors, and the 25 Fama-French size and
+book-to-market portfolios. Benchmark data sets are available for different sample periods, so we report
+statistics on the intersection of their out-of-sample ranges, which is from August 2002 to December 2016.
+22
+
+
+=== PAGE 24 ===
+3.2
+Comparison With Benchmarks
+In Figure 2, we compare large and small variants of factor models using random Fourier
+factors. However, the conclusion that large factor models outperform simple models is not
+specific to the nonparametric framework in Figure 2.
+Figure 3 compares the high complexity factor model (P = 360, 000 and z = 10ΓêÆ5) to
+five of the leading factor models in the literature: FF6, HXZ, SY, DHS, and BS. Panel A
+reports the out-of-sample Sharpe ratio for each modelΓÇÖs SDF portfolio, Panel B shows the
+corresponding cumulative return plot, and Panel C reports out-of-sample pricing errors.21
+Panel A shows that the benchmark factor models are all roughly on par with each other in
+terms of Sharpe ratio, while the complex model rather dramatically outperforms every simple
+model. Its Sharpe ratio is around 3-6 times higher than the benchmarks. The cumulative
+returns in Panel B show that the portfolio performance comparison is not driven by any
+particular subsample and that the complex model does not exhibit any periods of unusually
+turbulent behavior.
+Panel C shows that the large factor model also dominates in terms of pricing error.
+When the 153 JKP factors are test assets, HJD for the benchmark models hovers around
+0.9, roughly twice that of the large factor model. This finding is not specific to this set of
+test assets. When the test assets are the 360,000 random Fourier factors themselves, the
+HJD hovers around 0.95 for benchmark models, again roughly twice the HJD of the complex
+factor model. Third, we study the JKP theme factors, which collect the individual anomaly
+factors into 13 aggregate theme portfolios. The benchmark HJD for this test set is around
+0.2, which is roughly four times larger than the complex model HJD. Finally, we use the
+classic Fama-French 25 size and value portfolios. This test set has been the target for pricing
+models for forty years, and one can argue that benchmark models have been honed to price
+21Figure 3 shows small differences in performance metrics for the high complexity factor model compared
+to Figure 2. This is because Figure 3 is restricted to a shorter time sample in which data is available for all
+benchmark models.
+23
+
+
+=== PAGE 25 ===
+Table 1: Performance Comparison of Complex and Benchmark Factor Models
+This table reports a comparison of out-of-sample SDF portfolio performance for various factor pricing models,
+including the complex model (P = 360, 000 and z = 10ΓêÆ5) as well as the simple benchmark models FF6,
+HXZ, SY, DHS, and BS. The first two rows show the annualized percentage alpha and associated t statistic of
+the complex SDF portfolios versus each benchmark SDF portfolio. The next two rows show each benchmark
+SDF portfolioΓÇÖs alpha and t statistic versus the complex model. The last two rows show the ex-post tangency
+portfolio weights combining the SDF portfolios of all models with and without a non-negativity constraint
+(and constraining weights to sum to one). To facilitate alpha comparisons, out-of-sample SDF portfolio
+returns for all models are rescaled to have 10% annualized volatility. Benchmark data sets are available for
+different sample periods, so we report statistics on the intersection of their out-of-sample ranges, which is
+from August 2002 to December 2016.
+LHS
+FF6
+SY
+HXZ
+DHS
+BS
+Complex
+Complex Alpha
+42.8
+40.7
+39.4
+43.5
+44.4
+ΓÇô
+vs. Benchmark
+(13.9)
+(13.6)
+(13.0)
+(13.7)
+(13.8)
+ΓÇô
+Benchmark Alpha
+-2.8
+-4.3
+-2.3
+1.50
+3.90
+ΓÇô
+vs. Complex
+(-0.7)
+(-1.2)
+(-0.6)
+(0.40)
+(1.00)
+ΓÇô
+Tangency Weights
+Unconstrained
+-0.44
+-0.24
+-0.01
+0.12
+0.56
+1.01
+Non-negative
+0.00
+0.00
+0.00
+0.01
+0.09
+0.90
+test assets like these. Even in this case, benchmark models deliver an out-of-sample pricing
+error of around 0.2, roughly three times larger than those from the complex pricing model.
+Table 1 extends the benchmark comparison by reporting pairwise alphas between SDF
+portfolios of the large factor pricing model and each of the benchmark models. For this,
+we use the out-of-sample SDF portfolios but renormalize them ex post to a 10% annualized
+volatility to make alphas comparable for all models (unlike HJD, alphas lack scale invariance,
+so volatility scaling is helpful for comparison). The complex model produces a large and
+highly significant alpha versus all benchmarks, ranging from 39.4% to 44.4% per annum.
+The reverse is not true.
+Benchmark models all have small and statistically insignificant
+alphas versus the complex model. Finally, we estimate the ΓÇ£metaΓÇ¥-Markowitz portfolio that
+combines SDF portfolios of all individual models. The complex model dominates the meta
+24
+
+
+=== PAGE 26 ===
+Figure 4: Complex Versions of Benchmark Models
+Note.
+The figure reports out-of-sample Sharpe ratios of simple benchmark models compared to their
+nonlinear, high-complexity counterparts. For each benchmark model we construct its high complexity SDF
+with random Fourier factors derived from the characteristics underlying that model: size, value, investment,
+profitability, and momentum for FF6; size and two mispricing measures (MGMT and PERF) for SY; size,
+investment, profitability and expected growth for HXZ; size, PEAD, and two measures of issuance (CSI and
+NSI) for DHS; and asset growth, profitability, size, value and momentum for BS. Complex versions of each
+benchmark use P = 360, 000 factors (c = 1000) and shrinkage of z = 10ΓêÆ5, 10ΓêÆ3, 10ΓêÆ1 or 1.
+portfolio, receiving a weight of 101% in the unconstrained portfolio and a weight of 90% in
+the portfolio that constrains weights on individual models to be non-negative.
+3.3
+The Nonlinear Fama-French Model
+In the preceding analysis, we compare high complexity factor models derived from 130 JKP
+characteristics to the FF6 model and other benchmarks that are low complexity models
+derived from a small set of characteristics. Naturally, one may wonder about the benefits of
+complexity when we restrict the raw data inputs to match those used by a given benchmark
+25
+
+
+=== PAGE 27 ===
+model. To investigate this, we construct complex SDFs using random features derived from
+only the characteristics that underly each benchmark. For example, in the case of FF6, we
+construct a complex factor model with a large number of nonlinear factors derived from the
+size, value, investment, profitability, and momentum characteristics.
+Figure 4 reports the out-of-sample Sharpe ratio of high complexity variations of each
+benchmark model using P = 360,000 (c = 1,000) random Fourier factors and ridge shrinkage
+of z = 10ΓêÆ5, 10ΓêÆ3, 10ΓêÆ1 or 1.
+The original formulation of the FF6 model has an out-of-
+sample Sharpe ratio of 0.74, while its high complexity version ranges from 1.93 to 2.50
+depending on the degree of shrinkage. All benchmarks show the same patternΓÇöif we hold
+the stock characteristics of each simple model fixed but enrich the model specification to
+incorporate highly parameterized nonlinear transformations of those characteristics, the out-
+of-sample performance of the benchmarks improves by a factor of 1.4 to 3.6, depending on
+the benchmark and the amount of shrinkage.
+The conclusion is that the benefits of large factor models accrue even when starting from
+a small conditioning information set. Complexity may be applied to any set of conditioning
+variables to more flexibly reflect patterns in the underlying return-generating process.
+3.4
+Macroeconomics of the Complex SDF
+What is responsible for the high degree of mean-variance efficiency of the complex SDF
+portfolio relative to benchmarks?
+At a statistical level, the answer is straightforward:
+The complex SDF model more successfully optimizes the maximum Sharpe ratio objective,
+indicating that it estimates the ΓÇ£trueΓÇ¥ efficient portfolio with greater accuracy than the
+benchmarks.
+At an economic level, this improved measurement can help us better ascertain the
+economic nature of the ΓÇ£trueΓÇ¥ SDF. In equilibrium asset pricing models, an SDF reflects
+investorsΓÇÖ intertemporal marginal rate of substitution (IMRS), which is shaped by investorsΓÇÖ
+26
+
+
+=== PAGE 28 ===
+information and expectations about future macroeconomic conditions. As shown by Hansen
+and Jagannathan (1991), the mean-variance efficient portfolio is a projection of the IMRS
+onto the space of traded assets, resulting in a so-called ΓÇ£tradableΓÇ¥ SDF like those studied
+above. If, as econometricians, we achieve a more efficient tradable SDF, then we are more
+successfully honing in on information and expectations about future economic conditions
+that investors are collectively impounding into current prices and that govern investorsΓÇÖ
+IMRS. As articulated by Fama (1990) in his study of market returns and the macroeconomy,
+ΓÇ£the general hypothesis ... is that information about the production of a given
+period is spread across preceding periods and so affects the stock returns of
+preceding periods.ΓÇ¥
+We extend Fama (1990)ΓÇÖs hypothesis to the modern setting of SDF returns. If a complex SDF
+achieves superior mean-variance efficiency relative to benchmarks, it should better reflect
+investorsΓÇÖ IMRS, and it should in turn be a stronger predictor of future economic conditions.
+Or, stated more simply, portfolio efficiency and informational efficiency go hand-in-hand.
+To pursue this hypothesis, we compare candidate SDFs in their ability to predict
+macroeconomic activity. Let yt be a vector containing various measures of macro activity and
+conditions in log levels at the monthly frequency. In our baseline specification, y includes
+10 variables: industrial production, macroeconomic uncertainty, the Federal Funds rate,
+employment, consumer sentiment from the Michigan survey, CPI, housing starts, the Baa-
+Aaa yield spread, oil prices, and the trade-weighted dollar exchange rate index.22
+The goal of our prediction analysis is to understand the extent to which information
+realized in SDF portfolio returns reflects expectations of future macroeconomic conditions.
+To accomplish this, we estimate impulse response functions using the method of local
+22Nine of these variables are from the FRED-MD database and correspond to FRED identifiers IND-
+PRO, FEDFUNDS, PAYEMS, UMCSENTx, CPIAUCSL, HOUST, AAA and BAA, OILPRICEx, TWEX-
+AFEGSMTHx. The only variable not from FRED-MD is the macroeconomic uncertainty index (h = 1
+variant) from Jurado et al. (2015).
+27
+
+
+=== PAGE 29 ===
+Figure 5: Macroeconomic Impulse Response Functions
+Note. This figure reports SDF impulse responses estimated from equation (14). Dependent variables are
+shown in each figure title, and the impulse is a positive one standard deviation return to each SDF (the
+complex SDF in blue and the FF6 SDF in red). Shaded regions are pointwise 90% confidence intervals based
+on Newey-West standard errors with five lags.
+projections (Jord`a, 2005) using the ΓÇ£long differenceΓÇ¥ form (Jord`a and Taylor, 2025):
+yt+h ΓêÆyt = ah + bSDF,h
+ 11
+X
+j=0
+RM
+tΓêÆj
+!
+/╧âM +
+2
+X
+j=0
+bj,hytΓêÆj + et+h,
+h = 1, ..., 36.
+(14)
+The regression coefficient bSDF,h directly estimates, for each element of y, the expected
+h-period-ahead cumulative response (in percentage changes) to a positive one standard
+deviation realization of the annual SDF return, while controlling for predictive information
+28
+
+
+=== PAGE 30 ===
+in yΓÇÖs own lags.23 We use a 12-month SDF return to accumulate information over a longer
+interval and reduce noise in the regressor.24 We estimate regression (14) over the full out-of-
+sample period 1993-2023 using realized returns for the complex SDF and each benchmark.
+Figure 5 reports the estimated impulse responses for the complex SDF. To provide a
+frame of reference Figure 5 also reports results for the FF6 SDF, which is representative
+of results for the other benchmarks. (Results for the full set of benchmarks are shown in
+Appendix L.)
+The key conclusion from this analysis is that the complex SDF has strong predictive
+power for macroeconomic conditions, particularly at long horizons of two years or more. A
+positive one-standard-deviation annual return to the complex SDF predicts a roughly 3%
+(and highly significant) increase in industrial production over three years.
+It predicts a
+reduction in macroeconomic uncertainty of about 7.5% over two years. It predicts large and
+highly significant increases in employment (1.25%), consumer sentiment (9%), housing (9%),
+and the dollar (2.5%) over three years. A positive complex SDF return predicts a reduction
+in credit spreads of 0.08% over two years, which is a roughly 8% decrease in the credit
+spread relative to its long-term average level of 0.95%. Finally, we see a positive interest
+rate response of roughly 0.4% over 1.5 years (versus an average interest rate level of 2.5% in
+our sample) and a negative response in CPI of 1% over three years.
+In Appendix Figures IA.2 and IA.3, we repeat this analysis replacing the last variable in
+y (Dollar index) with consumption. In this specification, we see that a positive one standard
+deviation in the complex SDF return predicts a significant 0.7% increase in consumption
+over three years. The remaining impulse responses are quantitatively unaffected, with the
+23Among these ten variables, there are two that we use in levels without taking logs, these are the Federal
+Funds rate and the Baa-Aaa credit spread, which are already reported in annualized percentages. In this
+case, the bSDF,h coefficient describes the expected simple (not log) change in the corresponding variable.
+24For this analysis, the annual SDF return is defined in standard deviation units,
+P11
+j=0 RM
+tΓêÆj
+
+/╧âM,
+where ╧âM is the sample standard deviation of on the rolling annual return.
+29
+
+
+=== PAGE 31 ===
+Figure 6: SDF Returns and Future Macroeconomic Outcomes
+Note. This figure reports the R2 from a regression of SDF returns on future macroeconomic outcomes per
+equation (15).
+exception that the response of the credit spread drops more quickly, bottoming out after
+nine months rather than two years.
+The results in Figure 5 illustrate the strength with which the complex SDF predicts a
+variety of macroeconomic conditions. But how much of the SDFΓÇÖs behavior can be attributed
+to the marketΓÇÖs assimilation of information about future economic fundamentals collectively?
+We devise an answer to this question by running a somewhat unconventional regression of
+returns in month t on future realizations for all of the macroeconomic variables in y:
+RM
+t
+= ah + bΓÇ▓
+h(yt+h ΓêÆyt) + et,
+h = 1, ..., 36.
+(15)
+The R2 of this regression describes the fraction of SDF return variation that is attributable
+to information about future macroeconomic conditions over horizons h = 1 to 36 months
+ahead. Figure 6 plots the resulting R2 for the complex SDF and the FF6 benchmark SDF.
+30
+
+
+=== PAGE 32 ===
+The complex SDF is predominantly driven by information about the macroeconomy
+over long horizons. Cumulative macroeconomic realizations over the subsequent three years
+explain 25% of the variation in complex SDF returns. This drops to around 5% if we restrict
+to economic realizations over the next year. In contrast, only about 5% of the benchmark
+SDF return is explained by future macroeconomic factors, regardless of the horizon we look
+at.25
+In summary, positive SDF returns predict rising production, employment, sentiment,
+and housing; they predict decreasing risk, credit spreads, and inflation.
+Our impulse
+responses control for lags of y, implying that this predictive information in the complex
+SDF is not spanned by standard macro variables. Meanwhile, the benchmark SDF shows
+either little significant predictive power for macro variables, or the sign of the prediction is
+counterintuitive (as in the case of employment).
+The long-horizon impulse responses in Figure 5 are directionally consistent with equilib-
+rium models incorporating recursive preferences and long-run risk, such as Bansal and Yaron
+(2004) and Campbell et al. (2018). In these models, the SDF reflects investorsΓÇÖ expectations
+about future output uncertainty over the long run. Empirically, long-run risks are notoriously
+difficult to estimate and researchers continue to debate the reliability of proposed proxies (see
+e.g. Liu and Matthies, 2022, 2024; Maio, 2024). Our complex SDF provides new empirical
+evidence of the long-run risk mechanism in equity market prices.
+Our empirical findings about the joint cyclical variation in uncertainty, production,
+interest rates, and credit spreads are consistent with the equilibrium models of Gilchrist
+and Zakraj╦çsek (2011); Gilchrist et al. (2014); Christiano et al. (2014). Their focus relates
+to the empirical fact that credit spreads and risk predict economic conditions (Gilchrist
+and Zakraj╦çsek, 2012; Gilchrist et al., 2009). Importantly, since we control for lags of y,
+25Appendix L shows the same R2 plot for all benchmark models. The patterns for all benchmarks are
+broadly similar to FF6. DHS is an exception in that it captures more information about future short-term
+macroeconomic phenomena than the other SDFs.
+31
+
+
+=== PAGE 33 ===
+our analysis indicates that the complex SDF incorporates differential information about the
+macroeconomy above and beyond the information in prevailing credit spreads and risk.
+Finally, our conclusions from the macroeconomic analysis above are robust to a variety of
+alternative design choices in the analysis of (14), including changing the constituent variable
+in y, changing the frequency of SDF return, and changing the number of y lags. These
+results are reported in Appendix L.
+3.5
+SDF Complexity or SDF Sparsity?
+A recent line of financial machine learning research suggests that it is possible to estimate a
+successful factor pricing model through the imposition of sparsity.26 The evidence indicates
+that an SDF model with a small number of factors can successfully price a wide variety of
+test assets. This is exemplified by Kozak et al. (2018), who study a collection of difficult-to-
+price anomaly portfolios that serve as their test assets. They then show that a simple linear
+SDFΓÇöcomprised of just a few principal components of the anomaly portfoliosΓÇöis powerful
+for pricing their entire anomaly cross-section.
+The notion of SDF sparsity appears at odds with the benefits of complexity that
+we document above.
+While our results thus far demonstrate that a complex model can
+identify efficacious nonlinear pricing factors, is it possible that we also introduce unnecessary
+redundancy by using many thousands of factors? We investigate this possibility now.
+In Figure 2, each point on each curve is a model with a particular number of factors, P,
+and a particular shrinkage parameter, z. To investigate the potential benefits of sparsity,
+we replace the P-factors in each model of Figure 2 with a small number K of principal
+components derived from those P factors. We then re-estimate the SDF coefficients on the
+K components and track the resulting out-of-sample factor model performance.
+Figure 7 reports the results.
+In the left column, we consider a K = 5 component
+26This includes Gagliardini et al. (2016), Kelly et al. (2020), Kozak et al. (2020), Lettau and Pelger (2020),
+and Giglio and Xiu (2021), among others.
+32
+
+
+=== PAGE 34 ===
+K = 5
+K = 25
+Figure 7: The Effect of Sparsity on Out-of-sample SDF Performance
+Note. Realized out-of-sample SDF Sharpe ratio (top row) and pricing error (HJD, bottom row) for complex
+models with dimension reduction to K = 5 (left column) and K = 25 (right column) principal components.
+The horizontal axis shows model complexity c = P/T with P ranging from 36 to 360,000 and T = 360
+months. For ease of reference, ΓÇ£Complex ModelΓÇ¥ shows performance of the highest complexity model (P =
+360,000, z = 10ΓêÆ5) from Figure 2 without dimension reduction.
+dimension reduction of each complex factor model (corresponding to the K used in some
+model specifications of Kozak et al., 2018; Kelly et al., 2020). The Sharpe ratio (top panel)
+of the dimension-reduced SDF is roughly 1.3, compared to 3.7 for the full complexity model.
+Likewise, pricing errors (bottom panel) are 0.57 for the K = 5 SDF versus 0.22 for the full
+complexity model. In other words, imposing sparsity on the SDF via dimension reduction
+inhibits SDF performance relative to the unreduced, high-complexity counterpart.
+Kozak et al. (2018) consider larger numbers of principal components as well. The right
+33
+
+
+=== PAGE 35 ===
+Figure 8: The Effect of Sparsity on Out-of-sample SDF Performance
+Note. Realized out-of-sample SDF Sharpe ratio (top row) and pricing error (HJD, bottom row) for complex
+models with dimension reduction to K = 5, ..., 360 principal components (x-axis).
+column of Figure 7 shows that increasing model complexity by using K = 25 rather than
+K = 5 principal components leads to a large improvement in out-of-sample performance.
+But even in this case, the Sharpe ratio remains well below that of the full complexity model
+(3.7 vs 2.9), and the pricing error remains 41% higher (0.31 vs 0.22).
+Two properties of high-dimensional models drive this effect.
+First, even if the true
+(unobservable) factor covariance matrix has a few large eigenvalues and, hence, a strong
+factor structure, the factors become difficult to detect when complexity is high.27 Second
+and more surprisingly, even low-variance components have a significant Sharpe ratio, so
+excluding them leads to a large drop in out-of-sample SDF performance.
+This fact is
+illustrated in Figure 8. In this analysis, we hold the number of factors in the underlying model
+fixed at P = 360, 000, but vary the number of components extracted from the model from
+K = 5, 10, ..., 360. Adding low variance components typically helps, and never hurts, out-
+of-sample factor model performance. Based on this analysis, the AIPTΓÇÖs large factor model
+conjecture appears better suited for describing market behavior than does the parsimony
+conjecture of the APT.
+27See, e.g., Lettau and Pelger (2020).
+34
+
+
+=== PAGE 36 ===
+Panel A: Mega
+Panel B: Large
+Panel C: Small
+Panel D: Micro
+Figure 9: Out-of-sample Sharpe Ratios of Complex SDF Models By Size Group
+Note.
+Realized out-of-sample SDF Sharpe ratio for SDFs estimated from subsamples based on market
+capitalization.
+3.6
+Sensitivity to Liquidity
+A Sharpe ratio of 3.7 for the high-complexity SDF model suggests that the model is exploiting
+inefficiencies associated with illiquidity. To understand the role of complexity in factor pricing
+models while abstracting from the question of asset liquidity, we conduct our empirical
+analysis separately for different market capitalization groups. We study four size groups
+35
+
+
+=== PAGE 37 ===
+Panel A: Mega
+Panel B: Large
+Panel C: Small
+Panel D: Micro
+Figure 10: Out-of-sample Pricing Errors of Complex SDF Models By Size Group
+Note.
+Realized out-of-sample SDF pricing error (HJD) for SDFs estimated from subsamples based on
+market capitalization.
+from JKP: mega (largest 20% of stocks based on NYSE breakpoints each period), large
+(between 80% and 50%), small (between 50% and 20%), and micro (between 20% and 1%).
+Figure 9 plots out-of-sample Sharpe ratios for SDFs estimated separately within each
+size group, while Figure 10 plots pricing errors. The central conclusion from these figures is
+that the virtue of complexity arises in all stock size groups. In terms of magnitude, Figure 9
+indeed suggests that the SDF Sharpe ratios in Figure 2 are heavily influenced by microcap
+stocks. Yet the SDF Sharpe ratios based on mega or large stocks are on the order of 1.6 and
+36
+
+
+=== PAGE 38 ===
+T = 12
+T = 60
+T = 120
+Figure 11: The Effect of Training Sample Size on Out-of-sample SDF Performance
+Note. Realized out-of-sample SDF Sharpe ratio (top row) and pricing error (bottom row) training windows
+of T = 12, 60, and 120 months.
+1.8, respectively. In other words, a complex factor model derived from mega stocks alone
+(roughly the 400 largest stocks in the US) produces an out-of-sample SDF Sharpe ratio well
+in excess of the FF6 modelΓÇÖs Sharpe ratio of 0.74 (which uses the full cross-section of stocks).
+In summary, the patterns documented in our main analysis (Figure 2) do not appear to be
+driven by illiquidity and limits-to-arbitrage among the underlying assets.
+Instead, these
+findings suggest that models with a large number of factors are generally better suited to
+price assets in the cross-section, regardless of their liquidity.
+3.7
+Sensitivity to Sample Size
+Our main analysis demonstrates the virtue of complexity when estimation is conducted in a
+rolling 360-month training sample. However, the benefits of complexity can accrue in smaller
+37
+
+
+=== PAGE 39 ===
+training samples. In Figure 11, we plot VoC curves for training samples of T = 12, 60 and
+120 months.
+We find identical patterns in complex factor model behavior in training windows as short
+as a single year. Complex model performance weakens in shorter training windows as the
+training process has less information to learn from. The out-of-sample Sharpe ratio for our
+highest complexity factor model is 1.9, 2.9, 3.3, and 3.7 for T = 12, 60, 120, and 360 months,
+respectively. Likewise, pricing errors reduce from roughly 0.45 for T = 12 months to 0.22 for
+T = 360. In appendix Figure IA.9 we compare against simple benchmark SDFs that are also
+estimated in T = 12 month training windows. In this case, the complex model has a smaller
+margin of improvement over the benchmarks, since their small numbers of parameters make
+the simple benchmark SDFs resilient to estimation in fairly short samples. The complex
+Sharpe ratio is 1.9 versus 1.1 for the best simple benchmark (compared to the T = 360 case
+where the complex Sharpe ratio is 3.7 versus 1.2 for the best simple benchmark).
+Finally, we show in appendix Figure IA.10 that the decay in empirical model performance
+from reducing the sample from T = 360 to T = 12 matches the theoretically expected decay
+from using small samples. In particular, we simulate data from the our theoretical model
+calibration in Section 4.7.1. When we reduce the simulated sample size from T = 360 to T =
+12, the decline in simulated out-of-sample Sharpe ratio is quantitatively consistent with our
+empirical results. Theorem 3 below demonstrates that this decline is explicitly determined
+by the joint distribution of factor risk premia and the eigenvalues of their covariance matrix.
+See also Kelly and Malamud (2025) for an analogous result in the (simpler) single-asset case.
+3.8
+Sensitivity to Activation Functions
+Our main empirical model uses random features built from sine and cosine activation
+functions following Rahimi and Recht (2007).
+There are, however, a wide variety of
+38
+
+
+=== PAGE 40 ===
+Sharpe Ratio
+tanh
+ReLU
+Pricing Error
+tanh
+ReLU
+Figure 12: Complex SDF Performance With Alternative Activation Function
+Note. This figure repeats the analysis of Figure 2 using either hyperbolic tangent activation (left column)
+or rectified linear unit activation (right column). Performance is measured as out-of-sample Sharpe ratio
+(top row) and pricing error (bottom row).
+alternative activation functions used in the machine learning literature. In this section we
+examine the sensitivity of our results to this choice.
+Other than the activation function, we hold all design choices from our main analysis in
+Figure 2 fixed. Specifically, we set T = 360, we draw random weights {╧ëp}P
+p=1 Γê╝i.i.d. N(0, I),
+39
+
+
+=== PAGE 41 ===
+and we use the same grid of bandwidth parameters ╬│. We replace the sine/cosine activations
+in Equation (6) with two of the most common activation functions in the literature,
+hyperbolic tangent (ΓÇ£tanhΓÇ¥) and rectified linear unit (ΓÇ£ReLUΓÇ¥).
+Random features with
+these activations are
+S(tanh)
+p,t
+= e╬│Zt╧ëp ΓêÆeΓêÆ╬│Zt╧ëp
+e╬│Zt╧ëp + eΓêÆ╬│Zt╧ëp
+and
+S(ReLU)
+p,t
+= max[0, ╬│Zt╧ëp].
+Figure 12 shows tanh and ReLU model performance in terms of out-of-sample Sharpe
+ratio (top panels) and pricing errors (bottom panels), and are directly comparable to the
+results for the sine/cosine model in Figure 2. We see that the high complexity tanh and
+ReLU models achieve Sharpe ratios of roughly 3.0 to 3.5 and pricing errors of 0.25 to 0.30,
+slightly below but broadly in line with the performance of the main sine/cosine specification,
+and far in excess of benchmark model performance.
+Why does the choice of activation function influence out-of-sample performance? Our
+analytical characterization in Theorem 3 indicates that the construction of random features
+affects Sharpe Ratios by shaping the alignment between factor risk premia and the eigenvalue
+distribution of their covariance matrix. This alignment, in turn, is governed by the capacity
+of non-linear factors to escape linearity and capture genuine non-linear relationships when
+the sample size T is small. These trade-offs between limited sample size and non-linear
+representation have been widely studied in prediction contexts and are known to depend on
+the smoothness of the activation function; see Karoui (2010), Cheng and Singer (2013), and
+Do and Vu (2013). Extending this understanding to the SDF setting remains an important
+avenue for future research.
+40
+
+
+=== PAGE 42 ===
+4
+AIPT: Theoretical Underpinnings of Complex Factor Models
+This section presents artificial intelligence pricing theory. We first present assumptions that
+formalize the AIPTΓÇÖs core conjectureΓÇöthat asset prices are determined by a high-dimensional
+factor structure. From these assumptions, we derive a statistical theory of large factor pricing
+models. Lastly, we show that the empirical behavior of factor pricing models in Section 3
+bears a strikingly close correspondence to theoretically predicted behaviors of the AIPT.
+4.1
+Assets and Conditioning Information
+Our theory begins with the following two assumptions:
+Assumption 1 There exist loadings St ΓêêRN├ùP, latent factors eFt+1, and idiosyncratic
+shocks ╬╡t+1 such that returns Rt+1 ΓêêRN satisfy
+Rt+1 = St ╦£Ft+1 + ╬╡t+1,
+(16)
+where ╬╡t+1 = ╬ú1/2
+╬╡,t ╦£╬╡t+1 with E[╬╡i,t] being i.i.d. with E[╬╡i,t] = 0, E[╬╡2
+i,t] = 1, E[╬╡4
+i,t] < Γê₧.
+The latent factors satisfy Et[ ╦£Ft+1] = ╬╜, and the conditional covariance matrix ╬úF,t
+=
+Et[ ╦£Ft+1 ╦£F ΓÇ▓
+t+1] ΓêÆ╬╜╬╜ΓÇ▓ satisfies tr(╬úF,t) = O(1). We also assume that ╬╜ = P ΓêÆ1/2╬ú1/2
+╬╜
+╦å╬╜, where
+╦å╬╜ = (╦å╬╜i)P
+i=1 ΓêêRP is such that ╦å╬╜i are independent across i and E[╦å╬╜i] = 0, E[╦å╬╜2
+i ] = 1, E[╦å╬╜4
+i ] Γëñ
+K for some K > 0, and are independent of all other variables; ΓêÑ╬ú╬╜ΓêÑ= O(1) as P ΓåÆΓê₧.
+Assumption 2 We have St = ╬ú1/2Xt╬¿1/2 for some positive definite matrices ╬ú, ╬¿; here,
+the random variables Xi,k,t satisfy E[Xi,k,t] = 0, E[X2
+i,k,t] = 1, and Xi,k,t are independent
+and E[X8
+i,k,t] < Γê₧. In the limit as N, P ΓåÆΓê₧, both ╬ú and ╬¿ stay uniformly bounded,
+tr(╬ú) is uniformly bounded, and limNΓåÆΓê₧tr(╬ú2)/(tr(╬ú))2 = 0. Without loss of generality,
+everywhere in the sequel we assume ╬ú is normalized so that tr(╬ú) = 1.
+41
+
+
+=== PAGE 43 ===
+Factor pricing models summarize the risk-return tradeoff among N risky assets in the
+economy.
+To this end, Assumption 1 describes the dependence structure of assets and
+expected returns. It is a standard conditional factor structure that allows for an arbitrary
+number of factors P.28
+Assumption 1 defines the relevant conditioning information in
+this economy, which amounts to the conditional factor loadings in the N ├ù P matrix
+St.
+We refer to St as ΓÇ£characteristicsΓÇ¥ or ΓÇ£signalsΓÇ¥ in connection with the empirical
+asset pricing literature.29
+The P-vector of factor risk prices, denoted ╬╜, together with
+the conditional loadings determine asset expected returns.30 Internet Appendix B further
+discusses Assumption 1 as a generic statistical specification arising in the context of machine
+learning factor pricing models.
+Next, our theoretical derivations require assumptions about the covariance structure of
+the signals St. By Assumption 2,
+E[SΓÇ▓
+tSt] = tr(╬ú)╬¿ ΓêêRP├ùP
+and
+E[StSΓÇ▓
+t] = tr(╬¿)╬ú ΓêêRN├ùN,
+(17)
+thus the matrix ╬¿ captures the covariance of signals across factors and ╬ú captures their
+covariance across assets. The assumption of bounded tr(╬ú) is a no-arbitrage condition to
+ensure that the predictable variation in returns stays bounded.
+The last two limits in
+Assumption 2 ensure that characteristic-managed portfolios offer a meaningful amount of
+diversification across stocks.31
+28The assumption tr(╬úF,t) = O(1) as P ΓåÆΓê₧is the mathematical formalization of the idea of a factor
+structure. For example, if ╬úF has a finite rank K with bounded eigenvalues, then this condition is trivially
+satisfied. The assumption of constant conditional factor premia is without loss of generality since dynamic
+premia can be subsumed by St.
+29One can think of the loadings as some function of other underlying conditioning characteristics, or the
+characteristics could be loadings themselves as in the BARRA model popular among industry professionals.
+30The scaling ╬╜ = P ΓêÆ1/2╬ú1/2
+╬╜
+╦å╬╜ with P ΓêÆ1/2 is optimal and ensures that the vector of risk premia neither
+vanish nor explode for large P: E[ΓêÑ╬╜ΓêÑ2] = P ΓêÆ1 tr(╬ú╬╜) = O(1).
+31For example, suppose that rank(╬ú) = 1, so that ╬ú1/2 = ╧Ç╧ÇΓÇ▓ for some ╧Ç ΓêêRN. Then, St = ╧Ç╧ÇΓÇ▓Xt╬¿1/2
+and therefore all factors are given by
+Ft+1 = ╬¿1/2XΓÇ▓
+t╧Ç(╧ÇΓÇ▓Rt+1) ,
+(18)
+42
+
+
+=== PAGE 44 ===
+4.2
+Characteristic-managed Portfolios
+From the equivalence of the conditional SDF and the mean-variance efficient portfolio
+╦£
+Mt+1 = 1 ΓêÆ╧ÇΓÇ▓
+tRt+1 , ╧Çt = Et[Rt+1RΓÇ▓
+t+1]ΓêÆ1Et[Rt+1] ,
+(19)
+Assumption 1 implies the following SDF representation.
+Proposition 1 Let ╬úF,╬╡,t = Et[ eFt+1╬╡ΓÇ▓
+t+1]. A conditional stochastic discount factor is
+╦£
+Mt+1 = 1 ΓêÆ╦£w(St)ΓÇ▓Rt+1 ,
+(20)
+where
+╦£w(St) = ╬úΓêÆ1
+t ┬╡t
+(21)
+is the conditional mean-variance efficient portfolio with
+╬út = St(╬úF,t + ╬╜╬╜ΓÇ▓)SΓÇ▓
+t + St╬úF,╬╡,t + ╬úΓÇ▓
+F,╬╡,tSΓÇ▓
+t + ╬ú╬╡,t
+┬╡t = St╬╜
+(22)
+and
+Et[Ri,t+1 ╦£
+Mt+1] = 0, i = 1, ┬╖ ┬╖ ┬╖ , N .
+(23)
+The SDF in (20) is stated as a conditional portfolio of the basic risky assets, R, as discussed
+in the empirical framework of Section 2. Estimating the conditional mean-variance portfolio
+implying that all factor returns are proportional to returns on a single portfolio, ╧ÇΓÇ▓Rt+1, with no idiosyncratic
+return. Assumption 2 ensures that such pathological situations cannot occur.
+43
+
+
+=== PAGE 45 ===
+of basic assets is challenging. Not only does it require estimates of means and covariances
+for a large number of assets, but it also requires these moments in conditional terms.
+To avoid the difficult task of modeling the conditional distribution of basic assets, it is
+common in the empirical literature to instead study characteristic-managed portfolios, or
+ΓÇ£factors,ΓÇ¥32
+Ft+1 = SΓÇ▓
+tRt+1.
+(24)
+The conjecture is that by studying the unconditional properties of factors, we can learn about
+the conditional properties of asset markets. For example, Kozak et al. (2020) approximate
+the conditional SDF using the unconditional mean-variance efficient portfolio of managed
+portfolios.33 Yet it is easy to see that the mean-variance portfolio of Ft,
+╬╗ = E[Ft+1F ΓÇ▓
+t+1]ΓêÆ1E[Ft+1]
+(25)
+is generally different from the conditionally efficient portfolio of basic assets that determines
+the true SDF in (20).
+We prove in Proposition 2 that when the number of factors is large, the conjecture
+indeed holds, and the unconditional optimal portfolio of factors coincides with the true
+conditional SDF. While somewhat technical, the logic for this result is straightforward.
+Factors interact base asset returns with conditioning characteristics, and, in the large P
+limit, these interactions encode all available conditioning information. Therefore, we can rely
+on unconditional properties of factors to capture the conditional properties of the underlying
+assets.34
+32The literature often refers to the managed portfolios Ft as ΓÇ£factors,ΓÇ¥ and we adhere to this slight abuse
+of nomenclature when the difference between Ft and the true factors ╦£Ft is clear.
+33Relatedly, Kozak and Nagel (2023), Filipovic and Schneider (2024), and Chernov et al. (2025) discuss
+conditions under which managed portfolios ΓÇ£spanΓÇ¥ the conditional SDF.
+34See Internet Appendix E for technical details.
+44
+
+
+=== PAGE 46 ===
+Proposition 2 (Characteristic-Managed Portfolios Span the SDF) Let
+Mt+1 = 1 ΓêÆ╬╗ΓÇ▓Ft+1 = 1 ΓêÆw(St)ΓÇ▓Rt+1, with w(St) = St╬╗ ,
+(26)
+be the factor approximation for the SDF with ╬╗ given by (25). Suppose that ╬ú╬╡,t = ╦£╬ú╬╡,t+╧â2
+╬╡I,
+where limNΓåÆΓê₧tr(╬ú╦£╬ú╬╡,t) = 0 and ╧â2
+╬╡ ΓêêR+. Then, the difference Mt+1 ΓêÆ╦£
+Mt+1 converges to
+zero in L1 and the Sharpe ratio of w(St)ΓÇ▓Rt+1 converges to that of ╦£w(St)ΓÇ▓Rt+1 as N, P ΓåÆΓê₧.
+Proposition 2 implies that, when N, P are large enough,
+╬╗ΓÇ▓Ft+1 = ╬╗ΓÇ▓SΓÇ▓
+tRt+1 Γëê╬╜ΓÇ▓SΓÇ▓
+t ╬úΓêÆ1
+t
+Rt+1 .
+(27)
+As noted by Chernov et al. (2025), the omission of ╬úΓêÆ1
+t
+in the construction of Ft+1 introduces
+unhedged components, resulting in an efficiency wedge between the factor portfolio and the
+conditionally efficient portfolio.
+However, Proposition 2 shows that this wedge becomes
+asymptotically negligible. The surprising and very convenient implication of Proposition 2
+is that model complexity, in fact, simplifies asset pricing. Much like continuous time limits
+simplify a variety of asset pricing calculations, large factor limits reduce conditional SDF
+modeling to an unconditional problem. Therefore, in the remaining theoretical development,
+we leave behind the base assets Rt and work directly with managed portfolios, Ft.35
+35Relatedly, Assumptions 1 and 2 govern the properties of Rt, which serves two purposes.
+First, the
+assumptions ensure that characteristic-managed portfolios span the SDF in the high-complexity limit, per
+Proposition 2. Second, they imply that characteristic-managed portfolios satisfy the technical conditions of
+random matrix theory (see Theorem 4 in the Internet Appendix). Once these conditions are established, the
+origin of factors is no longer relevant, and the theory can treat them in the abstract when proving our main
+result in Theorem 3. Formally, the idea that conditionally efficient portfolio of stocks can be represented as
+an unconditional portfolio of a rich enough set of nonlinear managed portfolios is discussed in (Hansen and
+Richard, 1987). In general, portfolio weights for each asset depend on the entire set of conditioning variables
+(e.g., characteristics of all assets). By contrast, Proposition 2 implies that we can restrict our attention to
+portfolio weights that depend only on own asset characteristics.
+45
+
+
+=== PAGE 47 ===
+4.3
+Large Models as Approximations
+As the George Box adage goes, ΓÇ£All models are wrong, but some are useful.ΓÇ¥ In reality,
+the true data-generating process is unknown to the researcher. A core premise of modern
+artificial intelligence (and nonparametric statistics more broadly) is that large models are
+useful because they provide flexible approximations of the unknown truth. However, while
+added complexity brings better approximations, it also brings the usual statistical challenges
+of heavy parameterization in the face of limited data.
+In this section, we design a framework to understand the out-of-sample behavior of factor
+pricing models as we gradually expand their parameterization. To embed this investigation
+in our theoretical environment, we consider a true SDF with a large number of factors,
+P Γêù. We then consider an empirical model that approximates the SDF with only a fraction
+q =
+P
+P ΓêùΓëñ1 of those factors.
+Assumption 3 A misspecified empirical model of size P < P Γêù(q =
+P
+P Γêù) uses a subset of
+factors, Ft+1(q) = (Fi,t+1)P
+i=1 with covariance matrix E[Ft(q)Ft(q)ΓÇ▓] ΓêêRP├ùP.
+We are interested in characterizing out-of-sample factor model behavior as we expand the
+subset of factors from P = 1, ..., P Γêù, gradually reducing the degree of misspecification in the
+approximating model (when P1 = P the model is correctly specified) while increasing the
+number of parameters that must be estimated.
+Our theoretical derivations are based on large P limits. The number of factors in the true,
+unattainable factor model is P ΓêùΓåÆΓê₧. We conceptualize the AIPT as a rich but nevertheless
+imperfect empirical model with P ΓåÆΓê₧and q Γëñ1. We now develop the limiting behavior
+of large empirical factor models using random matrix theory.
+46
+
+
+=== PAGE 48 ===
+4.4
+Feasible and Infeasible SDF Estimators
+Proposition 2 directly motivates our empirical approximation to the SDF in equation (4) and
+the ridge estimator in equations (9) and (12). Following Assumption 3, the ridge estimator
+has access to a fraction q of the factors in the true model. Given a training sample of size
+T, the empirical model has complexity c = P/T. We define the ridge SDF estimator for an
+empirical model of complexity c and specification q as
+╦å╬╗(z; q; c) = (zI + ╦åE[Ft(q)Ft(q)ΓÇ▓])ΓêÆ1 ╦åE[Ft(q)]
+(28)
+with corresponding portfolio return and SDF of
+╦åRM
+T+1(z; q; c) = ╦å╬╗(z; q; c)ΓÇ▓FT+1(q),
+╦å
+MT+1(z; q; c) = 1 ΓêÆ╦åRM
+T+1(z; q; c),
+where ╦åE denotes sample average over the T training observations.
+It will be useful to contrast ╦å╬╗(z; q; c) with the infeasible ridge SDF estimator
+╬╗(z; q) = (zI + E[F(q)F(q)ΓÇ▓])ΓêÆ1E[F(q)]
+(29)
+and its return and SDF
+RM
+T+1(z; q) = ╬╗(z; q)ΓÇ▓FT+1(q),
+MT+1(z; q) = 1 ΓêÆRM
+T+1(z; q).
+(30)
+This estimator is infeasible because it relies on the population mean and covariance of factors
+rather than their sample counterparts. The special case ╬╗ = ╬╗(0, 1) corresponds to the true
+SDF in (26). Naturally, as z increases from zero or as q decreases from one, the Sharpe ratio
+of RM
+T+1(z) declines. The portfolio ╬╗(z; q) is an intermediate object between the true SDF
+╬╗(0, 1) and the feasible estimator ╦å╬╗(z; q; c).
+47
+
+
+=== PAGE 49 ===
+A remarkable aspect of the theoretical results below is that we can fully characterize the
+properties of ╦å╬╗(z; q; c) in terms of the infeasible estimator ╬╗(z; q). Our analysis focuses on
+the key properties that summarize the theoretical behavior of a factor-based SDF: its mean
+and variance (which in turn dictate its Sharpe ratio and pricing errors). Because they are
+central to our derivation below, we give special notation to these properties for the infeasible
+ridge SDF:
+E(z; q) ΓëíE[RM
+T+1(z; q)],
+V(z; q) ΓëíVar[RM
+T+1(z; q)].
+(31)
+4.5
+The Ridge SDF and Random Matrix Theory
+It is perhaps easiest to understand our large P theory for factor model behavior through the
+calibrations in Section 4.7, and readers interested in a non-technical discussion of the theory
+may proceed there directly. For interested readers, this section provides a brief overview of
+the random matrix theory concepts behind our analysis, and Section 4.6 gives a detailed
+presentation of our main result.
+The central challenge to understanding ╦å╬╗(z; q; c) is the P ├ùP matrix ╦åE[Ft(q)Ft(q)ΓÇ▓] whose
+dimension grows with the number of factors. The limiting properties of this object require
+the apparatus of random matrix theory (RMT).
+One technical insight in our analysis is that incorporating ridge regularization in the
+SDF estimation problem allows us to extend core RMT results, such as the Mar╦çcenko and
+Pastur (1967) theorem, to asset pricing analysis.
+We derive the necessary extensions of
+Mar╦çcenko and Pastur (1967) to describe expected out-of-sample SDF behavior in terms of
+three objects: the eigenvalue distribution of the factor population covariance matrix, E[FF ΓÇ▓],
+the number of parameters per training observation (i.e., complexity, c), and the extent of
+model misspecification (governed by q). Recall that our factors are defined as Ft+1 = SΓÇ▓
+tRt+1,
+with signals and returns satisfy Assumption 1 and 2. As we show in the Internet Appendix,
+48
+
+
+=== PAGE 50 ===
+the only properties of the data-generating process that matter for portfolio performance in
+the high complexity limit are ╬¿ and ╬╜. Let ╬¿(q) = ╬¿[1 : P, 1 : P] be the ╬¿ sub-matrix
+corresponding to the first P signals.
+We need the following regularity condition on the covariance matrix of factors.
+Assumption 4 In the limit as P ΓåÆΓê₧, the eigenvalue distribution of ╬¿(q) converges to a
+limit distribution supported on a bounded interval. Furthermore, limPΓåÆΓê₧P ΓêÆ1 tr(╬ú╬╜[1 : P, 1 :
+P]╬¿(q)k) exists for each k ΓêêN. Furthermore, in addition to Assumptions 1 and 2, we have
+E[╦£╬╡3
+i,t] = E[X3
+i,j,t] = 0 for all i, j, and the latent factors satisfy ╦£Ft = ╬╜ + ╬ú1/2
+F,t ╦£Xt, where
+╦£Xt = ( ╦£Xi,t)P
+i=1 with ╦£Xi,t being i.i.d. with E[ ╦£Xi,t] = 0, E[ ╦£X2
+i,t] = 1.
+The first part of Assumption 4 ensures that the joint structure of signal covariance and
+risk premia are well-behaved in the P ΓåÆΓê₧limit. The second part of the assumption ensures
+that the covariance of latent factors fully captures their dependency structure (e.g., this is
+always the case when Ft are normally distributed).
+The central object that dictates the behavior of large factor models is the eigenvalue
+distribution of the factor covariance matrix, which our derivations represent as a Stieltjes
+transform. This transform for the eigenvalue distribution of E[Ft(q)Ft(q)ΓÇ▓] in the large P
+limit is denoted
+m(ΓêÆz; q) =
+lim
+PΓåÆΓê₧
+1
+P tr
+ (E[Ft(q)Ft(q)ΓÇ▓] + zI)ΓêÆ1
+,
+(32)
+and, similarly, the infeasible moments (31) converge to well-defined limits
+E(z; q) , V(z; q) .
+49
+

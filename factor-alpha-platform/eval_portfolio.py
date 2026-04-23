@@ -14,7 +14,32 @@ Usage:
     python eval_portfolio.py --strategy top_n --top 5   # Only use top N factors by rolling perf
     python eval_portfolio.py --compare                  # Compare all strategies
     python eval_portfolio.py --scoreboard               # Show portfolio scoreboard
+
+# ============================================================================
+# PREFERRED COMBINATION STRATEGY — 2026-04-22
+# ============================================================================
+# BillionsQP  (strategy_billions_qp, --strategy billions_qp)  is the preferred
+# production combiner for the KUCOIN_TOP100 universe.
+#
+# Architecture: Two-stage pipeline
+#   Stage 1: Billions regression (Kakushadze, arxiv 1603.05937)
+#             Walk-forward, bar-by-bar regression that estimates E[factor return]
+#             using orthogonal residuals — superior to naive rolling mean (μ).
+#   Stage 2: CVXPY MV-Utility QP (Isichenko Eq 6.1)
+#             max_α  α'μ  -  (k/2)·α'Cα  -  λ_tc·‖Δα‖₁
+#             Explicitly optimises the 3-way tradeoff:
+#               • Closeness to signal  (α'μ)
+#               • Risk model           (Ledoit-Wolf shrunk factor covariance)
+#               • Execution cost       (L1 TC penalty on position changes)
+#
+# Validated results (Sep 2024 → Mar 2025, 5bps fees, $20M book, 18 alphas):
+#   BillionsQP(ol=120, k=2.0, tc=0.5):  Sharpe=+4.62, Fitness=11.31,
+#                                         TO=0.195, MaxDD=-3.9%, Ann.Ret=117%
+#   vs. CorrSelect (prior best):          Sharpe=+4.40
+#   vs. ProperEqual (baseline):           Sharpe=+3.47
+# ============================================================================
 """
+
 
 import sys, os, argparse, sqlite3, warnings
 import numpy as np
@@ -34,11 +59,10 @@ VAL_START    = "2024-09-01"
 VAL_END      = "2025-03-01"   # 6 months validation
 
 # Sim parameters (same as Agent 1)
-UNIVERSE     = "BINANCE_TOP50"
+UNIVERSE     = "KUCOIN_TOP100"
 INTERVAL     = "4h"
 BOOKSIZE     = 2_000_000.0
-MAX_WEIGHT   = 0.08          # Tuned by Agent 2: 0.08 — best for CorrSelAdaptive (SR +2.75)
-                              # Use 0.02 for QPOptimal-style conservative (SR +2.08, TO=0.12, DD=-0.05)
+MAX_WEIGHT   = 0.02          # KuCoin BEST: ProperEqual(mw=0.02) — Sharpe +2.97, Fitness 5.76, TO=0.19, DD=-0.05
 NEUTRALIZE   = "market"
 
 BARS_PER_DAY = 6
@@ -46,13 +70,14 @@ COVERAGE_CUTOFF = 0.3
 VAL_FEES     = 5.0           # 5bps fees — always applied on validation
 
 # Portfolio construction parameters — AGENT 2 TUNES THESE
-# BEST STRATEGY: CorrSelAdaptive(mw=0.08, mc=0.3, lb=240, n=4) — Sharpe +2.75, Fitness 4.84, TO=0.32, DD=-0.10
-# ALT STRATEGY:  QPOptimal(mw=0.02, lb=240, rb=60)             — Sharpe +2.08, Fitness 3.59, TO=0.12, DD=-0.05
-LOOKBACK     = 240           # Rolling window for adaptive weights (bars) — tuned by Agent 2
+# BEST STRATEGY [KUCOIN]: ProperEqual(mw=0.02) — Sharpe +2.97, Fitness 5.76, TO=0.19, DD=-0.05, Ann. Return 71.1%
+#   Both alphas selected; corr(#2, #3) < 0.5 so diversification gain is material.
+#   QPOptimal and CorrSelect collapse to ProperEqual given only 2 factors (QP has no OOS advantage with K=2).
+LOOKBACK     = 240           # Rolling window for adaptive weights (bars)
 IC_LOOKBACK  = 60            # Rolling window for IC-based weighting
 TOP_N        = 5             # For top-N strategy: how many factors to use
 DECAY_ALPHA  = 0.95          # Exponential decay for momentum weighting
-SIM_DECAY    = 2             # Simulation-level decay (signal persistence) — optimized by Agent 2
+SIM_DECAY    = 2             # Simulation-level decay (signal persistence)
 MIN_SR       = 0.5           # Minimum validation Sharpe to keep an alpha in the portfolio
 
 DB_PATH      = "data/alphas.db"
@@ -68,8 +93,8 @@ def load_val_data():
     if "val" in _DATA_CACHE:
         return _DATA_CACHE["val"]
 
-    mat_dir = Path(f"data/binance_cache/matrices/{INTERVAL}")
-    uni_path = Path(f"data/binance_cache/universes/{UNIVERSE}_{INTERVAL}.parquet")
+    mat_dir = Path(f"data/kucoin_cache/matrices/{INTERVAL}")
+    uni_path = Path(f"data/kucoin_cache/universes/{UNIVERSE}_{INTERVAL}.parquet")
 
     universe_df = pd.read_parquet(uni_path)
     coverage = universe_df.sum(axis=0) / len(universe_df)
@@ -2322,7 +2347,297 @@ def strategy_hrp(raw_signals, returns_pct, close, universe,
                     decay=decay), f"HRP(mw={max_wt},lb={lookback},rb={rebal_every},hl={ema_halflife})"
 
 
+def strategy_billions(raw_signals, returns_pct, close, universe,
+                      max_wt=MAX_WEIGHT, optim_lookback=60, **kwargs):
+    """
+    Billions Regression Combiner — Kakushadze "How to Combine a Billion Alphas"
+    (arxiv 1603.05937).
+
+    Walk-forward, bar-by-bar regression that finds the residual portfolio weights
+    which are orthogonal to all reachable linear combinations of past alpha returns.
+
+    Lookahead-bias audit
+    ────────────────────
+    1. Factor returns:  fr = signal.shift(1) * returns   [lagged 1 bar — no bias]
+    2. Expected rets:   rolling_mean(fr).shift(1)         [only sees data up to t-1]
+    3. Walk-forward:    at bar test_start, window is
+                          fr[test_start : test_start + optim_lookback]
+                        and result stored at optim_end + 1 (= test_start + optim_lookback + 1)
+                        → at bar t, weight uses data from [t-L-1, t-1).  No bias.
+    4. Sim execution:   simulate() uses the combined signal; the vectorised sim
+                        lags positions by 1 bar internally before multiplying returns.
+    """
+    from sklearn import linear_model
+
+    # ── 0. Normalize each alpha signal ──────────────────────────────────────
+    normed_signals = {
+        aid: proper_normalize_alpha(raw, universe, max_wt=max_wt)
+        for aid, raw in raw_signals.items()
+    }
+
+    dates    = close.index
+    tickers  = close.columns.tolist()
+    n_bars   = len(dates)
+    aid_list = list(normed_signals.keys())
+    n_alphas = len(aid_list)
+
+    # ── 1. Compute factor returns (lagged 1 bar — no lookahead) ─────────────
+    ret_df = returns_pct.reindex(index=dates, columns=tickers)
+    fr_data = {}
+    for aid, norm in normed_signals.items():
+        lagged = norm.shift(1)                              # lag positions by 1
+        ab = lagged.abs().sum(axis=1).replace(0, np.nan)
+        n  = lagged.div(ab, axis=0)
+        fr_data[aid] = (n * ret_df).sum(axis=1)
+    fr_df = pd.DataFrame(fr_data, index=dates)             # shape (T, N_alphas)
+
+    # ── 2. Rolling expected returns — shifted 1 bar (no lookahead) ──────────
+    min_periods = max(1, optim_lookback // 2)
+    alphas_exp_ret = (
+        fr_df.rolling(window=optim_lookback, min_periods=min_periods)
+             .mean()
+             .shift(1)                                      # crucial: no lookahead
+    )
+    alphas_exp_ret = alphas_exp_ret.clip(lower=0)
+
+    # ── 3. Initialise weights to equal-weight ───────────────────────────────
+    alpha_weights_ts = pd.DataFrame(
+        1.0 / n_alphas, index=dates, columns=aid_list
+    )
+
+    reg = linear_model.LinearRegression(fit_intercept=False)
+
+    # ── 4. Walk-forward regression loop ─────────────────────────────────────
+    #   At test_start t, window = fr[t : t+L].
+    #   Weights stored at t+L+1  →  zero lookahead.
+    for test_start in range(1, n_bars - optim_lookback - 2):
+        optim_end = test_start + optim_lookback
+        if optim_end + 1 >= n_bars:
+            break
+        try:
+            # a. Rolling window of realised factor returns
+            bil_df = fr_df.iloc[test_start:optim_end].copy()
+
+            # b. Demean along time axis
+            demeaned = bil_df - bil_df.mean(axis=0)
+
+            # c. Per-alpha std; skip if any alpha is constant
+            sample_std = demeaned.std(axis=0).replace(0, np.nan)
+            if sample_std.isna().any():
+                continue
+
+            # d. Normalize
+            normalized = demeaned.divide(sample_std)
+
+            # e. A_is = normalized returns (lookback × N_alphas)
+            A_is = normalized.fillna(0.0)
+
+            # f. Expected returns for window, normalized by same std
+            sub_exp = alphas_exp_ret.iloc[test_start:optim_end].divide(sample_std)
+            sub_exp = sub_exp.fillna(0.0)
+
+            # g. Linear regression; no intercept — matches paper
+            reg.fit(A_is.values, sub_exp.values)
+
+            # h. Residuals = predicted − actual
+            residuals = pd.DataFrame(
+                reg.predict(A_is.values) - sub_exp.values,
+                index=sub_exp.index, columns=sub_exp.columns
+            )
+
+            # i. Weights = residuals / std
+            opt_w = residuals.divide(sample_std)
+
+            # j. Normalize each row to sum = 1
+            row_sums = opt_w.sum(axis=1).replace(0, np.nan)
+            opt_w = opt_w.div(row_sums, axis=0)
+
+            # k. Take last row, store ONE BAR AHEAD of window end
+            alpha_weights_ts.iloc[optim_end + 1] = opt_w.iloc[-1].values
+
+        except Exception:
+            pass   # keep equal-weight for this bar
+
+    # ── 5. Combine signals using time-varying scalar weights ─────────────────
+    combined = None
+    for aid in aid_list:
+        w  = alpha_weights_ts[aid]
+        ws = normed_signals[aid].mul(w, axis=0)
+        combined = ws if combined is None else combined.add(ws, fill_value=0)
+
+    return (simulate(combined, returns_pct, close, universe, max_wt=max_wt),
+            f"Billions(mw={max_wt},ol={optim_lookback})")
+
+
+def strategy_billions_qp(raw_signals, returns_pct, close, universe,
+                          max_wt=MAX_WEIGHT, optim_lookback=120, qp_lookback=120, rebal_every=12,
+                          risk_aversion=2.0, tc_penalty=0.5, ema_halflife=60, **kwargs):
+    """
+    Billions-QP Hybrid (Kakushadze + Isichenko Eq 6.1)
+
+    Stage 1 — Billions regression:
+        Walk-forward, bar-by-bar, uses the Kakushadze regression (arxiv 1603.05937)
+        to estimate E[factor return] at each bar.  This is used as the μ vector
+        instead of the naive rolling mean.  No lookahead bias (same audit as
+        strategy_billions).
+
+    Stage 2 — CVXPY MV-Utility QP:
+        max_α  α'μ  -  (k/2)·α'Cα  -  λ_tc·‖Δα‖₁
+        s.t.   Σαᵢ = 1,  αᵢ ≥ 0,  αᵢ ≤ 0.5
+        C = Ledoit-Wolf shrunk factor-return covariance  (risk model)
+        Δα = α − α_prev                                  (execution cost)
+
+    Result: optimal factor weights that trade off signal quality, risk, and TC.
+    """
+    import cvxpy as cp
+    from sklearn import linear_model
+
+    # ── 0. Normalize signals ─────────────────────────────────────────────────
+    normed_signals = {
+        aid: proper_normalize_alpha(raw, universe, max_wt=max_wt)
+        for aid, raw in raw_signals.items()
+    }
+
+    dates    = close.index
+    tickers  = close.columns.tolist()
+    n_bars   = len(dates)
+    aid_list = list(normed_signals.keys())
+    n_alphas = len(aid_list)
+
+    # ── 1. Factor returns (lagged 1 bar — no lookahead) ──────────────────────
+    ret_df = returns_pct.reindex(index=dates, columns=tickers)
+    fr_data = {}
+    for aid, norm in normed_signals.items():
+        lagged = norm.shift(1)
+        ab = lagged.abs().sum(axis=1).replace(0, np.nan)
+        n  = lagged.div(ab, axis=0)
+        fr_data[aid] = (n * ret_df).sum(axis=1)
+    fr_df = pd.DataFrame(fr_data, index=dates)
+
+    # ── 2. Billions walk-forward → store estimated μ at each bar ─────────────
+    #   At bar test_start, uses window [test_start, test_start+L).
+    #   Result stored at optim_end+1 = test_start+L+1  → zero lookahead.
+    min_periods = max(1, optim_lookback // 2)
+    seed_exp_ret = (
+        fr_df.rolling(window=optim_lookback, min_periods=min_periods)
+             .mean().shift(1).clip(lower=0)
+    )
+
+    # billions_mu[t] = Billions-estimated expected factor return at bar t
+    billions_mu = seed_exp_ret.copy()   # initialised to rolling mean (equal to seed)
+
+    reg_bil = linear_model.LinearRegression(fit_intercept=False)
+
+    for test_start in range(1, n_bars - optim_lookback - 2):
+        optim_end = test_start + optim_lookback
+        if optim_end + 1 >= n_bars:
+            break
+        try:
+            bil_df   = fr_df.iloc[test_start:optim_end].copy()
+            demeaned = bil_df - bil_df.mean(axis=0)
+            sample_std = demeaned.std(axis=0).replace(0, np.nan)
+            if sample_std.isna().any():
+                continue
+            normalized = demeaned.divide(sample_std)
+            A_is    = normalized.fillna(0.0)
+            sub_exp = seed_exp_ret.iloc[test_start:optim_end].divide(sample_std).fillna(0.0)
+            reg_bil.fit(A_is.values, sub_exp.values)
+            residuals = pd.DataFrame(
+                reg_bil.predict(A_is.values) - sub_exp.values,
+                index=sub_exp.index, columns=sub_exp.columns
+            )
+            opt_w    = residuals.divide(sample_std)
+            row_sums = opt_w.sum(axis=1).replace(0, np.nan)
+            opt_w    = opt_w.div(row_sums, axis=0)
+            # The last row's weights imply a μ: w_i > 0 → factor i is favoured
+            # Store the implied signal at optim_end+1 (no lookahead)
+            billions_mu.iloc[optim_end + 1] = opt_w.iloc[-1].values
+        except Exception:
+            pass
+
+    # ── 3. CVXPY MV-Utility QP with Billions-μ ───────────────────────────────
+    # NOTE: qp_lookback is the covariance window for the risk model — independent
+    # of optim_lookback (the Billions regression window). Keeping them separate
+    # means short Billions windows don't corrupt the covariance estimate.
+    K      = n_alphas
+    T      = n_bars
+    weights_arr = np.zeros((T, K))
+    prev_w = np.ones(K) / K
+
+    for t in range(qp_lookback, T, rebal_every):
+        window = fr_df.iloc[max(0, t - qp_lookback):t].dropna(axis=1, how='all')
+        if len(window) < 20 or window.shape[1] < 2:
+            weights_arr[t:min(t + rebal_every, T)] = prev_w
+            continue
+
+        active_ids = list(window.columns)
+        K_a = len(active_ids)
+
+        # μ from Billions regression at bar t (already shifted — no bias)
+        mu_row = billions_mu.iloc[t]
+        mu = np.array([mu_row.get(aid, 0.0) for aid in active_ids])
+
+        # Ledoit-Wolf shrunk covariance (risk model)
+        cov_raw = window.cov().values
+        cov = _ledoit_wolf_shrink(cov_raw) + 1e-8 * np.eye(K_a)
+
+        alpha_prev = np.array([prev_w[aid_list.index(aid)] for aid in active_ids])
+
+        # CVXPY problem: α'μ - (k/2)α'Cα - λ_tc‖α−α_prev‖₁
+        alpha = cp.Variable(K_a, nonneg=True)
+        delta = cp.Variable(K_a)
+        objective = cp.Maximize(
+            mu @ alpha
+            - 0.5 * risk_aversion * cp.quad_form(alpha, cov)
+            - tc_penalty * cp.norm1(delta)
+        )
+        constraints = [cp.sum(alpha) == 1.0, alpha <= 0.5, delta == alpha - alpha_prev]
+        prob = cp.Problem(objective, constraints)
+
+        try:
+            for solver in [cp.CLARABEL, cp.ECOS, cp.SCS]:
+                try:
+                    prob.solve(solver=solver, warm_start=True)
+                    if prob.status in ['optimal', 'optimal_inaccurate'] and alpha.value is not None:
+                        break
+                except Exception:
+                    continue
+            w = alpha.value
+            if w is None or not np.all(np.isfinite(w)):
+                w = alpha_prev
+            w = np.clip(w, 0, None)
+            wsum = w.sum()
+            w = w / wsum if wsum > 1e-10 else alpha_prev
+        except Exception:
+            w = alpha_prev
+
+        w_full = np.zeros(K)
+        for i, aid in enumerate(active_ids):
+            w_full[aid_list.index(aid)] = w[i]
+        prev_w = w_full
+        weights_arr[t:min(t + rebal_every, T)] = w_full
+
+    weights_arr[:qp_lookback] = 1.0 / K
+
+    # ── 4. EMA-smooth weights, combine, simulate ─────────────────────────────
+    weights_df     = pd.DataFrame(weights_arr, index=dates, columns=aid_list)
+    weights_smooth = weights_df.ewm(halflife=ema_halflife, min_periods=1).mean()
+    wsum           = weights_smooth.sum(axis=1).replace(0, np.nan)
+    weights_norm   = weights_smooth.div(wsum, axis=0).fillna(0)
+
+    combined = None
+    for aid, normed in normed_signals.items():
+        w  = weights_norm[aid].values
+        ws = normed.multiply(w, axis=0)
+        combined = ws if combined is None else combined.add(ws, fill_value=0)
+
+    return (simulate(combined, returns_pct, close, universe, max_wt=max_wt),
+            f"BillionsQP(mw={max_wt},ol={optim_lookback},ql={qp_lookback},k={risk_aversion},tc={tc_penalty})")
+
+
 PROPER_STRATEGIES = {
+    "billions": strategy_billions,
+    "billions_qp": strategy_billions_qp,
     "proper_equal": strategy_proper_equal,
     "proper_adaptive": strategy_proper_adaptive,
     "qp_optimal": strategy_qp_optimal,
@@ -2665,6 +2980,13 @@ def compare_all():
     print(f"  {'-'*80}")
     for label, sr, fit, to, dd in results:
         print(f"  {label:<45} {sr:+8.3f} {fit:8.3f} {to:6.3f} {dd:8.3f}")
+
+    import csv
+    with open('data/portfolio_results.csv', 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['Strategy', 'Sharpe', 'Fitness', 'TO', 'DD'])
+        for row in results:
+            writer.writerow([row[0], f"{row[1]:.3f}", f"{row[2]:.3f}", f"{row[3]:.3f}", f"{row[4]:.3f}"])
 
 
 # ============================================================================

@@ -1,14 +1,13 @@
 """
-discover_alphas_4h.py -- 4H Alpha Discovery Pipeline
+discover_alphas_kucoin_4h.py -- 4H Alpha Discovery Pipeline for KuCoin
 
-Discovers orthogonal alpha factors for 4h Binance perpetual futures.
-Uses eval_alpha.py (INTERVAL=4h) harness for evaluation.
-
-SR >= 4.0 quality gate, TO < 0.40 (4h naturally lower turnover)
-Train: 2021-01-01 to 2025-01-01 (4 years)
+Discovers orthogonal alpha factors for 4h KuCoin perpetual futures.
+Mirrors discover_alphas_4h.py but excludes fields not available on KuCoin:
+  - No funding_rate, taker_buy_ratio, trades_count, trades_per_volume
+  - Shorter train period (2 years: Sep 2023 - Sep 2025)
 
 Usage:
-    python discover_alphas_4h.py
+    python discover_alphas_kucoin_4h.py
 """
 
 import sys, os, time, random
@@ -17,20 +16,21 @@ import warnings; warnings.filterwarnings("ignore")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import eval_alpha as ea
 
-# Override config
-UNIVERSE = "BINANCE_TOP50"
+# Override config for KuCoin
+UNIVERSE = "KUCOIN_TOP50"
+ea.EXCHANGE = "kucoin"
 ea.UNIVERSE = UNIVERSE
 ea.INTERVAL = "4h"
-ea.TRAIN_START = "2021-01-01"
-ea.TRAIN_END   = "2025-01-01"
+ea.TRAIN_START = "2023-09-01"
+ea.TRAIN_END   = "2025-09-01"
 ea.SUBPERIODS = [
-    ("2021-01-01", "2023-01-01", "H1"),
-    ("2023-01-01", "2025-01-01", "H2"),
+    ("2023-09-01", "2024-09-01", "H1"),
+    ("2024-09-01", "2025-09-01", "H2"),
 ]
 ea.BARS_PER_DAY = 6
 ea.MAX_WEIGHT = 0.10
 ea.COVERAGE_CUTOFF = 0.3
-ea.MIN_IS_SHARPE = 1.5    # Lowered -- fitness gate is the real filter
+ea.MIN_IS_SHARPE = 1.5
 ea.CORR_CUTOFF = 0.70
 ea.MAX_TURNOVER = 0.10
 ea.MIN_SUB_SHARPE = 1.0
@@ -44,14 +44,11 @@ MAX_TO = 0.10
 MIN_FITNESS = 5.0
 
 # ============================================================================
-# ATOM LIBRARIES
-# Built from analysis of existing proven 4h alphas.
-# Key insight: price-level structures (Decay_exp, multiply, ts_delta(close))
-# are far stronger than zscore_cs(sma()) composites on 4h.
+# ATOM LIBRARIES — KuCoin-specific (no funding_rate, taker_buy, trades_count)
 # 4h bar equivalents: 6bars=1d, 30bars=5d, 60bars=10d, 120bars=20d, 360bars=60d
 # ============================================================================
 
-# --- Category A: ts_delta(close) × signal structures (from #12, #14, #15, #16) ---
+# --- Category A: ts_delta(close) × signal structures ---
 CLOSE_DELTA_WINDOWS = [3, 6, 12, 24, 48]
 BETA_SIGNALS = [
     "subtract(beta_to_btc, sma(beta_to_btc, 60))",
@@ -67,12 +64,10 @@ VOL_SIGNALS = [
     "true_divide(open_close_range, df_max(high_low_range, 0.0001))",
     "subtract(historical_volatility_20, sma(historical_volatility_20, 60))",
     "ts_delta(historical_volatility_20, 12)",
-    "true_divide(lower_shadow, df_max(high_low_range, 0.0001))",
-    "true_divide(upper_shadow, df_max(high_low_range, 0.0001))",
 ]
 DECAY_RATES = [0.05, 0.1, 0.2]
 
-# --- Category B: Sign(momentum) × ratio structures (from #11, #13) ---
+# --- Category B: Sign(momentum) × ratio structures ---
 SIGN_SIGNALS = [
     "Sign(sma(returns, 60))",
     "Sign(sma(returns, 120))",
@@ -81,39 +76,38 @@ SIGN_SIGNALS = [
     "Sign(ts_delta(close, 24))",
     "Sign(ts_delta(close, 48))",
 ]
+# KuCoin: use volume-based ratios instead of taker_buy_ratio
 RATIO_SIGNALS = [
     "true_divide(volume_momentum_5_20, df_max(historical_volatility_60, 0.0001))",
     "true_divide(volume_momentum_5_20, df_max(parkinson_volatility_60, 0.0001))",
     "true_divide(volume_momentum_5_20, df_max(historical_volatility_20, 0.0001))",
     "true_divide(volume_ratio_20d, df_max(historical_volatility_20, 0.0001))",
-    "true_divide(taker_buy_ratio, df_max(historical_volatility_20, 0.0001))",
     "true_divide(momentum_20d, df_max(historical_volatility_20, 0.0001))",
     "true_divide(ts_sum(log_returns, 30), df_max(historical_volatility_20, 0.0001))",
     "true_divide(ts_sum(log_returns, 60), df_max(historical_volatility_60, 0.0001))",
+    "true_divide(volume_ratio_20d, df_max(parkinson_volatility_20, 0.0001))",
 ]
 
-# --- Category C: zscore_cs(sma) composites that proved to work (from #18-31) ---
-# Only include atoms with longer SMA windows that proved effective
+# --- Category C: zscore_cs(sma) composites (KuCoin-compatible atoms only) ---
 CS_ATOMS = [
-    "zscore_cs(sma(taker_buy_ratio, 120))",
     "zscore_cs(sma(ts_delta(s_log_1p(adv60), 30), 120))",
     "zscore_cs(sma(ts_delta(s_log_1p(adv60), 30), 90))",
-    "zscore_cs(sma(ts_delta(trades_per_volume, 30), 60))",
     "zscore_cs(sma(ts_zscore(close_position_in_range, 60), 60))",
     "zscore_cs(sma(ts_zscore(log_returns, 120), 120))",
     "zscore_cs(sma(ts_skewness(log_returns, 60), 60))",
-    "zscore_cs(sma(ts_regression(log_returns, historical_volatility_20, 60, 0, 2), 60))",
-    "zscore_cs(sma(ts_regression(log_returns, funding_rate_zscore, 60, 0, 2), 60))",
-    "zscore_cs(sma(true_divide(lower_shadow, df_max(high_low_range, 0.001)), 120))",
-    "zscore_cs(sma(funding_rate_zscore, 60))",
     "zscore_cs(sma(vwap_deviation, 120))",
     "zscore_cs(sma(ts_corr(log_returns, delay(log_returns, 1), 30), 60))",
     "zscore_cs(sma(ts_corr(log_returns, delay(log_returns, 1), 60), 60))",
-    "zscore_cs(sma(ts_corr(log_returns, funding_rate_zscore, 60), 60))",
-    "zscore_cs(sma(ts_corr(close_position_in_range, taker_buy_ratio, 60), 60))",
-    "zscore_cs(sma(ts_corr(log_returns, trades_per_volume, 60), 60))",
+    "zscore_cs(sma(ts_corr(close_position_in_range, volume_ratio_20d, 60), 60))",
+    "zscore_cs(sma(ts_corr(log_returns, volume_ratio_20d, 60), 60))",
     "zscore_cs(Decay_exp(ts_corr(log_returns, delay(log_returns, 1), 30), 0.05))",
     "zscore_cs(sma(ts_delta(s_log_1p(quote_volume), 30), 120))",
+    "zscore_cs(sma(ts_corr(log_returns, delay(log_returns, 6), 120), 60))",
+    "zscore_cs(sma(volume_momentum_5_20, 60))",
+    "zscore_cs(sma(ts_kurtosis(log_returns, 60), 60))",
+    "zscore_cs(sma(ts_corr(high_low_range, volume_ratio_20d, 60), 60))",
+    "zscore_cs(sma(ts_delta(parkinson_volatility_20, 30), 60))",
+    "zscore_cs(sma(ts_corr(close_position_in_range, open_close_range, 60), 60))",
 ]
 
 
@@ -142,7 +136,6 @@ def generate_candidates(seed=42):
         add_expr(expr)
 
     # ── Strategy A: Decay_exp(multiply(ts_delta(close, w), signal), rate) ──
-    # Mirror of #12, #14, #16 -- strongest existing alphas
     for w in CLOSE_DELTA_WINDOWS:
         for sig in BETA_SIGNALS + VOL_SIGNALS:
             for rate in DECAY_RATES:
@@ -154,7 +147,7 @@ def generate_candidates(seed=42):
             for sma_w in [2, 3, 6, 12]:
                 add_expr(f"sma(multiply(ts_delta(close, {w}), {sig}), {sma_w})")
 
-    # ── Strategy C: Sign(momentum) × ratio (from #11, #13) ──
+    # ── Strategy C: Sign(momentum) × ratio ──
     for sign in SIGN_SIGNALS:
         for ratio in RATIO_SIGNALS:
             add_expr(f"multiply({sign}, {ratio})")
@@ -165,7 +158,7 @@ def generate_candidates(seed=42):
             for sma_w in [6, 12, 24]:
                 add_expr(f"sma(multiply({sign}, {ratio}), {sma_w})")
 
-    # ── Strategy E: 3-4 component CS composites from proven atoms ──
+    # ── Strategy E: 3-4 component CS composites ──
     for _ in range(800):
         comps = rng.sample(CS_ATOMS, rng.choice([3, 4]))
         add_combo(comps)
@@ -176,7 +169,6 @@ def generate_candidates(seed=42):
         add_combo(comps)
 
     # ── Strategy G: Mix price-level atom + CS composite ──
-    # Build pure price-level single atoms first
     price_atoms = []
     for w in CLOSE_DELTA_WINDOWS:
         for sig in BETA_SIGNALS:
@@ -193,14 +185,13 @@ def generate_candidates(seed=42):
         c = rng.sample(CS_ATOMS, min(n_cs, len(CS_ATOMS)))
         add_combo(p + c)
 
-    # ── Strategy H: Mutate existing alpha #12 family ──
-    # #12: Decay_exp(multiply(ts_delta(close, 12), subtract(beta_to_btc, sma(beta_to_btc, 60))), 0.05)
+    # ── Strategy H: Mutate beta-momentum family ──
     for w in [6, 12, 18, 24, 36, 48]:
         for sma_w in [30, 60, 90, 120]:
             for rate in [0.02, 0.05, 0.1, 0.2]:
                 add_expr(f"Decay_exp(multiply(ts_delta(close, {w}), subtract(beta_to_btc, sma(beta_to_btc, {sma_w}))), {rate})")
 
-    # ── Strategy I: ts_delta(close) × (beta - sma(beta)) + CS atom additive ──
+    # ── Strategy I: Price-level + CS composite additive ──
     base_price = [
         "zscore_cs(Decay_exp(multiply(ts_delta(close, 12), subtract(beta_to_btc, sma(beta_to_btc, 60))), 0.05))",
         "zscore_cs(Decay_exp(multiply(ts_delta(close, 6), subtract(beta_to_btc, sma(beta_to_btc, 60))), 0.1))",
@@ -214,7 +205,7 @@ def generate_candidates(seed=42):
             cs_picks = rng.sample(CS_ATOMS, rng.choice([2, 3]))
             add_combo([bp] + cs_picks)
 
-    # ── Strategy J: Different seeds for more diversity ──
+    # ── Strategy J: Different seeds for diversity ──
     for extra_seed in [1000, 2000, 3000]:
         rng2 = random.Random(seed + extra_seed)
         for _ in range(300):
@@ -232,11 +223,8 @@ def main():
     t0 = time.time()
     conn = ea.get_conn()
     ea.ensure_trial_log(conn)
-
-    # Clear data cache since we changed config
     ea._DATA_CACHE.clear()
 
-    # Count existing with correct universe filter
     n_existing = conn.execute(
         "SELECT COUNT(*) FROM alphas WHERE archived=0 AND interval='4h' AND universe=?",
         (UNIVERSE,)
@@ -244,15 +232,13 @@ def main():
 
     candidates = generate_candidates()
 
-    est_per_eval = 0.5  # seconds (from timing)
-    est_total = len(candidates) * est_per_eval
     print(f"\n{'='*80}", flush=True)
-    print(f"  4H ALPHA DISCOVERY -- {UNIVERSE}", flush=True)
+    print(f"  4H ALPHA DISCOVERY -- {UNIVERSE} (KuCoin)", flush=True)
+    print(f"  Exchange: kucoin", flush=True)
     print(f"  Train: {ea.TRAIN_START} to {ea.TRAIN_END}", flush=True)
     print(f"  Target: {TARGET_ALPHAS} new | Existing: {n_existing}", flush=True)
     print(f"  Gates: SR >= {MIN_SR}, TO < {MAX_TO}, Corr < {ea.CORR_CUTOFF}", flush=True)
     print(f"  Candidates: {len(candidates)}", flush=True)
-    print(f"  Est. time: {est_total/60:.0f}m ({est_per_eval:.2f}s/eval)", flush=True)
     print(f"  Time limit: {TIME_LIMIT_SECONDS/60:.0f}m", flush=True)
     print(f"{'='*80}\n", flush=True)
 
@@ -264,7 +250,6 @@ def main():
     for i, expr in enumerate(candidates):
         if found >= TARGET_ALPHAS:
             break
-
         elapsed_total = time.time() - t0
         if elapsed_total > TIME_LIMIT_SECONDS:
             print(f"\n  TIME LIMIT REACHED ({TIME_LIMIT_SECONDS/60:.0f}m)", flush=True)
@@ -328,7 +313,7 @@ def main():
 
         if all_pass:
             print(f"  >>> ALL GATES PASS! Checking diversity (corr < {ea.CORR_CUTOFF})...", flush=True)
-            saved = ea.save_alpha(conn, expr, "4h_discovery_v1", full)
+            saved = ea.save_alpha(conn, expr, "kucoin_4h_discovery_v1", full)
             if saved:
                 found += 1
                 print(f"  >>> SAVED! ({found}/{TARGET_ALPHAS})", flush=True)
@@ -344,7 +329,7 @@ def main():
 
     total_time = time.time() - t0
     print(f"\n{'='*80}")
-    print(f"  DISCOVERY COMPLETE")
+    print(f"  DISCOVERY COMPLETE (KuCoin)")
     print(f"  Tested: {tested} | S1 Pass: {s1_pass} | Saved: {found}/{TARGET_ALPHAS}")
     print(f"  Best SR seen: {best_sr:+.3f}")
     print(f"  Time: {total_time:.0f}s ({total_time/60:.1f}m)")
@@ -354,7 +339,7 @@ def main():
         "SELECT COUNT(*) FROM alphas WHERE archived=0 AND interval='4h' AND universe=?",
         (UNIVERSE,)
     ).fetchone()[0]
-    print(f"\n  Total active 4h alphas: {n_total}")
+    print(f"\n  Total active KuCoin 4h alphas: {n_total}")
     conn.close()
 
 
