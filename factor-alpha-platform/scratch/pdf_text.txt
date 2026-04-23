@@ -1,0 +1,726 @@
+﻿
+=== PAGE 1 ===
+ 
+  APT or ΓÇ£AIPTΓÇ¥? The Surp
+University of Melbourne Shikun Ke
+Yale School of Management Bryan Kelly
+Yale School of Management, AQR Capital Management, and NBER 
+ Semyon Malamud
+Ecole Polytechnique F├⌐d├⌐rale de Lausanne, Swiss Finance Institute, and  
+CEPR Swiss Finance Institu
+
+
+=== PAGE 2 ===
+APT or ΓÇ£AIPTΓÇ¥? The Surprising Dominance of Large
+Factor Models
+Antoine Didisheim, Shikun Ke, Bryan Kelly, and Semyon MalamudΓêù
+July 22, 2025
+Abstract
+We introduce artificial intelligence pricing theory (AIPT). In contrast with the APTΓÇÖs
+foundational assumption of a low dimensional factor structure in returns, the AIPT
+conjectures that returns are driven by a large number of factors. We first verify this
+conjecture empirically and show that complex nonlinear models with an exorbitant
+number of factors (many more than the number of training observations or base assets)
+are far more successful in describing the out-of-sample behavior of asset returns than
+simpler benchmark models.
+Economically, we show that complex models are more
+than twice as sensitive to long-run macroeconomic activity than simpler benchmarks.
+Finally, we theoretically characterize the behavior of large factor pricing models, from
+which we show that the AIPTΓÇÖs ΓÇ£many factorsΓÇ¥ conjecture faithfully explains our
+empirical findings, while the APTΓÇÖs ΓÇ£few factorsΓÇ¥ conjecture is contradicted by the
+data.
+Keywords: Machine learning, asset pricing, factor model, stochastic discount factor
+(SDF), pricing error, cross-section of returns, portfolio choice
+JEL: C3, C58, C61, G11, G12, G14
+ΓêùA previously circulated version of this article was titled ΓÇ£Complexity in Factor Pricing Models.ΓÇ¥ Antoine
+Didisheim is at the University of Melbourne. Shikun Ke is at Yale School of Management. Bryan Kelly
+is at Yale School of Management, AQR Capital Management, and NBER; www.bryankellyacademic.org.
+Semyon Malamud is at Swiss Finance Institute, EPFL, and CEPR, and is a consultant to AQR. We are
+grateful for helpful comments from Federico Baldi-Lanfranchi, John Campbell, Mike Chernov, Xavier Gabaix,
+Martin Lettau, Stefan Nagel, Mohammad Pourmohammadi, Seth Pruitt, Mirela Sandulescu, Paul Schneider,
+Fabio Trojani, Neng Wang, and participants at many seminars and conferences. Semyon Malamud gratefully
+acknowledges the financial support of the Swiss Finance Institute and the Swiss National Science Foundation,
+Grant 100018 192692. AQR Capital Management is a global investment management firm that may or may
+not apply similar investment techniques or methods of analysis as described herein. The views expressed
+here are those of the authors and not necessarily those of AQR.
+
+
+=== PAGE 3 ===
+1
+Introduction
+RossΓÇÖs (1976) APT conjectures that a small number of common factors govern the joint
+variation of returns.
+This premise, combined with no-arbitrage arguments, delivers the
+prediction that assetsΓÇÖ expected returns are determined by exposures to a few common
+factors. Most empirical investigations of the risk-return tradeoff in the past fifty years have
+occurred within the confines of the APTΓÇÖs assumptionΓÇösmall linear factor models.
+In this paper, we consider a different conjecture: that asset pricing models with an
+exorbitant number of factors are better suited to describe the behavior of asset returns. Our
+conjecture is rooted in the burgeoning theory of artificial intelligence, which suggests that
+ΓÇ£complexΓÇ¥ statistical models, those with many more parameters (P) than available training
+observations (T), tend to achieve better out-of-sample success than smaller models.1 Given
+its origins, we refer to this conjecture as artificial intelligence pricing theory, or AIPT, to
+contrast it with the parsimony assumption at the heart of the APT.
+One reason for the APTΓÇÖs position as a cornerstone of empirical asset pricing is the
+convenience of working with small linear factor models.
+The most obvious convenience
+stems from the tractability of estimating small models. More subtle is the convenience of
+comparing small models. The APT sets up conditions necessary for comparing models based
+on in-sample test statistics (namely, that the number of parameters is small compared to the
+number of training observations). Large factor models, on the other hand, are admittedly
+inconvenient. With so many parameters, they can be costly to train, and due to their high
+1See, among others, Hastie et al. (2019), Bartlett et al. (2020), and Kelly et al. (2024b). Following these
+papers, we define model complexity as the ratio of factor dimension to the number of training observations
+c = P/T. Our theoretical derivations rely crucially on the ratio c, hence our focus on this definition of
+complexity. The statistics literature proposes and analyzes other measures of model complexity as well, each
+capturing somewhat different qualities. As noted by Bartlett et al. (2020): ΓÇ£The classical perspective in
+statistical learning theory is that there should be a tradeoff between the fit to the training data and the
+complexity of the prediction rule. Whether complexity is measured in terms of the number of parameters,
+the number of nonzero parameters in a high-dimensional setting, the number of neighbors averaged in a
+nearest neighbor estimator, the scale of an estimate in a reproducing kernel Hilbert space, or the bandwidth
+of a kernel smoother, this tradeoff has been ubiquitous in statistical learning theory.ΓÇ¥
+2
+
+
+=== PAGE 4 ===
+statistical complexity, standard in-sample asset pricing tests are not applicable. Instead,
+they require out-of-sample model performance comparisons.
+We show that, despite their inconveniences, large factor models are far better at pricing
+assets than the standard low-dimensional factor models in the literature. In the first half
+of this paper, we present extensive empirical evidence that challenges the APT parsimony
+conjecture and favors the complexity conjecture of AIPT. In the second half of the paper
+we develop a statistical theory that characterizes the behavior of complex factor models and
+rationalizes their surprising dominance in pricing assets.
+1.1
+Empirical Behavior of Large Factor Models
+Our central empirical finding is that the out-of-sample performance of factor pricing models
+is increasing in the number of factors. We focus on two metrics of model performanceΓÇö the
+Sharpe ratio of the tangency portfolio among factors and the magnitude of pricing errors
+among test assets.
+Our analysis gradually increases the number of factors while holding the underlying
+information set fixed.
+The information set includes 130 well-known characteristics that
+predict the cross-section of US stocks.
+To vary the number of pricing factors, we use a
+neural network to generate new stock characteristicsΓÇöup to hundreds of thousandsΓÇöthat are
+nonlinear transformations of the original 130 variables. For each nonlinear characteristic, we
+build the corresponding factor (using a standard characteristic-managed portfolio approach).
+Training the factor model amounts to building the stochastic discount factor (SDF) as the
+tangency portfolio of factors (using ridge shrinkage where applicable). We then track the
+complex SDFΓÇÖs performance out-of-sample, presenting our main empirical results in the
+form of ΓÇ£VoC curvesΓÇ¥ (Kelly et al., 2024b, KMZ henceforth) that plot performance as a
+function of the number of factors. These curves document a ΓÇ£virtue of complexityΓÇ¥ in factor
+pricing models, with out-of-sample Sharpe ratios increasing and pricing errors decreasing
+3
+
+
+=== PAGE 5 ===
+as we expand the number of factors. The complex SDF performs well even whenΓÇöin fact,
+especially whenΓÇöP far exceeds T.
+Large factor models outperform well-known, low-dimensional factor models from the
+literature by a wide margin.
+For example, the largest model we consider (with 360,000
+factors, or a complexity ratio of 1,000 given our 360-month rolling training window) reduces
+pricing errors by 54.8% relative to the six-factor Fama and French (2015) model (including
+momentum) and by 50.4% relative to the five-factor Hou et al. (2021) model. Meanwhile,
+our largest factor model produces an out-of-sample tangency Sharpe ratio of 3.7, compared
+to 0.8 and 1.2 for the aforementioned benchmarks, respectively.2
+Improvements in SDF measurement achieved by large factor models offer a window into
+the economic nature of the unobservable ΓÇ£trueΓÇ¥ SDF. We argue that the higher an SDFΓÇÖs out-
+of-sample Sharpe ratio, the better it reflects the drivers of investorsΓÇÖ intertemporal marginal
+rate of substitution, and thus the better it should reflect expectations of future economic
+conditions. In other words, portfolio efficiency and informational efficiency go hand-in-hand.
+We estimate a macroeconomic vector autoregression and find that the complex SDF is an
+unusually strong forecaster of macroeconomic conditions as far as three years into the future.
+For example, a positive one standard deviation annual return to the complex SDF predicts a
+roughly 3% rise in industrial production over three years and a reduction in macroeconomic
+uncertainty of about 7.5% over two years. A positive SDF return also predict significant
+increases in employment, consumption, consumer sentiment, and housing over horizons of
+up to three years, and it predicts a decrease in credit spreads and inflation.
+The asset pricing benefits of complexity and nonlinearity accrue even when the condition-
+ing information set is relatively small. For example, we construct a ΓÇ£nonlinear Fama-French
+modelΓÇ¥ using a large set of nonlinear factors derived from only five characteristics: size, value,
+investment, profitability, and momentum, rather than the full set of 130 characteristics in our
+main analysis. The added complexity more than doubles the out-of-sample tangency Sharpe
+2We study a number of additional benchmark models as well.
+4
+
+
+=== PAGE 6 ===
+ratio relative to the baseline Fama-French model.
+The same result obtains for complex
+nonlinear versions of other benchmark models in the literature.
+The insights of Kozak et al. (2020) suggest that a successful asset pricing model may not
+require many factors because the returns of most anomaly factors are adequately explained
+by a small number of their principal components. This begs the question: Can our complex
+pricing model be compressed to achieve similar performance with potentially many fewer
+parameters?
+Evidently, the answer is no.
+We consider replacing the large number of
+factors in our complex model with a smaller number of their principal components and
+find that dimension reduction significantly impairs out-of-sample performance relative to
+the full complex model.
+Lastly, we conduct a variety of robustness analyses that consider different input char-
+acteristics, various subsets of the stock universe, different training windows, and so forth.
+Every robustness test reinforces our main findings. In summary, we establish the empirical
+fact that large factor models are better at pricing assets than existing parsimonious models.
+1.2
+Theoretical Findings
+In order to understand our empirical findings, we develop a statistical theory of large factor
+pricing models. Consider the following interpretation of a large factor model from the asset
+pricing theory perspective of an SDF. A conditional SDF can be represented as a tradable
+portfolio of risky assets:
+Mt+1 = 1 ΓêÆw(Zt)ΓÇ▓Rt+1.
+(1)
+Rt+1 contains excess returns of risky assets, and w(Zt) are the SDFΓÇÖs weights on those
+assets. The weights are determined by variables Zt that span the time t information set.
+Without further guidance about the functional form of w, a machine learning-based empirical
+approach would approximate the SDF with a nonparametric model such as a shallow neural
+5
+
+
+=== PAGE 7 ===
+network: w(Zt) ΓëêPP
+p=1 ╬╗pSp(Zt), where each Sp(Zt) is some nonlinear basis function of Zt.
+Thus, a neural network SDF delivers a linear factor pricing model,
+Mt+1 Γëê1 ΓêÆ
+X
+p
+╬╗pFp,t+1,
+(2)
+where each ΓÇ£factorΓÇ¥ Fp,t+1 is a characteristic-managed portfolio that uses the transformed
+ΓÇ£characteristicsΓÇ¥ Sp(Zt) as portfolio weights, and ╬╗ = (╬╗1, ..., ╬╗P) are parameters to be
+estimated.
+This formulation captures the tension in machine learning asset pricing models. On the
+one hand, the more terms in the nonparametric representation of w (and thus the larger
+the number of factors), the better the model can approximate the true SDF. But as we
+improve the approximation, we simultaneously increase the number of parameters that must
+be estimated, so when P becomes large, the estimated model may be unstable and suffer
+out-of-sample. Our theory makes it possible to understand (and quantitatively characterize)
+this cost/benefit tradeoff in large factor models. This is non-trivial and requires our novel
+random matrix theory (RMT) results that allow us to tackle the ΓÇ£three infinitiesΓÇ¥ problem
+(when the number of assets, observations, and parameters are simultaneously large).3
+On the cost side of the tradeoff is a phenomenon we refer to as ΓÇ£limits to learning.ΓÇ¥
+In low complexity settingsΓÇöwith many more observations than parameters to estimateΓÇö
+the law of large numbers kicks in, and appropriate estimators can recover the true model.4
+Traditional econometric theory deals with estimator behavior in this data-rich environment.
+By contrast, in high-complexity settings, the number of factors is large relative to the number
+of observations.
+Thus, the law of large numbers breaks down.
+Even correctly specified
+estimators fail to converge on the true model because there is not enough data to go around.
+The first key aspect of our theory is an explicit characterization of the limits to the learning
+3Established RMT results (e.g., those from Hastie et al., 2019) are insufficient in our context.
+4I.e., if the model is correctly specified. If the model is mis-specified, estimators recover the nearest
+ΓÇ£pseudo-trueΓÇ¥ parameters (e.g. White, 1996).
+6
+
+
+=== PAGE 8 ===
+effect. We prove that data limitations impose an unavoidable implicit shrinkage of the model,
+which depresses the modelΓÇÖs expressive power. Complexity induces bias through its implicit
+shrinkage. But on the benefit side of the tradeoff, complexity also reduces specification bias.
+More factors lead to a more accurate approximation of the true SDF. Our main theoretical
+result shows that which effect dominates depends on the eigenvalue distribution of the factors.
+When there is a concentrated eigenvalue distribution and thus a few dominant factors, asset
+pricing model performance tops out after adding only a few factors, and there is no virtue
+of complexityΓÇöa counterfactual prediction in light of our empirical findings.
+However, when the underlying factor structure is not too concentratedΓÇöthat is, when the
+data-generating process aligns with the AIPT conjectureΓÇöa virtue of complexity emerges
+that closely mimics the patterns we find in the data. Our theory rationalizes our surprising
+empirical facts, demonstrating that even if arbitrage is absent and an SDF exists, it is
+possible to continually find new empirical ΓÇ£riskΓÇ¥ factors that are unpriced by others and that
+adding these factors to the pricing model continually improves its out-of-sample performance.
+The theory also helps rationalize the prominence of ΓÇ£anomalyΓÇ¥ portfolios in empirical asset
+pricing. The abundance of anomalies (the so-called ΓÇ£factor zooΓÇ¥) is not a puzzle to be solved
+or evidence of a corrupt research process.5 Instead, it is the theoretically expected outcome
+in a complex asset pricing environment because data limitations hamper our ability to learn
+the true nature of markets. In fact, our theory argues that the extant factor zoo is too small
+and that an SDF model can be beneficially expanded to incorporate a teeming NoahΓÇÖs ark
+of factors by transforming raw asset characteristics into a wide variety of nonlinear signals
+(buttressed by appropriate shrinkage). Such a large factor set improves the out-of-sample
+SDF Sharpe ratio and reduces out-of-sample pricing errors.
+5Jensen et al. (2023) reach a similar conclusion based on the rationale that the risk-return trade-off is
+difficult to measure and complexity manifests as an inability to find a single silver-bullet characteristic that
+pins down expected returns. Instead, researchers gradually expand and refine the set of noisy signals and
+conclude ΓÇ£a more positive take on the factor zoo is not as a collective exercise in data mining and false
+discovery, but rather as a natural outcome of a decentralized effort in which researchers make contributions
+that are correlated with, but incrementally improve on, the body of knowledge.ΓÇ¥
+7
+
+
+=== PAGE 9 ===
+1.3
+Literature Review
+This paper is related to an emergent literature that shows machine learning asset pricing
+models achieve higher out-of-sample Sharpe ratios and smaller pricing errors than their
+parsimonious predecessors. Examples include Kozak et al. (2020), Gu et al. (2020a), Chen
+et al. (2023), Bryzgalova et al. (2020), Cong et al. (2022), Fan et al. (2022) and Preite
+et al. (2022), among others.
+It also relates to machine learning methods for analyzing
+factor models, including Connor et al. (2012), Fan et al. (2016), Kelly et al. (2020), Lettau
+and Pelger (2020), Giglio and Xiu (2021), Giglio et al. (2022), and He et al. (2023) (see
+Kelly and Xiu (2023) and Rapach and Zhou (2020) for more complete survey treatments of
+these topics). We extend this literature with detailed documentation of the counterintuitive
+phenomenon that out-of-sample asset pricing model performance appears to improve with
+ever richer model specifications.
+An understanding of this surprising empirical phenomenon is only beginning to take
+shape.
+KMZ theoretically analyze machine learning models for return prediction.
+We
+extend this work in a number of ways, including reorienting the statistical objective around
+minimizing pricing errors and maximizing SDF Sharpe ratios, and by moving from a single
+asset to a cross-section of assets.6 Together with Martin and Nagel (2021), Da et al. (2022),
+Fan et al. (2022), and KMZ, our paper belongs to an emergent literature analyzing ΓÇ£limits to
+learningΓÇ¥ in high-dimensional asset pricing models. Our paper also relates to the theoretical
+6From a technical standpoint, we overcome a number of new theoretical hurdles relative to KMZ. In time
+series regressions of KMZ, the random matrix behavior of time series signal covariances dictates the market
+timing strategies. In the panel problem, behavior is determined not just by time series covariances but also by
+the covariance of signals across assets. While standard random matrix theory in KMZ requires dealing with
+double limits (number of observations and number of parameters), our analysis requires the development
+of a non-trivial theoretical extension to deal with a third limiting dimensionΓÇöthe number of base assets.
+This contrasts with recent results of Martin and Nagel (2021), who lack the time dimension and assume
+that all stock characteristics are constant. Such an assumption implies that factors (characteristics-managed
+portfolios) are, in fact, static portfolios of stocks. In particular, the number of factors in their setting is
+always smaller than the number of stocks. Importantly, we also remove the equal ex-ante predictive power
+assumption of KMZ and allow for a generic distribution of risk premia across factors.
+8
+
+
+=== PAGE 10 ===
+machine learning literature on topics surrounding ΓÇ£double descentΓÇ¥ and ΓÇ£benign overfitΓÇ¥ (e.g.
+Spigler et al., 2019; Hastie et al., 2019; Belkin et al., 2020; Bartlett et al., 2020).
+A related empirical literature analyzes the association between asset returns and future
+macroeconomic conditions. Parker and Julliard (2005) and Croce et al. (2023) show that
+stock returns covary with future consumption growth.7 Bryzgalova et al. (Forthcoming) and
+Dew-Becker and Giglio (2016) use returns to identify the role of long-lived consumption risks
+for pricing assets. Backus et al. (2007) show that equity returns lead GDP growth by a few
+quarters. We add to this literature in a number of ways. First, our complex SDF forecasts
+future not just consumption and output, but a wide range of macroeconomic activity and
+conditions. The macro predictability arising from our model is larger in magnitude than
+that of benchmark factor models in the literature. A particularly important new finding is
+our complex SDFΓÇÖs strong predictability for macroeconomic uncertainty, giving credence to
+popular consumption-based asset pricing models with stochastic macroeconomic volatility
+(e.g. Bansal and Yaron, 2004; Campbell et al., 2018). In contrast, none of the standard
+benchmarks demonstrate any ability predict macroeconomic uncertainty.8
+Through its coupling with the literature on factor pricing models, our work also relates
+to the empirical literature surrounding the ΓÇ£factor zooΓÇ¥ and factor replicability, including
+Harvey et al. (2016), McLean and Pontiff (2016), Hou et al. (2020), Feng et al. (2020),
+Jensen et al. (2023), and Chen and Zimmermann (2021). Our theory helps rationalize the
+continued discovery of factors that are unspanned by simpler precedent models. Relatedly,
+the demonstrated success of machine learning models in predicting the cross-section of
+returns such as Chinco et al. (2019), Han et al. (2019), Freyberger et al. (2020), Rapach
+and Zhou (2020), Gu et al. (2020b), Avramov et al. (2023), and Guijarro-Ordonez et al.
+(2021), is additional evidence of the virtue of complexity in financial markets research.
+The remainder of the paper proceeds by introducing our empirical design in Section 2
+7Chernov et al. (2023) demonstrate that currency returns are also predictive of future consumption.
+8Relatedly, Bryzgalova et al. (Forthcoming) point out that consumption volatility shocks are conspicuously
+absent from their estimation of the risk-return tradeoff.
+9
+
+
+=== PAGE 11 ===
+and our empirical findings in Section 3. Section 4 presents our theoretical analysis of large
+factor models, and Section 5 concludes.
+2
+Empirical Framework
+We now present the details of our empirical framework for large factor pricing models and
+their associated SDF representations.
+2.1
+Background: Factor Models and the SDF
+Hansen and Richard (1987) show that a true SDF, if one exists, is representable as a tradable
+portfolio of risky assets as introduced in Equation (1).
+A factor pricing model is equivalent to an SDF that is linear in the factors. We can,
+therefore, analyze and compare asset pricing factor models as competing SDF specifications.
+Motivated by the APT and the principle of parsimony,9 the literature has primarily
+investigated (1) with tightly constrained factor specifications of the SDF weight function
+w(Zt). A leading example is the Fama and French (1993) model, which restricts Mt+1 to be
+a three-parameter model:
+wFF
+i
+= c1MKTi + c2SIZEi + c3VALUEi,
+where the weight of asset i in the Fama-French SDF (wFF
+i ) depends only on the stockΓÇÖs
+weight in the market portfolio (MKTi) and on researcher-dictated functions of the stockΓÇÖs
+size and book-to-market ratio (SIZEi and VALUEi).
+The Fama-French SDF portfolio can equivalently (and more familiarly) be viewed as a
+9See, e.g., Tukey (1961) and Box and Jenkins (1970).
+Economic theory also motivates functional
+restrictions on the SDF (e.g. Hansen and Singleton, 1982). However, restrictions derived from economic
+theory have had limited success to date in pricing cross-sections of assets such as stocks, bonds, and
+derivatives. The Fama-French SDF and many other factor models in the literature are motivated by empirical
+ΓÇ£anomaliesΓÇ¥ vis-a-vis the CAPM and not by a particular economic theory.
+10
+
+
+=== PAGE 12 ===
+linear combination of three factors. The factors are portfolios whose individual stock weights
+are given by MKTi, SIZEi, and VALUEi, respectively. The SDF combines these factors with
+three parameters, c1, c2, and c3, corresponding to the Sharpe ratio maximizing combination
+of the factors. These are the only three parameters that must be estimated in the Fama-
+French SDF, resulting in an extraordinarily parsimonious asset pricing model. Thus, the
+Fama-French model is a special case of (1) where
+w(ZFF
+t
+) = ZFF
+t
+╬╗FF.
+The conditioning set is ZFF
+t
+, which has D = 3 columns containing stocksΓÇÖ Fama-French
+characteristics, and the weight function is linear in parameters ╬╗FF = (c1, c2, c3)ΓÇ▓. In this
+case, the SDF is
+M FF
+t
+= 1 ΓêÆ╬╗FF ΓÇ▓ZFF
+t
+ΓÇ▓Rt+1,
+where we recognize that ZFF
+t
+ΓÇ▓Rt+1 is a vector of time t returns on the three Fama-French
+factors and 1 ΓêÆM FF
+t
+is their mean-variance efficient combination.
+2.2
+Designing A Large Factor Model
+The Fama-French model achieves its parsimony from rigid assumptions on the SDF weighting
+functionΓÇödiscarding all but a few conditioning variables and making detailed choices for the
+functional form that maps the selected variables into SDF weights.
+The AIPT takes a different approach, founded on the philosophy of machine learning,
+and explores the benefits of flexible models that accommodate many potential conditioning
+variables and diverse functional forms. In our analysis, Zt is an Nt ├ù D matrix that collects
+a large number of D conditioning variables for each risky asset.
+We derive a complex
+factor pricing model by replacing detailed specification choices with a generic nonparametric
+11
+
+
+=== PAGE 13 ===
+approximation to the unknown SDF:
+w(Zt) Γëê
+P
+X
+p=1
+╬╗pSp(Zt) = St╬╗,
+(3)
+where each Sp(Zt) is an Nt├ù1 nonlinear basis function of the input data Zt and ╬╗p is a scalar
+basis coefficient. This basis expansion explores the space of potential shapes for w(Zt), then
+combines these building blocks with coefficients (╬╗p) that best reconstruct the unknown
+function w(Zt).
+Collecting the P basis terms into an Nt ├ù P matrix of characteristics
+St = [S1,t, ..., SP,t], and collecting parameters ╬╗ = [╬╗1, ..., ╬╗P]ΓÇ▓, we arrive at St╬╗ as the
+nonparametric approximation to the true SDF weighting function.
+The larger is P, the
+broader the set of nonlinearities considered, the larger the number of model parameters, and
+the more flexible the approximation.
+The nonparametric approximation in (3) takes the same basic form as the Fama-French
+SDF with St in place of ZFF
+t
+. The basis terms Sp(Zt) merely transform conditioning variables
+into a large number of new nonlinear asset ΓÇ£characteristicsΓÇ¥ analogous to those underpinning
+the Fama-French model. Substituting the approximation in (3) into the SDF definition (1),
+we arrive at
+Mt+1 Γëê1 ΓêÆ╬╗ΓÇ▓SΓÇ▓
+tRt+1 = 1 ΓêÆ╬╗ΓÇ▓Ft+1 = 1 ΓêÆRM
+t+1.
+(4)
+In other words, like the Fama-French model, the SDF portfolio (denoted RM
+t+1 = ╬╗ΓÇ▓Ft+1) is a
+linear combination of factor portfolios,
+Ft+1 = SΓÇ▓
+tRt+1.
+(5)
+Each factor Fp,t+1 = Sp(Zt)ΓÇ▓Rt+1 is a characteristic-managed portfolio of risky assets that
+uses the nonlinear asset ΓÇ£characteristicΓÇ¥ Sp(Zt) as the vector of portfolio weights, and again ╬╗
+12
+
+
+=== PAGE 14 ===
+is the mean-variance efficient combination of factors.10 The difference vis-a-vis Fama-French
+(and other parsimonious models) is that the factors in (4) make flexible and nonlinear use
+of conditioning data, and there are a large number P of these factors.
+2.3
+Random Fourier Factors
+To operationalize this large factor model approximation of the SDF, our empirical approach
+adapts the method of random Fourier features, or RFF (Rahimi and Recht, 2007).11 While
+(Rahimi and Recht, 2007) propose RFF for predictive regression, our approach embeds RFF
+in an SDF. The nonlinear basis functions in this method are trigonometric transformations
+of the original signals Zt:
+[S2pΓêÆ1,tS2p,t] ΓêêRNt├ù2 = [sin(╬│Zt╧ëp), cos(╬│Zt╧ëp)]ΓÇ▓ ,
+╧ëp Γê╝i.i.d. N(0, I),
+p = 1, ..., P/2. (6)
+Each RFF basis function forms a random linear combination (╧ëp) of the raw characteristics
+Zt, then feeds this through sine and cosine activation functions.12 The transformation is
+applied stock-by-stock, converting stock iΓÇÖs characteristics into new nonlinear characteristics
+that include not just transformations of each individual characteristic but general multi-way
+interactive effects involving all characteristics for stock i.
+Upon closer inspection, we see that the SDF in (4) is, in fact, a two-layer neural
+network with input parameters given by ╧ëp, output parameters given by ╬╗, and trigonometric
+activation neurons (see Figure 1). In a typical neural network, both the input and output
+parameters are estimated using computationally costly numerical methods. The fascinating
+insight of (Rahimi and Recht, 2007) is that, by using randomization to fix the input
+10Because the size of the cross-section varies over time, our empirical analysis in fact scales the factors as
+Ft+1 = N ΓêÆ1/2
+t
+SΓÇ▓
+tRt+1 to maintain a relatively consistent scale of factor returns over time.
+11In Section 3.8 we demonstrate the robustness of our findings to other complex model specifications.
+12The parameter ╬│ controls the Gaussian kernel bandwidth in generating random Fourier features.
+Following Kelly et al. (2022), we randomly chose ╬│ from the grid [0.5, 0.6, 0.7, 0.8, 0.9, 1.0] for each ╧ëi that
+we generate. This embeds varying degrees of nonlinearity in the generated feature set St.
+13
+
+
+=== PAGE 15 ===
+wi,t=SΓÇ▓
+i,t╬╗
+Si,t=
+nh
+sin(╬│ZΓÇ▓
+i,t╧ëp), cos(╬│ZΓÇ▓
+i,t╧ëp)
+ioP
+p=1
+Zi,t
+Figure 1: Neural Network Representation of Random Fourier Factors
+Note. Illustration of nonlinear mapping from stock iΓÇÖs characteristics Zi,t into hidden layer neurons Si,t
+and then into the conditional SDF weight wi,t during the construction of random Fourier factors.
+parameters and only estimating the output parameters, random features regression can build
+nonparametric approximations in a computationally efficient manner.13
+Building on this
+insight, our SDF model is estimable in closed form using only least squares regression (as
+discussed below).
+RFF is an ideal tool for our analysis because, from a fixed input data set Zt we can create
+asset pricing models with any desired factor dimension, P. For a low-dimensional model of,
+say, P = 2, one generates a single pair of RFFs. For a high-dimensional model of, say,
+P = 10,000, one can instead draw many random weight vectors ╧ëp, p = 1, ..., 5,000. This
+gives us the ability to evaluate how asset pricing models are impacted by varying the number
+of factors while holding the set of conditioning variables fixed. It is important to emphasize
+that in our analysis, factor proliferation arises not from expanding the set of input data Zt
+(which may or may not be low-dimensional) but instead from generating many nonlinear
+basis transformations of Zt.
+2.4
+Estimator
+The SDF coefficient vector ╬╗ represents the mean-variance efficient portfolio of factors. Note
+that the factor representation of the conditional SDF in essence produces an equivalent
+unconditional SDF. This allows us to estimate ╬╗ as the sample Markowitz portfolio of factors:
+13Indeed, RFF is a special case of kernel regression. For applications of kernel regression in asset pricing
+settings, see Kozak (2020) and Kelly et al. (2024a).
+14
+
+
+=== PAGE 16 ===
+arg max
+╬╗
+
+╦åE[╬╗ΓÇ▓Ft] ΓêÆ1
+2
+╦åE
+
+(╬╗ΓÇ▓Ft)2
+= ╦åE[FtF ΓÇ▓
+t]ΓêÆ1 ╦åE[Ft]
+(7)
+where ╦åE denotes the training sample mean. We denote the corresponding estimated SDF
+and SDF portfolio as
+╦å
+Mt = 1 ΓêÆ╦åRM
+t
+and
+╦åRM
+t
+= ╦å╬╗ΓÇ▓Ft.
+(8)
+The AIPT explores large factor models in which the dimension of ╬╗ may exceed the
+number of time series observations, i.e., P > T. In this case, ╦åE[FtF ΓÇ▓
+t]ΓêÆ1 is rank-deficient,
+which we resolve by introducing a ridge penalty in the Markowitz problem:
+╦å╬╗(z) = arg max
+╬╗
+
+╦åE[╬╗ΓÇ▓Ft] ΓêÆ1
+2
+╦åE
+
+(╬╗ΓÇ▓Ft)2
+ΓêÆz╬╗ΓÇ▓╬╗
+
+=
+
+zI + ╦åE[FtF ΓÇ▓
+t]
+ΓêÆ1 ╦åE[Ft]
+(9)
+where z is the ridge parameter.
+Kozak et al. (2020) point out that we can also interpret ╦å╬╗(z) in terms of ΓÇ£pricing errors.ΓÇ¥
+Since the factors Ft are tradable assets, the true SDF Mt prices these factors with zero error
+due to the marginal investorΓÇÖs first-order optimality condition:
+E[MtFt] = 0.
+(10)
+Hansen and Jagannathan (1997) suggest a statistic for comparing the efficacy of SDF
+models in terms of their pricing error magnitudes. For a candidate SDF ╦£
+Mt, The Hansen-
+Jagannathan distance (HJD) is a weighted sum of squared pricing errors for the set of test
+15
+
+
+=== PAGE 17 ===
+assets Ft:14
+DHJ = E[ ╦£
+MtFt]ΓÇ▓E[FtF ΓÇ▓
+t]ΓêÆ1E[ ╦£
+MtFt].
+(11)
+Substituting the SDF approximation model (4) for ╦£
+M in the HJD and adding a ridge penalty
+to handle rank deficiency when P > T, we have
+╦å╬╗(z) = arg min
+╬╗
+n
+╦åE[(1 ΓêÆ╬╗ΓÇ▓Ft)Ft]ΓÇ▓ ╦åE[FtF ΓÇ▓
+t]ΓêÆ1 ╦åE[(1 ΓêÆ╬╗ΓÇ▓Ft)Ft] + z╬╗ΓÇ▓╬╗
+o
+.
+(12)
+In other words, ╦å╬╗(z) is also the regularized SDF estimator that minimizes pricing error (we
+discuss HJD in further detail in Section 2.6).
+2.5
+Data and Training
+To make the conclusions from this analysis as easy to digest as possible, we perform our
+analysis in a conventional setting with conventional data.
+We use a comprehensive and
+standardized sample of monthly US stock returns and 153 stock characteristics from 1963 to
+2023, compiled by Jensen et al. (2023) (JKP henceforth).15 As in JKP, our universe includes
+NYSE/AMEX/NASDAQ securities with CRSP share code 10, 11, or 12, excluding ΓÇ£nanoΓÇ¥
+stocks (i.e., stocks with market capitalization below the first percentile of NYSE stocks).
+Some of the JKP characteristics have low coverage, especially in the early parts of the
+sample. To ensure that characteristic composition is fairly homogeneous over time and to
+avoid purging a large number of stock-month observations due to missing data, we reduce
+the 153 characteristics to a smaller set of D = 130 characteristics with the fewest missing
+values. We drop stock-month observations for which more than 30% of the 130 characteristic
+values are missing and use Nt to denote the number of the remaining stock observations at
+time t. Next, we cross-sectionally rank-standardize each characteristic and map it to the
+14We discuss some attractive properties of the HJD in the following sections.
+15To access the stock-level characteristic data and associated documentation, refer to jkpfactors.com.
+16
+
+
+=== PAGE 18 ===
+[ΓêÆ0.5, 0.5] interval, following Gu et al. (2020b). Ultimately, we obtain an Nt ├ù D matrix of
+conditioning characteristics Zt in each month.
+In our empirical analyses, we study SDF performance as we vary two aspects of the model:
+the number of factors P and ridge penalty z. For each model of a given size and shrinkage,
+we conduct a rolling out-of-sample model performance analysis. Starting in January 1993, in
+each month t, we use the most recent 360 months of data to estimate the ridge SDF parameter
+in (9).16 We then track the out-of-sample SDF portfolio return in the subsequent month.
+From the sequence of monthly out-of-sample SDF realizations, we calculate out-of-sample
+SDF performance metrics.
+2.6
+Performance Metrics
+We evaluate our SDF models with two standard out-of-sample performance metrics. A true
+SDF is the mean-variance efficient portfolio of risky assets. Thus, our first performance
+metric is the SDF portfolio Sharpe ratio. For a candidate SDF ╦£
+Mt = 1ΓêÆ╦£RM
+t , the annualized
+out-of-sample Sharpe ratio is
+c
+SR =
+ΓêÜ
+12
+╦åEOS[ ╦£RM
+t ]
+╦å╧âOS( ╦£RM
+t )
+where ╦åEOS and ╦å╧âOS denote sample average and standard deviation among the TOS out-of-
+sample observations (to differentiate versus the notation ╦åE and T used for training samples).
+Since the SDF is constructed from excess returns on risky assets, the numerator need not be
+adjusted for the risk-free rate.
+Our second performance metric is the pricing error for a large set of test assets. The test
+assets in our main analysis are the 153 JKP anomaly factors constructed by those authors
+16The stochastic nature of RFF means that there is inherent variability in the estimated SDF model when
+P is small. To mitigate this variability, we repeat the RFF-based estimation 20 times with different random
+seeds and report average performance metrics across seeds. This has little qualitative effect on the plots
+shown. See KMZ for further discussion of this point.
+17
+
+
+=== PAGE 19 ===
+and downloadable at jkpfactors.com (robustness analyses report pricing errors for other
+test asset sets as well). To aggregate test asset pricing errors into a single metric, we calculate
+the normalized sum of squared pricing errors according to the Hansen-Jagannathan distance
+(HJD) referenced in Section 2.4. For a set of test asset returns RT
+t , the out-of-sample HJD
+is
+╦åDHJ = ╦åEOS
+h
+╦£
+MtRT
+t
+iΓÇ▓ ╦åEOS
+h
+RT
+t RT
+t
+ΓÇ▓i+ ╦åEOS
+h
+╦£
+MtRT
+t
+i
+,
+(13)
+where + is the Moore-Penrose quasi-inverse (necessary due to the degeneracy of ╦åEOS[RT
+t RT
+t
+ΓÇ▓]
+when P > TOS).
+The HJD has a number of attractive model comparison properties.17 It averages pricing
+errors among test assets using a common weighting matrix for all candidate models of
+Mt. This is important because it puts all models on equal footing for comparison, unlike
+other alpha or GMM-based comparisons. The weighting matrix is economically motivated
+since it gives the HJD a clear interpretation as the pricing error of the portfolio of test
+assets that is most mispriced by each model. Furthermore, the HJD is scale invariant.18
+While typically used for in-sample comparison, the HJD easily generalizes for out-of-sample
+evaluation because it avoids the need to estimate out-of-sample time series alphas and betas
+for each test asset. Finally, because our theoretical derivations explicitly characterize the
+expected out-of-sample HJD for complex SDF models, the empirical HJD can be directly
+compared to theoretical predictions.
+17In addition to Hansen and Jagannathan (1997), the literature including Kan and Robotti (2009), Chen
+and Ludvigson (2009), and Kelly and Xiu (2023) further advocates HJD as a pricing error metric.
+18Differences in volatilities among factors can skew test statistics like average absolute alpha or the GRS
+statistic, and as a result, the volatility scaling choice for test assets can lead to different conclusions. HJD
+is invariant to changes in test asset volatility.
+18
+
+
+=== PAGE 20 ===
+2.7
+Benchmark Models
+We provide reference points for our analysis by comparing large factor model performance
+to five benchmark factor pricing models in the literature:19
+FF6: This is a six-factor model that includes the five factors of Fama and French (2015) plus
+their UMD momentum.
+SY: This is a four-factor model that includes the ΓÇ£mispricingΓÇ¥ factors of Stambaugh and
+Yuan (2017).
+HXZ: This is a five-factor model that includes the q-factor model specification of Hou et al.
+(2015) augmented to include the expected growth factor of Hou et al. (2021).
+DHS: This is a three-factor model that includes the long-horizon and short-horizon behavioral
+factors of Daniel et al. (2020).
+BS: This is a composite model that selects factors from the literature based on the Bayesian
+methodology of Barillas and Shanken (2018). Its six factors include the market factor,
+the investment and profitability factors from Hou et al. (2015), the size and momentum
+factors from Fama and French (2015), and the value factor (HMLm) from Asness et al.
+(2013).
+To compare models, we use the SDF corresponding to each of these factor pricing models,
+which requires estimating the Markowitz portfolio of factors in each model. We do this in
+rolling 360-month training windows and track benchmark performance out-of-sample. In
+other words, we use the same training/evaluation design for the benchmarks that we use for
+our large factor pricing models.20
+19All benchmark factor data are conveniently available from the respective authorsΓÇÖ websites.
+20When building the Markowitz portfolio for each benchmark model, we do not use ridge shrinkage because
+the number of assets is far smaller than the number of time series observations. Even with infeasible (ex-
+post optimal) ridge shrinkage, we find the out-of-sample SDF performance of benchmark models changes
+negligibly.
+19
+
+Total pages: 172

@@ -25,6 +25,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 EXPRESSION = "ts_zscore(close, 60)"           # <-- LLM EDITS THIS LINE
 
+# Exchange: 'binance' or 'kucoin' — controls matrix/universe paths
+EXCHANGE = "binance"
+
 # Agent 1 ONLY uses the train period
 TRAIN_START  = "2022-09-01"
 TRAIN_END    = "2024-09-01"   # 2 years in-sample
@@ -45,7 +48,7 @@ BARS_PER_DAY = 6
 COVERAGE_CUTOFF = 0.3
 
 # Quality gates
-MIN_IS_SHARPE  = 2.0
+MIN_IS_SHARPE  = 3.0
 MIN_FITNESS    = 5.0
 MIN_IC_MEAN    = -0.05       # Loose IC gate — Sharpe/stability/DSR are the real filters
 CORR_CUTOFF    = 0.70
@@ -195,8 +198,9 @@ def load_data(split="train"):
     if split in _DATA_CACHE:
         return _DATA_CACHE[split]
 
-    mat_dir = Path(f"data/binance_cache/matrices/{INTERVAL}")
-    uni_path = Path(f"data/binance_cache/universes/{UNIVERSE}_{INTERVAL}.parquet")
+    exchange_dir = "binance_cache" if EXCHANGE == "binance" else "kucoin_cache"
+    mat_dir = Path(f"data/{exchange_dir}/matrices/{INTERVAL}")
+    uni_path = Path(f"data/{exchange_dir}/universes/{UNIVERSE}_{INTERVAL}.parquet")
 
     universe_df = pd.read_parquet(uni_path)
     coverage = universe_df.sum(axis=0) / len(universe_df)
@@ -423,14 +427,14 @@ def list_alphas():
                COALESCE(e.turnover, 0), COALESCE(e.ic_mean, 0)
         FROM alphas a
         LEFT JOIN evaluations e ON e.alpha_id = a.id
-        WHERE a.archived = 0
+        WHERE a.archived = 0 AND a.universe = ?
         ORDER BY COALESCE(e.fitness, 0) DESC
-    """).fetchall()
+    """, (UNIVERSE,)).fetchall()
     n_trials = get_num_trials(conn)
     conn.close()
 
     print(f"\n{'='*70}")
-    print(f"ALPHA DATABASE: {len(rows)} active alphas | {n_trials} agent trials")
+    print(f"ALPHA DATABASE [{UNIVERSE}]: {len(rows)} active alphas | {n_trials} agent trials")
     print(f"{'='*70}")
     for r in rows:
         print(f"  #{r[0]:3d} | SR={r[3]:+.2f} Fit={r[4]:.2f} TO={r[5]:.2f} IC={r[6]:+.3f} "
@@ -439,20 +443,23 @@ def list_alphas():
 
 def print_scoreboard():
     conn = get_conn()
-    n_alphas = conn.execute("SELECT COUNT(*) FROM alphas WHERE archived=0").fetchone()[0]
-    n_agent = conn.execute("SELECT COUNT(*) FROM alphas WHERE source='agent1_research' AND archived=0").fetchone()[0]
+    n_alphas = conn.execute("SELECT COUNT(*) FROM alphas WHERE archived=0 AND universe=?",
+                            (UNIVERSE,)).fetchone()[0]
+    n_agent = conn.execute(
+        "SELECT COUNT(*) FROM alphas WHERE source='agent1_research' AND archived=0 AND universe=?",
+        (UNIVERSE,)).fetchone()[0]
     n_trials = get_num_trials(conn)
     rows = conn.execute("""
         SELECT a.expression, COALESCE(e.sharpe_is, 0), COALESCE(e.fitness, 0),
                COALESCE(e.ic_mean, 0), COALESCE(e.psr, 0)
         FROM alphas a LEFT JOIN evaluations e ON e.alpha_id = a.id
-        WHERE a.archived = 0 AND a.source = 'agent1_research'
+        WHERE a.archived = 0 AND a.source = 'agent1_research' AND a.universe = ?
         ORDER BY COALESCE(e.fitness, 0) DESC
-    """).fetchall()
+    """, (UNIVERSE,)).fetchall()
     conn.close()
 
     print(f"\n{'='*70}")
-    print(f"  ALPHA RESEARCH SCOREBOARD (Agent 1)")
+    print(f"  ALPHA RESEARCH SCOREBOARD (Agent 1) [{UNIVERSE}]")
     print(f"  Total alphas in DB: {n_alphas} | Agent 1 alphas: {n_agent} | Trials: {n_trials}")
     print(f"  Train: {TRAIN_START} to {TRAIN_END} (no fees)")
     print(f"{'='*70}")
@@ -477,7 +484,25 @@ def main():
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--scoreboard", action="store_true")
     parser.add_argument("--reasoning", type=str, default="")
+    parser.add_argument("--universe", type=str, default=None,
+                        help="Universe name (e.g. BINANCE_TOP50, KUCOIN_TOP50). Auto-detects exchange.")
     args = parser.parse_args()
+
+    # Auto-detect exchange from universe prefix
+    global EXCHANGE, UNIVERSE, TRAIN_START, TRAIN_END, SUBPERIODS
+    if args.universe:
+        UNIVERSE = args.universe
+        if args.universe.startswith("KUCOIN"):
+            EXCHANGE = "kucoin"
+            TRAIN_START = "2023-09-01"
+            TRAIN_END   = "2025-09-01"
+            SUBPERIODS  = [
+                ("2023-09-01", "2024-09-01", "H1"),
+                ("2024-09-01", "2025-09-01", "H2"),
+            ]
+        elif args.universe.startswith("BINANCE"):
+            EXCHANGE = "binance"
+        _DATA_CACHE.clear()
 
     os.makedirs(os.path.dirname(DB_PATH) or ".", exist_ok=True)
 

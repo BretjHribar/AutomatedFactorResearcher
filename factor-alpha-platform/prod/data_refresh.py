@@ -57,10 +57,12 @@ def _now_utc() -> datetime:
 # 1. BINANCE
 # ═══════════════════════════════════════════════════════════════
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
 BINANCE_BASE = "https://fapi.binance.com"
-BINANCE_KLINES_DIR = Path("data/binance_cache/klines/4h")
-BINANCE_MATRICES_DIR = Path("data/binance_cache/matrices/4h/prod")  # Separate from research matrices
-BINANCE_FUNDING_DIR = Path("data/binance_cache/funding_rates")
+BINANCE_KLINES_DIR = PROJECT_ROOT / "data/binance_cache/klines/4h"
+BINANCE_MATRICES_DIR = PROJECT_ROOT / "data/binance_cache/matrices/4h/prod"  # Separate from research matrices
+BINANCE_FUNDING_DIR = PROJECT_ROOT / "data/binance_cache/funding_rates"
 
 
 def _binance_fetch_klines(symbol: str, limit: int = 6) -> pd.DataFrame | None:
@@ -233,9 +235,6 @@ def _build_binance_matrices():
         mom = close / close.shift(window) - 1
         mom.to_parquet(BINANCE_MATRICES_DIR / f"momentum_{window}d.parquet")
 
-    gap = open_ / close.shift(1) - 1
-    gap.to_parquet(BINANCE_MATRICES_DIR / "overnight_gap.parquet")
-
     tc = pd.DataFrame({s: d["trades_count"] for s, d in all_data.items()})
     tpv = tc / safe_vol
     tpv.to_parquet(BINANCE_MATRICES_DIR / "trades_per_volume.parquet")
@@ -336,8 +335,8 @@ def refresh_binance() -> str:
 # ═══════════════════════════════════════════════════════════════
 
 KUCOIN_BASE = "https://api-futures.kucoin.com"
-KUCOIN_KLINES_DIR = Path("data/kucoin_cache/klines/4h")
-KUCOIN_MATRICES_DIR = Path("data/kucoin_cache/matrices/4h/prod")
+KUCOIN_KLINES_DIR = PROJECT_ROOT / "data/kucoin_cache/klines/4h"
+KUCOIN_MATRICES_DIR = PROJECT_ROOT / "data/kucoin_cache/matrices/4h/prod"
 KUCOIN_GRAN = 240  # 4h in minutes
 
 
@@ -492,7 +491,6 @@ def _build_kucoin_matrices():
         "close_position_in_range": (close - low) / (high - low + 1e-10),
         "upper_shadow": (high - close.where(close > opn, opn)) / close,
         "lower_shadow": (close.where(close < opn, opn) - low) / close,
-        "overnight_gap": opn / close.shift(1) - 1,
         "volume_momentum_5_20": vol.rolling(30).mean() / vol.rolling(120).mean(),
         "historical_volatility_10": ret.rolling(60).std() * np.sqrt(6 * 365),
         "historical_volatility_20": ret.rolling(120).std() * np.sqrt(6 * 365),
