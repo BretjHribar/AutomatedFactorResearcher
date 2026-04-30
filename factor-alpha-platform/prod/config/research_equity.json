@@ -1,0 +1,70 @@
+{
+  "market": "equity",
+  "interval": "1d",
+  "annualization": { "bars_per_year": 252 },
+
+  "data": {
+    "matrices_dir": "data/fmp_cache/matrices",
+    "universe_path": "data/fmp_cache/universes/MCAP_100M_500M.parquet",
+    "universe_filter": { "method": "coverage", "threshold": 0.5 },
+    "returns_source": "compute_from_close"
+  },
+
+  "alpha_source": {
+    "db_path": "data/alpha_results.db",
+    "table": "alphas",
+    "filter_sql": "archived=0 AND (notes LIKE '%SMALLCAP_D0_v2%' OR notes LIKE '%SMALLCAP_D0_v3%')",
+    "train_sharpe_table": null,
+    "train_sharpe_column": null
+  },
+
+  "preprocessing": {
+    "universe_mask": true,
+    "demean_method": "subindustry",
+    "subindustry_field": "subindustry",
+    "normalize": "l1",
+    "clip_max_w": 0.02
+  },
+
+  "combiner": {
+    "name": "equal",
+    "params": { "max_wt": 0.02 }
+  },
+
+  "post_combiner": {
+    "renormalize_l1": true,
+    "clip_max_w": 0.02
+  },
+
+  "risk_model": {
+    "name": "diagonal",
+    "params": { "factor_window": 126, "n_pca_factors": 5, "vol_window": 60 }
+  },
+
+  "qp": {
+    "enabled": true,
+    "lambda_risk": 5.0,
+    "kappa_tc": 30.0,
+    "max_w": 0.02,
+    "dollar_neutral": true,
+    "max_gross_leverage": 1.0,
+    "commission_per_share": 0.0045,
+    "impact_bps": 0.5,
+    "adv_cap": null
+  },
+
+  "fees": {
+    "model": "per_share_ib",
+    "params": {
+      "commission_per_share": 0.0045,
+      "per_order_min": 0.35,
+      "sec_fee_per_dollar": 27.80e-6,
+      "sell_fraction": 0.50,
+      "impact_bps": 0.5,
+      "borrow_bps_annual": 50
+    }
+  },
+
+  "splits": { "train_end": "2024-01-01", "val_end": "2025-04-01" },
+  "book": 500000
+}

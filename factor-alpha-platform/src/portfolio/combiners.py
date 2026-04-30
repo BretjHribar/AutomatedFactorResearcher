@@ -366,6 +366,60 @@ def combiner_sharpe_weighted(alpha_signals, matrices, universe_df, returns_df,
 
 
 # ============================================================================
+# COMBINER: TOP-N BY PRECOMPUTED TRAIN SHARPE (research selection)
+# ============================================================================
+
+def combiner_topn_train(alpha_signals, matrices, universe_df, returns_df, *,
+                        train_sharpes, top_n=30, max_wt=None):
+    """Equal-weight the top-N alphas by precomputed TRAIN Sharpe.
+
+    Convention matches the canonical eval framework (update_wq_alphas_db.py):
+      1. select top-N alpha_ids by `train_sharpes`
+      2. cross-sectionally z-score each selected signal per bar
+      3. average the z-scored signals
+      4. final demean + L1-normalize  (matches signal_to_portfolio)
+
+    Unlike combiner_equal etc., this combiner does NOT call process_signal per
+    alpha (which would apply universe mask + clip). The matrices/universe are
+    expected to be pre-filtered before alpha evaluation — and no clip is
+    applied here, leaving that to the caller's post-combiner stage.
+
+    Args:
+        alpha_signals: dict {alpha_id: raw_signal_DataFrame}
+        matrices: dict (unused — kept for signature compat)
+        universe_df: bool DataFrame (unused for this combiner)
+        returns_df: DataFrame (unused for this combiner)
+        train_sharpes: dict {alpha_id: train_sharpe}  — required, selects
+                       top-N. Alphas not in this dict are skipped.
+        top_n: select top-N by train_sharpes
+        max_wt: optional final clip (None = no clip — the typical research
+                convention)
+    """
+    eligible = {aid: s for aid, s in train_sharpes.items() if aid in alpha_signals}
+    if not eligible:
+        return pd.DataFrame()
+    selected_ids = [aid for aid, _ in sorted(eligible.items(),
+                                              key=lambda kv: -kv[1])[:top_n]]
+
+    sig_sum = None
+    for aid in selected_ids:
+        s = alpha_signals[aid].replace([np.inf, -np.inf], np.nan)
+        mu = s.mean(axis=1)
+        sd = s.std(axis=1).replace(0, np.nan)
+        s_zs = s.sub(mu, axis=0).div(sd, axis=0)
+        sig_sum = s_zs if sig_sum is None else sig_sum.add(s_zs, fill_value=0)
+    avg_sig = sig_sum / len(selected_ids)
+
+    s = avg_sig.replace([np.inf, -np.inf], np.nan)
+    demean = s.sub(s.mean(axis=1), axis=0)
+    gross = demean.abs().sum(axis=1).replace(0, np.nan)
+    out = demean.div(gross, axis=0).fillna(0)
+    if max_wt is not None:
+        out = out.clip(lower=-max_wt, upper=max_wt)
+    return out
+
+
+# ============================================================================
 # COMBINER: TOP-N (select only top N alphas by rolling Sharpe each bar)
 # ============================================================================
 
