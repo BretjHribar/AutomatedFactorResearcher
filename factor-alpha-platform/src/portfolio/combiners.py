@@ -274,3 +274,138 @@ def combiner_billions(alpha_signals, matrices, universe_df, returns_df,
         combined = combined.add(normed_signals[aid].mul(w, axis=0))
 
     return combined
+
+
+# ============================================================================
+# COMBINER: IC-WEIGHTED (rolling cross-sectional Pearson IC vs forward returns)
+# ============================================================================
+
+def combiner_ic_weighted(alpha_signals, matrices, universe_df, returns_df,
+                         lookback=126, max_wt=0.01):
+    """
+    IC-weighted: weight each alpha by its rolling mean cross-sectional IC.
+
+    For each alpha and date t:
+      ic_t = corr(signal_{t-1}, return_t) across the cross-section
+      ic_smooth_t = rolling_mean(ic_t, lookback)
+    Weights = max(ic_smooth, 0), L1-normalized across alphas.
+    """
+    close_df = matrices["close"]
+    dates = close_df.index
+    tickers = close_df.columns.tolist()
+
+    normed_signals = {
+        aid: process_signal(raw, universe_df=universe_df, max_wt=max_wt)
+        for aid, raw in alpha_signals.items()
+    }
+
+    ret_df = returns_df.reindex(index=dates, columns=tickers)
+
+    # Per-alpha daily IC: corr(signal at t-1, return at t) across cross-section
+    ic_data = {}
+    for aid, norm in normed_signals.items():
+        lagged = norm.shift(1)
+        ic = lagged.corrwith(ret_df, axis=1)
+        ic_data[aid] = ic
+
+    ic_df = pd.DataFrame(ic_data, index=dates)
+    rolling_ic = ic_df.rolling(window=lookback, min_periods=20).mean()
+    weights = rolling_ic.clip(lower=0)
+    wsum = weights.sum(axis=1).replace(0, np.nan)
+    weights_norm = weights.div(wsum, axis=0).fillna(0)
+
+    combined = pd.DataFrame(0.0, index=dates, columns=tickers)
+    for aid, norm in normed_signals.items():
+        w = weights_norm[aid].values if aid in weights_norm.columns else np.zeros(len(dates))
+        combined = combined.add(norm.mul(pd.Series(w, index=dates), axis=0))
+
+    return combined
+
+
+# ============================================================================
+# COMBINER: SHARPE-WEIGHTED (rolling standalone Sharpe of each alpha)
+# ============================================================================
+
+def combiner_sharpe_weighted(alpha_signals, matrices, universe_df, returns_df,
+                             lookback=252, max_wt=0.01):
+    """
+    Sharpe-weighted: weight each alpha by its rolling standalone Sharpe ratio
+    of factor returns. Negative-Sharpe alphas get zero weight.
+    """
+    close_df = matrices["close"]
+    dates = close_df.index
+    tickers = close_df.columns.tolist()
+
+    normed_signals = {
+        aid: process_signal(raw, universe_df=universe_df, max_wt=max_wt)
+        for aid, raw in alpha_signals.items()
+    }
+
+    ret_df = returns_df.reindex(index=dates, columns=tickers)
+    fr_data = {}
+    for aid, norm in normed_signals.items():
+        lagged = norm.shift(1)
+        ab = lagged.abs().sum(axis=1).replace(0, np.nan)
+        n = lagged.div(ab, axis=0)
+        fr_data[aid] = (n * ret_df).sum(axis=1)
+
+    fr_df = pd.DataFrame(fr_data, index=dates)
+    rolling_mean = fr_df.rolling(window=lookback, min_periods=60).mean()
+    rolling_std  = fr_df.rolling(window=lookback, min_periods=60).std()
+    rolling_sr   = (rolling_mean / rolling_std.replace(0, np.nan))
+    weights = rolling_sr.clip(lower=0).fillna(0)
+    wsum = weights.sum(axis=1).replace(0, np.nan)
+    weights_norm = weights.div(wsum, axis=0).fillna(0)
+
+    combined = pd.DataFrame(0.0, index=dates, columns=tickers)
+    for aid, norm in normed_signals.items():
+        w = weights_norm[aid].values if aid in weights_norm.columns else np.zeros(len(dates))
+        combined = combined.add(norm.mul(pd.Series(w, index=dates), axis=0))
+
+    return combined
+
+
+# ============================================================================
+# COMBINER: TOP-N (select only top N alphas by rolling Sharpe each bar)
+# ============================================================================
+
+def combiner_topn_sharpe(alpha_signals, matrices, universe_df, returns_df,
+                          lookback=252, top_n=10, max_wt=0.01):
+    """
+    Top-N: at each bar, equal-weight the N alphas with highest rolling Sharpe.
+    Combats noise from low-quality alphas dragging down composite.
+    """
+    close_df = matrices["close"]
+    dates = close_df.index
+    tickers = close_df.columns.tolist()
+
+    normed_signals = {
+        aid: process_signal(raw, universe_df=universe_df, max_wt=max_wt)
+        for aid, raw in alpha_signals.items()
+    }
+
+    ret_df = returns_df.reindex(index=dates, columns=tickers)
+    fr_data = {}
+    for aid, norm in normed_signals.items():
+        lagged = norm.shift(1)
+        ab = lagged.abs().sum(axis=1).replace(0, np.nan)
+        n = lagged.div(ab, axis=0)
+        fr_data[aid] = (n * ret_df).sum(axis=1)
+
+    fr_df = pd.DataFrame(fr_data, index=dates)
+    rolling_mean = fr_df.rolling(window=lookback, min_periods=60).mean()
+    rolling_std  = fr_df.rolling(window=lookback, min_periods=60).std()
+    rolling_sr   = (rolling_mean / rolling_std.replace(0, np.nan)).fillna(-1e9)
+
+    # For each row, top_n columns get 1/N weight, rest 0
+    rank = rolling_sr.rank(axis=1, ascending=False, method="first")
+    weights = (rank <= top_n).astype(float)
+    wsum = weights.sum(axis=1).replace(0, np.nan)
+    weights_norm = weights.div(wsum, axis=0).fillna(0)
+
+    combined = pd.DataFrame(0.0, index=dates, columns=tickers)
+    for aid, norm in normed_signals.items():
+        w = weights_norm[aid].values if aid in weights_norm.columns else np.zeros(len(dates))
+        combined = combined.add(norm.mul(pd.Series(w, index=dates), axis=0))
+
+    return combined

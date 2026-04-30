@@ -1,0 +1,82 @@
+[
+  {
+    "check": "exchange_info",
+    "status": "PASS",
+    "detail": "642 symbols in exchange_info (535 active)"
+  },
+  {
+    "check": "file_count",
+    "status": "PASS",
+    "detail": "640 kline files (vs 642 symbols in info)"
+  },
+  {
+    "check": "BTCUSDT/span",
+    "status": "PASS",
+    "detail": "2424 bars 2019-09-08 -> 2026-04-27 (cov=100.0%, 0d stale)"
+  },
+  {
+    "check": "ETHUSDT/span",
+    "status": "PASS",
+    "detail": "2344 bars 2019-11-27 -> 2026-04-27 (cov=100.0%, 0d stale)"
+  },
+  {
+    "check": "year_coverage",
+    "status": "PASS",
+    "detail": "yearly counts printed above"
+  },
+  {
+    "check": "price_positivity",
+    "status": "PASS",
+    "detail": "all 100 sample files have positive OHLC"
+  },
+  {
+    "check": "BTCUSDT/gaps",
+    "status": "PASS",
+    "detail": "max gap 1d, 0 gaps > 2d"
+  },
+  {
+    "check": "ETHUSDT/gaps",
+    "status": "PASS",
+    "detail": "max gap 1d, 0 gaps > 2d"
+  },
+  {
+    "check": "BNBUSDT/gaps",
+    "status": "PASS",
+    "detail": "max gap 1d, 0 gaps > 2d"
+  },
+  {
+    "check": "SOLUSDT/gaps",
+    "status": "PASS",
+    "detail": "max gap 1d, 0 gaps > 2d"
+  },
+  {
+    "check": "XRPUSDT/gaps",
+    "status": "PASS",
+    "detail": "max gap 1d, 0 gaps > 2d"
+  },
+  {
+    "check": "extreme_moves",
+    "status": "WARN",
+    "detail": "2 files with |daily_ret| > 200%: ALPACAUSDT(520%), BAKEUSDT(241%)"
+  },
+  {
+    "check": "btc_apr24_sanity",
+    "status": "PASS",
+    "detail": "BTC Apr 2024 mean = $65,872 (expected $50K-$80K)"
+  },
+  {
+    "check": "btc_nov21_ath",
+    "status": "PASS",
+    "detail": "BTC Nov 2021 max = $67,607 (expected ~$67K)"
+  },
+  {
+    "check": "matrix/close.shape",
+    "status": "PASS",
+    "detail": "(2424, 640), 2019-09-08 -> 2026-04-27"
+  },
+  {
+    "check": "matrix/returns_aligned",
+    "status": "PASS",
+    "detail": "returns.shape = (2424, 640) == close.shape"
+  }
+]

@@ -1,0 +1,18 @@
+{
+  "n_alphas": 190,
+  "n_processed": 190,
+  "n_eval_failed": 0,
+  "corr_cutoff": 0.7,
+  "n_corr_violations": 12,
+  "n_pass_all_gates": 83,
+  "thresholds": {
+    "MIN_IS_SHARPE": 3.0,
+    "MIN_FITNESS": 5.0,
+    "MIN_IC_MEAN": -0.05,
+    "MAX_TURNOVER": 0.3,
+    "MIN_SUB_SHARPE": 1.0,
+    "MAX_PNL_KURTOSIS": 20,
+    "MAX_ROLLING_SR_STD": 0.05,
+    "MIN_PNL_SKEW": -0.5
+  }
+}

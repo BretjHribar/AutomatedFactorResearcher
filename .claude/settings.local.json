@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python compare_rebal.py)",
+      "Bash(python prod/aipt_trader_p1000.py --backfill)",
+      "Bash(schtasks /query /tn \"AIPT_Trader\" /fo LIST /v)",
+      "Bash(schtasks /query /fo LIST /v)",
+      "PowerShell(schtasks /query /tn \"AIPT_KuCoin_Trader\" /fo LIST /v)"
+    ]
+  }
+}

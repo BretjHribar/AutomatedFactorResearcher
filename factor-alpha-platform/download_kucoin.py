@@ -78,8 +78,9 @@ def download_klines(symbol):
     if not all_candles:
         return None
     
-    # [time_ms, open, close, high, low, volume, turnover]
-    df = pd.DataFrame(all_candles, columns=["time", "open", "close", "high", "low", "volume", "turnover"])
+    # KuCoin Futures API returns [time_ms, open, HIGH, LOW, CLOSE, volume, turnover]
+    # (verified empirically; docs claiming [t, o, c, h, l, v, tv] are wrong for futures v1).
+    df = pd.DataFrame(all_candles, columns=["time", "open", "high", "low", "close", "volume", "turnover"])
     df["time"] = pd.to_datetime(df["time"], unit="ms")
     df = df.set_index("time").sort_index()
     for col in df.columns:

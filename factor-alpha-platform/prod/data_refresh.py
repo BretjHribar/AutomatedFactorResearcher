@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -338,6 +339,8 @@ KUCOIN_BASE = "https://api-futures.kucoin.com"
 KUCOIN_KLINES_DIR = PROJECT_ROOT / "data/kucoin_cache/klines/4h"
 KUCOIN_MATRICES_DIR = PROJECT_ROOT / "data/kucoin_cache/matrices/4h/prod"
 KUCOIN_GRAN = 240  # 4h in minutes
+KUCOIN_LOCK_FILE = KUCOIN_MATRICES_DIR.parent / ".kucoin_refresh.lock"
+_LOCK_TIMEOUT_S = 600  # 10 min: max wait before treating lock as stale
 
 
 def _kucoin_fetch_klines(symbol: str, limit: int = 6) -> pd.DataFrame | None:
@@ -361,10 +364,11 @@ def _kucoin_fetch_klines(symbol: str, limit: int = 6) -> pd.DataFrame | None:
     if not candles:
         return None
 
-    # KuCoin format: [time_ms, open, close, high, low, volume, turnover]
-    df = pd.DataFrame(candles, columns=["time", "open", "close", "high", "low", "volume", "turnover"])
+    # KuCoin Futures API actually returns [time_ms, open, HIGH, LOW, CLOSE, volume, turnover]
+    # (verified empirically; docs claiming [t, o, c, h, l, v, tv] are wrong for futures v1).
+    df = pd.DataFrame(candles, columns=["time", "open", "high", "low", "close", "volume", "turnover"])
     df["time"] = pd.to_datetime(df["time"], unit="ms")
-    for col in ["open", "close", "high", "low", "volume", "turnover"]:
+    for col in ["open", "high", "low", "close", "volume", "turnover"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
     df = df.sort_values("time").drop_duplicates("time").reset_index(drop=True)
     return df
@@ -392,8 +396,12 @@ def _kucoin_update_klines() -> int:
         except Exception:
             continue
 
+        # Skip only if we already have the most recent COMPLETED 4h bar.
+        # Old logic ("within 1.5 bars of now") incorrectly skipped symbols
+        # sitting at e.g. 16:00 UTC when the 20:00 bar was already available.
         now_ts = pd.Timestamp.now('UTC').tz_localize(None)
-        if (now_ts - last_ts).total_seconds() < BAR_SECONDS_4H * 1.5:
+        latest_completed = now_ts.floor('4h')
+        if last_ts >= latest_completed:
             continue
 
         new_df = _kucoin_fetch_klines(sym, limit=BARS_TO_FETCH)
@@ -495,6 +503,7 @@ def _build_kucoin_matrices():
         "historical_volatility_10": ret.rolling(60).std() * np.sqrt(6 * 365),
         "historical_volatility_20": ret.rolling(120).std() * np.sqrt(6 * 365),
         "historical_volatility_60": ret.rolling(360).std() * np.sqrt(6 * 365),
+        "historical_volatility_120": ret.rolling(720, min_periods=360).std() * np.sqrt(6 * 365),
         "momentum_5d": close / close.shift(30) - 1,
         "momentum_20d": close / close.shift(120) - 1,
         "momentum_60d": close / close.shift(360) - 1,
@@ -510,6 +519,20 @@ def _build_kucoin_matrices():
     derived["parkinson_volatility_20"] = hl.pow(2).rolling(120).mean().pow(0.5) / (2 * np.log(2))**0.5
     derived["parkinson_volatility_60"] = hl.pow(2).rolling(360).mean().pow(0.5) / (2 * np.log(2))**0.5
 
+    # Beta to BTC (rolling 60-bar cov / var)
+    btc_sym = "XBTUSDTM"
+    if btc_sym in ret.columns:
+        btc_ret = ret[btc_sym]
+        btc_var = btc_ret.rolling(60, min_periods=30).var()
+        betas = {}
+        for col in ret.columns:
+            if col == btc_sym:
+                betas[col] = pd.Series(1.0, index=ret.index)
+                continue
+            cov = ret[col].rolling(60, min_periods=30).cov(btc_ret)
+            betas[col] = cov / btc_var
+        derived["beta_to_btc"] = pd.DataFrame(betas)
+
     for name, mat in derived.items():
         mat.to_parquet(KUCOIN_MATRICES_DIR / f"{name}.parquet")
 
@@ -517,31 +540,89 @@ def _build_kucoin_matrices():
                 f"latest={close.index[-1]}")
 
 
+def _lock_holder_alive() -> tuple[bool, str]:
+    """Check whether the lock holder's PID is still an active process.
+    Returns (alive, pid_str). If the lock file can't be read, treats as dead."""
+    try:
+        pid_str = KUCOIN_LOCK_FILE.read_text().strip()
+        pid = int(pid_str)
+    except Exception:
+        return False, "?"
+    try:
+        import psutil
+        return psutil.pid_exists(pid) and psutil.Process(pid).status() != psutil.STATUS_ZOMBIE, pid_str
+    except ImportError:
+        # Fall back to mtime-based timeout if psutil unavailable.
+        age = time.time() - KUCOIN_LOCK_FILE.stat().st_mtime
+        return age < _LOCK_TIMEOUT_S, pid_str
+
+
 def refresh_kucoin() -> str:
-    """Full KuCoin data refresh: fetch latest bars + rebuild matrices."""
-    t0 = time.time()
-    logger.info("KuCoin data refresh starting...")
+    """Full KuCoin data refresh: fetch latest bars + rebuild matrices.
 
-    _kucoin_update_klines()
-    _build_kucoin_matrices()
+    Uses a lock file so concurrent callers (e.g. aipt_trader and aipt_trader_p1000
+    running simultaneously) don't write the same parquet files at the same time.
+    The second process waits for the first to finish, then reads the result.
 
-    # Validate freshness
-    close = pd.read_parquet(KUCOIN_MATRICES_DIR / "close.parquet")
-    latest = close.index[-1]
-    if isinstance(latest, pd.Timestamp):
-        age_s = (pd.Timestamp.now('UTC').tz_localize(None) - latest).total_seconds()
-    else:
-        age_s = 0.0
-    elapsed = time.time() - t0
+    Staleness is determined by PID liveness (via psutil) rather than file age —
+    this correctly handles long refreshes (which can take 10+ minutes or hours
+    when the machine sleeps mid-run) without two processes stealing each other's
+    locks.
+    """
+    # If another process is currently rebuilding, wait for it.
+    if KUCOIN_LOCK_FILE.exists():
+        alive, pid = _lock_holder_alive()
+        lock_age = time.time() - KUCOIN_LOCK_FILE.stat().st_mtime
+        if alive:
+            logger.info(f"  Refresh in progress (pid={pid}, age={lock_age:.0f}s), waiting...")
+            # Wait up to 1 hour for the other process. No timeout on "waiting"
+            # within a run — if the holder is alive, we wait.
+            wait_deadline = time.time() + 3600
+            while KUCOIN_LOCK_FILE.exists() and _lock_holder_alive()[0] and time.time() < wait_deadline:
+                time.sleep(5)
+            if KUCOIN_LOCK_FILE.exists() and _lock_holder_alive()[0]:
+                logger.warning("  Waited 1h for lock holder — proceeding anyway with cached data.")
+                close = pd.read_parquet(KUCOIN_MATRICES_DIR / "close.parquet")
+                return str(close.index[-1])
+            logger.info("  Lock released — using data written by other process.")
+            close = pd.read_parquet(KUCOIN_MATRICES_DIR / "close.parquet")
+            latest = close.index[-1]
+            age_s = (pd.Timestamp.now("UTC").tz_localize(None) - latest).total_seconds()
+            logger.info(f"  KuCoin data is fresh: latest bar {latest} ({age_s/3600:.1f}h old)")
+            return str(latest)
+        else:
+            logger.warning(f"  Abandoned lock (pid={pid} not alive, age={lock_age:.0f}s) — removing and proceeding.")
+            KUCOIN_LOCK_FILE.unlink(missing_ok=True)
 
-    if age_s > MAX_STALENESS_S:
-        logger.warning(f"  [!] KuCoin data may be stale: latest bar {latest} "
-                       f"({age_s/3600:.1f}h old)")
-    else:
-        logger.info(f"  KuCoin data is fresh: latest bar {latest} ({age_s/3600:.1f}h old)")
+    # Acquire lock.
+    KUCOIN_LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+    KUCOIN_LOCK_FILE.write_text(str(os.getpid()))
+    try:
+        t0 = time.time()
+        logger.info("KuCoin data refresh starting...")
 
-    logger.info(f"  Refresh complete in {elapsed:.1f}s")
-    return str(latest)
+        _kucoin_update_klines()
+        _build_kucoin_matrices()
+
+        # Validate freshness
+        close = pd.read_parquet(KUCOIN_MATRICES_DIR / "close.parquet")
+        latest = close.index[-1]
+        if isinstance(latest, pd.Timestamp):
+            age_s = (pd.Timestamp.now('UTC').tz_localize(None) - latest).total_seconds()
+        else:
+            age_s = 0.0
+        elapsed = time.time() - t0
+
+        if age_s > MAX_STALENESS_S:
+            logger.warning(f"  [!] KuCoin data may be stale: latest bar {latest} "
+                           f"({age_s/3600:.1f}h old)")
+        else:
+            logger.info(f"  KuCoin data is fresh: latest bar {latest} ({age_s/3600:.1f}h old)")
+
+        logger.info(f"  Refresh complete in {elapsed:.1f}s")
+        return str(latest)
+    finally:
+        KUCOIN_LOCK_FILE.unlink(missing_ok=True)
 
 
 # ═══════════════════════════════════════════════════════════════

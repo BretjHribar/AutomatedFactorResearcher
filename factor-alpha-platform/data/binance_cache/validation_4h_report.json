@@ -1,0 +1,72 @@
+[
+  {
+    "check": "file_count",
+    "status": "PASS",
+    "detail": "640 kline files (vs 642 symbols)"
+  },
+  {
+    "check": "BTCUSDT/span",
+    "status": "PASS",
+    "detail": "14536 bars 2019-09-08 -> 2026-04-27 (cov=100.0%, 0.1d stale)"
+  },
+  {
+    "check": "ETHUSDT/span",
+    "status": "PASS",
+    "detail": "14059 bars 2019-11-27 -> 2026-04-27 (cov=100.0%, 0.1d stale)"
+  },
+  {
+    "check": "year_coverage",
+    "status": "PASS",
+    "detail": "yearly counts printed above"
+  },
+  {
+    "check": "price_positivity",
+    "status": "PASS",
+    "detail": "all 100 sample files have positive OHLC"
+  },
+  {
+    "check": "BTCUSDT/gaps",
+    "status": "PASS",
+    "detail": "max gap 4h, 0 gaps > 8h"
+  },
+  {
+    "check": "ETHUSDT/gaps",
+    "status": "PASS",
+    "detail": "max gap 4h, 0 gaps > 8h"
+  },
+  {
+    "check": "BNBUSDT/gaps",
+    "status": "PASS",
+    "detail": "max gap 4h, 0 gaps > 8h"
+  },
+  {
+    "check": "SOLUSDT/gaps",
+    "status": "PASS",
+    "detail": "max gap 4h, 0 gaps > 8h"
+  },
+  {
+    "check": "XRPUSDT/gaps",
+    "status": "PASS",
+    "detail": "max gap 4h, 0 gaps > 8h"
+  },
+  {
+    "check": "btc_apr24_sanity",
+    "status": "PASS",
+    "detail": "BTC Apr 2024 mean = $65,916"
+  },
+  {
+    "check": "btc_nov21_ath",
+    "status": "PASS",
+    "detail": "BTC Nov 2021 max = $68,564"
+  },
+  {
+    "check": "matrix/close.shape",
+    "status": "PASS",
+    "detail": "(14536, 640), 2019-09-08 16:00:00 -> 2026-04-27 04:00:00"
+  },
+  {
+    "check": "matrix/returns_aligned",
+    "status": "PASS",
+    "detail": "returns.shape = (14536, 640)"
+  }
+]

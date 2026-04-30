@@ -170,10 +170,25 @@ def load_alpha_signals():
 
 
 def load_raw_alpha_signals():
-    """Load raw (un-normalized) alpha signals — preserves magnitude info."""
+    """Load raw (un-normalized) alpha signals — preserves magnitude info.
+
+    Optional env-var filters (set before invoking eval_portfolio.py):
+      ALPHA_ID_MAX=<int>      — only load alphas with id <= this value
+      ALPHA_ID_MIN=<int>      — only load alphas with id >= this value
+      ALPHA_LIMIT=<int>       — after id filtering, take only the first N (sorted by id)
+    """
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("SELECT id, expression FROM alphas WHERE archived=0 ORDER BY id")
+    sql = "SELECT id, expression FROM alphas WHERE archived=0"
+    params = []
+    if os.environ.get("ALPHA_ID_MIN"):
+        sql += " AND id >= ?"; params.append(int(os.environ["ALPHA_ID_MIN"]))
+    if os.environ.get("ALPHA_ID_MAX"):
+        sql += " AND id <= ?"; params.append(int(os.environ["ALPHA_ID_MAX"]))
+    sql += " ORDER BY id"
+    if os.environ.get("ALPHA_LIMIT"):
+        sql += " LIMIT ?"; params.append(int(os.environ["ALPHA_LIMIT"]))
+    c.execute(sql, params)
     alphas = c.fetchall()
     conn.close()
 
@@ -194,6 +209,55 @@ def load_raw_alpha_signals():
         except Exception as e:
             print(f"  Alpha #{alpha_id} failed: {e}")
 
+    return raw_signals, returns_pct, close, universe
+
+
+def load_full_data():
+    """Load all KuCoin matrices without date slicing (train + val + test)."""
+    if "full" in _DATA_CACHE:
+        return _DATA_CACHE["full"]
+    mat_dir  = Path(f"data/kucoin_cache/matrices/{INTERVAL}")
+    uni_path = Path(f"data/kucoin_cache/universes/{UNIVERSE}_{INTERVAL}.parquet")
+    universe_df = pd.read_parquet(uni_path)
+    coverage = universe_df.sum(axis=0) / len(universe_df)
+    valid_tickers = sorted(coverage[coverage > COVERAGE_CUTOFF].index.tolist())
+    matrices = {}
+    for fp in sorted(mat_dir.glob("*.parquet")):
+        df = pd.read_parquet(fp)
+        cols = [c for c in valid_tickers if c in df.columns]
+        if cols:
+            matrices[fp.stem] = df[cols]
+    close = matrices.get("close")
+    if close is not None:
+        matrices["returns_pct"] = close.pct_change()
+    result = (matrices, universe_df[valid_tickers])
+    _DATA_CACHE["full"] = result
+    return result
+
+
+def load_full_alpha_signals():
+    """Evaluate all alpha expressions over the full data range (no date slice)."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT id, expression FROM alphas WHERE archived=0 ORDER BY id")
+    alphas = c.fetchall()
+    conn.close()
+    if not alphas:
+        print("No alphas in DB.")
+        return None, None, None, None
+    matrices, universe = load_full_data()
+    close   = matrices.get("close")
+    returns_pct = matrices.get("returns_pct")
+    raw_signals = {}
+    for alpha_id, expression in alphas:
+        try:
+            alpha_df = evaluate_expression(expression, matrices)
+            if alpha_df is not None and not alpha_df.empty:
+                raw_signals[alpha_id] = alpha_df
+        except Exception as e:
+            print(f"  Alpha #{alpha_id} failed: {e}")
+    print(f"  Loaded {len(raw_signals)} alpha signals "
+          f"({close.index[0]} to {close.index[-1]})")
     return raw_signals, returns_pct, close, universe
 
 
@@ -498,7 +562,36 @@ def strategy_proper_equal(raw_signals, returns_pct, close, universe, max_wt=MAX_
         normed = proper_normalize_alpha(raw_signal, universe, max_wt=max_wt)
         combined = normed if combined is None else combined.add(normed, fill_value=0)
         n += 1
-    return simulate(combined, returns_pct, close, universe, max_wt=max_wt), f"ProperEqual(mw={max_wt})"
+    return simulate(combined, returns_pct, close, universe, max_wt=max_wt,
+                    fees_bps=kwargs.get("fees_bps", kwargs.get("fee_bps", VAL_FEES))), f"ProperEqual(mw={max_wt})"
+
+
+def strategy_proper_equal_qp(raw_signals, returns_pct, close, universe,
+                              max_wt=MAX_WEIGHT, rebal_every=1, qp_lookback=120,
+                              track_aversion=1.0, risk_aversion=0.0, tc_bps=None,
+                              **kwargs):
+    """ProperEqual aggregation + asset-level QP execution layer.
+
+    Same target as strategy_proper_equal (uniform alpha sum), then QP solves
+        max -A·||P-target||² - k·P'CP - (tc/1e4)·||P-P_prev||_1
+        s.t. |P_s| ≤ max_wt
+    inner tc_bps defaults to outer fees_bps for correct net-utility framing.
+    """
+    combined = None
+    for _, raw_signal in raw_signals.items():
+        normed = proper_normalize_alpha(raw_signal, universe, max_wt=max_wt)
+        combined = normed if combined is None else combined.add(normed, fill_value=0)
+
+    eff_fees = kwargs.get("fees_bps", kwargs.get("fee_bps", VAL_FEES))
+    eff_tc_bps = eff_fees if tc_bps is None else tc_bps
+    P_df = _qp_execution_layer(
+        target_df=combined, returns_pct=returns_pct,
+        max_wt=max_wt, rebal_every=rebal_every, cov_lookback=qp_lookback,
+        track_aversion=track_aversion, risk_aversion=risk_aversion,
+        tc_bps=eff_tc_bps, verbose=False,
+    )
+    return (simulate(P_df, returns_pct, close, universe, max_wt=max_wt, fees_bps=eff_fees),
+            f"ProperEqualQP(mw={max_wt},A={track_aversion},k={risk_aversion},tc_bps={eff_tc_bps})")
 
 
 def strategy_proper_adaptive(raw_signals, returns_pct, close, universe,
@@ -2465,29 +2558,131 @@ def strategy_billions(raw_signals, returns_pct, close, universe,
         ws = normed_signals[aid].mul(w, axis=0)
         combined = ws if combined is None else combined.add(ws, fill_value=0)
 
-    return (simulate(combined, returns_pct, close, universe, max_wt=max_wt),
+    return (simulate(combined, returns_pct, close, universe, max_wt=max_wt,
+                     fees_bps=kwargs.get("fees_bps", kwargs.get("fee_bps", VAL_FEES))),
             f"Billions(mw={max_wt},ol={optim_lookback})")
 
 
-def strategy_billions_qp(raw_signals, returns_pct, close, universe,
-                          max_wt=MAX_WEIGHT, optim_lookback=120, qp_lookback=120, rebal_every=12,
-                          risk_aversion=2.0, tc_penalty=0.5, ema_halflife=60, **kwargs):
+def _qp_execution_layer(target_df, returns_pct, max_wt=MAX_WEIGHT, rebal_every=1,
+                         cov_lookback=120, track_aversion=1.0, risk_aversion=0.0,
+                         tc_bps=5.0, dollar_neutral=False, verbose=False):
     """
-    Billions-QP Hybrid (Kakushadze + Isichenko Eq 6.1)
+    Asset-level QP execution layer — Isichenko Eq 6.4 (tracking-error formulation).
 
-    Stage 1 — Billions regression:
-        Walk-forward, bar-by-bar, uses the Kakushadze regression (arxiv 1603.05937)
-        to estimate E[factor return] at each bar.  This is used as the μ vector
-        instead of the naive rolling mean.  No lookahead bias (same audit as
-        strategy_billions).
+        max_P  -A·||P - target||²  -  k·P'CP  -  (tc_bps/1e4)·||P - P_prev||_1
+        s.t.   |P_s| ≤ max_wt
+               sum(P) = 0      (optional, dollar-neutral)
 
-    Stage 2 — CVXPY MV-Utility QP:
-        max_α  α'μ  -  (k/2)·α'Cα  -  λ_tc·‖Δα‖₁
-        s.t.   Σαᵢ = 1,  αᵢ ≥ 0,  αᵢ ≤ 0.5
-        C = Ledoit-Wolf shrunk factor-return covariance  (risk model)
-        Δα = α − α_prev                                  (execution cost)
+    Equivalently (Isichenko Eq 6.5: forecast f = 2A·P*):
+        max_P  2A·target·P  -  P'(A·I + k·C)P  -  (tc_bps/1e4)·||P - P_prev||_1
 
-    Result: optimal factor weights that trade off signal quality, risk, and TC.
+    Limits:
+        TC → 0, k → 0  ⇒  P → target  (perfect tracking)
+        TC → ∞         ⇒  P → P_prev  (no trading)
+        k  → ∞         ⇒  P shrinks toward 0 along low-risk directions
+
+    Inputs
+    ------
+    target_df       : (T, N)  aggregate target portfolio at each bar
+    returns_pct     : (T, N)  one-period asset returns (for risk model)
+    max_wt          : per-name position cap
+    rebal_every     : bars between QP solves; positions are held in between
+    cov_lookback    : rolling window for asset return covariance
+    track_aversion  : A — quadratic penalty on tracking error (default 1.0)
+    risk_aversion   : k — quadratic penalty on portfolio variance (default 0.0 = off)
+    tc_bps          : linear trade cost in bps (per unit traded, one-sided)
+
+    Returns
+    -------
+    P_df            : (T, N) DataFrame of post-QP portfolio weights at each bar.
+    """
+    import cvxpy as cp
+    dates = target_df.index
+    tickers = target_df.columns
+    T, N = len(dates), len(tickers)
+    target_arr = target_df.values
+    ret_arr = returns_pct.reindex(index=dates, columns=tickers).values
+
+    P_arr = np.zeros((T, N))
+    P_prev = np.zeros(N)
+    n_optimal = 0; n_skip = 0; n_fallback = 0
+
+    for t in range(cov_lookback, T):
+        if (t - cov_lookback) % rebal_every != 0:
+            P_arr[t] = P_prev
+            continue
+
+        ret_win = ret_arr[t - cov_lookback : t]
+        target_t = target_arr[t]
+        finite_t = np.isfinite(target_t)
+        finite_r = np.isfinite(ret_win).mean(axis=0) >= 0.5
+        active = finite_t & finite_r
+        N_a = int(active.sum())
+        if N_a < 5 or np.abs(target_t[active]).sum() < 1e-12:
+            P_arr[t] = P_prev; n_skip += 1; continue
+
+        target_a = np.nan_to_num(target_t[active], nan=0.0)
+        Pp_a = P_prev[np.where(active)[0]]
+
+        P = cp.Variable(N_a)
+        # Tracking-error (always on): -A·||P - target||²
+        obj_terms = [-track_aversion * cp.sum_squares(P - target_a)]
+        # Risk model term (off by default): -k·P'CP
+        if risk_aversion > 0:
+            ret_win_a = np.nan_to_num(ret_win[:, active], nan=0.0)
+            Sigma = np.cov(ret_win_a.T) + 1e-6 * np.eye(N_a)
+            obj_terms.append(-risk_aversion * cp.quad_form(P, cp.psd_wrap(Sigma)))
+        # L1 trade cost
+        if tc_bps > 0:
+            obj_terms.append(-(tc_bps / 10000.0) * cp.norm1(P - Pp_a))
+
+        objective = cp.Maximize(cp.sum(obj_terms))
+        constraints = [cp.abs(P) <= max_wt]
+        if dollar_neutral:
+            constraints.append(cp.sum(P) == 0)
+        prob = cp.Problem(objective, constraints)
+
+        solved = False
+        for solver in [cp.CLARABEL, cp.ECOS, cp.SCS]:
+            try:
+                prob.solve(solver=solver, warm_start=True)
+                if prob.status in ['optimal', 'optimal_inaccurate'] and P.value is not None \
+                   and np.all(np.isfinite(P.value)):
+                    solved = True; break
+            except Exception:
+                continue
+        if solved:
+            sol = P.value
+            n_optimal += 1
+        else:
+            sol = Pp_a
+            n_fallback += 1
+
+        P_full = np.zeros(N)
+        P_full[np.where(active)[0]] = sol
+        P_arr[t] = P_full
+        P_prev = P_full
+
+    if verbose:
+        print(f"  QP execution: {n_optimal} optimal, {n_fallback} fallback, {n_skip} skip", flush=True)
+    return pd.DataFrame(P_arr, index=dates, columns=tickers)
+
+
+def strategy_billions_qp(raw_signals, returns_pct, close, universe,
+                          max_wt=MAX_WEIGHT, optim_lookback=120, qp_lookback=120, rebal_every=1,
+                          track_aversion=1.0, risk_aversion=0.0, tc_bps=None,
+                          ema_halflife=60, **kwargs):
+    """If tc_bps is None, defaults to the outer fees_bps so the QP solves the same
+    problem the simulator scores (correct net-utility framing per Isichenko §6.3)."""
+    """
+    Billions aggregator + asset-level QP execution layer (Isichenko Eq 6.6).
+
+    Stage 1 — Billions regression on alpha factor returns (same as before),
+              produces time-varying alpha-weights → aggregate target portfolio f(t).
+    Stage 2 — Asset-level QP execution layer
+              max_P  f·P − k·P'CP − (tc_bps/1e4)·||P-P_prev||_1
+              s.t.   |P_s| ≤ max_wt
+              C = rolling covariance of underlying asset (futures) returns.
     """
     import cvxpy as cp
     from sklearn import linear_model
@@ -2555,84 +2750,180 @@ def strategy_billions_qp(raw_signals, returns_pct, close, universe,
         except Exception:
             pass
 
-    # ── 3. CVXPY MV-Utility QP with Billions-μ ───────────────────────────────
-    # NOTE: qp_lookback is the covariance window for the risk model — independent
-    # of optim_lookback (the Billions regression window). Keeping them separate
-    # means short Billions windows don't corrupt the covariance estimate.
-    K      = n_alphas
-    T      = n_bars
-    weights_arr = np.zeros((T, K))
-    prev_w = np.ones(K) / K
-
-    for t in range(qp_lookback, T, rebal_every):
-        window = fr_df.iloc[max(0, t - qp_lookback):t].dropna(axis=1, how='all')
-        if len(window) < 20 or window.shape[1] < 2:
-            weights_arr[t:min(t + rebal_every, T)] = prev_w
-            continue
-
-        active_ids = list(window.columns)
-        K_a = len(active_ids)
-
-        # μ from Billions regression at bar t (already shifted — no bias)
-        mu_row = billions_mu.iloc[t]
-        mu = np.array([mu_row.get(aid, 0.0) for aid in active_ids])
-
-        # Ledoit-Wolf shrunk covariance (risk model)
-        cov_raw = window.cov().values
-        cov = _ledoit_wolf_shrink(cov_raw) + 1e-8 * np.eye(K_a)
-
-        alpha_prev = np.array([prev_w[aid_list.index(aid)] for aid in active_ids])
-
-        # CVXPY problem: α'μ - (k/2)α'Cα - λ_tc‖α−α_prev‖₁
-        alpha = cp.Variable(K_a, nonneg=True)
-        delta = cp.Variable(K_a)
-        objective = cp.Maximize(
-            mu @ alpha
-            - 0.5 * risk_aversion * cp.quad_form(alpha, cov)
-            - tc_penalty * cp.norm1(delta)
-        )
-        constraints = [cp.sum(alpha) == 1.0, alpha <= 0.5, delta == alpha - alpha_prev]
-        prob = cp.Problem(objective, constraints)
-
-        try:
-            for solver in [cp.CLARABEL, cp.ECOS, cp.SCS]:
-                try:
-                    prob.solve(solver=solver, warm_start=True)
-                    if prob.status in ['optimal', 'optimal_inaccurate'] and alpha.value is not None:
-                        break
-                except Exception:
-                    continue
-            w = alpha.value
-            if w is None or not np.all(np.isfinite(w)):
-                w = alpha_prev
-            w = np.clip(w, 0, None)
-            wsum = w.sum()
-            w = w / wsum if wsum > 1e-10 else alpha_prev
-        except Exception:
-            w = alpha_prev
-
-        w_full = np.zeros(K)
-        for i, aid in enumerate(active_ids):
-            w_full[aid_list.index(aid)] = w[i]
-        prev_w = w_full
-        weights_arr[t:min(t + rebal_every, T)] = w_full
-
-    weights_arr[:qp_lookback] = 1.0 / K
-
-    # ── 4. EMA-smooth weights, combine, simulate ─────────────────────────────
-    weights_df     = pd.DataFrame(weights_arr, index=dates, columns=aid_list)
-    weights_smooth = weights_df.ewm(halflife=ema_halflife, min_periods=1).mean()
+    # ── 3. EMA-smooth Billions alpha-weights, combine into target portfolio ──
+    weights_smooth = billions_mu.ewm(halflife=ema_halflife, min_periods=1).mean()
     wsum           = weights_smooth.sum(axis=1).replace(0, np.nan)
-    weights_norm   = weights_smooth.div(wsum, axis=0).fillna(0)
+    weights_norm   = weights_smooth.div(wsum, axis=0).fillna(1.0 / n_alphas)
 
-    combined = None
+    target = None
     for aid, normed in normed_signals.items():
         w  = weights_norm[aid].values
         ws = normed.multiply(w, axis=0)
-        combined = ws if combined is None else combined.add(ws, fill_value=0)
+        target = ws if target is None else target.add(ws, fill_value=0)
 
-    return (simulate(combined, returns_pct, close, universe, max_wt=max_wt),
-            f"BillionsQP(mw={max_wt},ol={optim_lookback},ql={qp_lookback},k={risk_aversion},tc={tc_penalty})")
+    # ── 4. Asset-level QP execution (Isichenko Eq 6.4 — tracking-error) ─────
+    eff_fees = kwargs.get("fees_bps", kwargs.get("fee_bps", VAL_FEES))
+    eff_tc_bps = eff_fees if tc_bps is None else tc_bps
+    P_df = _qp_execution_layer(
+        target_df=target,
+        returns_pct=returns_pct,
+        max_wt=max_wt,
+        rebal_every=rebal_every,
+        cov_lookback=qp_lookback,
+        track_aversion=track_aversion,
+        risk_aversion=risk_aversion,
+        tc_bps=eff_tc_bps,
+        verbose=False,
+    )
+
+    return (simulate(P_df, returns_pct, close, universe, max_wt=max_wt,
+                     fees_bps=eff_fees),
+            f"BillionsQP(mw={max_wt},ol={optim_lookback},ql={qp_lookback},A={track_aversion},k={risk_aversion},tc_bps={eff_tc_bps})")
+
+
+# ============================================================================
+# AIPT-SDF ON ALPHA SIGNALS (Didisheim-Ke-Kelly-Malamud 2025)
+# ============================================================================
+
+_AIPT_GAMMA_GRID = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+
+
+def _aipt_rff_params(K, P, seed=42):
+    rng = np.random.default_rng(seed)
+    n_pairs = P // 2
+    theta = rng.standard_normal((n_pairs, K))
+    gamma = rng.choice(_AIPT_GAMMA_GRID, size=n_pairs)
+    return theta, gamma
+
+
+def _aipt_rff_signals(Z, theta, gamma, P):
+    """Z: (N_valid, K) -> S: (N_valid, P)"""
+    proj = Z @ theta.T * gamma[np.newaxis, :]   # (N, P//2)
+    S = np.empty((Z.shape[0], P), dtype=np.float64)
+    S[:, 0::2] = np.sin(proj)
+    S[:, 1::2] = np.cos(proj)
+    return S
+
+
+def _aipt_ridge(F, z):
+    """Ridge-Markowitz: lambda = (zI + E[FF'])^{-1} E[F]. Woodbury for P>T."""
+    T, P = F.shape
+    mu = F.mean(axis=0)
+    if P <= T:
+        A = z * np.eye(P) + (F.T @ F) / T
+        try:    return np.linalg.solve(A, mu)
+        except: return np.linalg.lstsq(A, mu, rcond=None)[0]
+    FFT = F @ F.T
+    A_T = z * T * np.eye(T) + FFT
+    F_mu = F @ mu
+    try:    inv_F_mu = np.linalg.solve(A_T, F_mu)
+    except: inv_F_mu = np.linalg.lstsq(A_T, F_mu, rcond=None)[0]
+    return (mu - F.T @ inv_F_mu) / z
+
+
+def strategy_aipt_sdf(raw_signals, returns_pct, close, universe,
+                      P=200, z=1e-3, seed=42, rebal_every=12,
+                      train_bars=1000, min_train_bars=300,
+                      max_wt=MAX_WEIGHT, **kwargs):
+    """
+    AIPT Random Fourier Feature SDF portfolio applied to alpha signal outputs.
+
+    Treats the K alpha outputs as cross-sectional characteristics (analogous to
+    price-based features in Didisheim-Ke-Kelly-Malamud 2025), applies P Random
+    Fourier Features, then estimates SDF weights via ridge-Markowitz (Eq. 9).
+
+    Parameters
+    ----------
+    P           : random Fourier features (default 200)
+    z           : ridge penalty (default 1e-3)
+    rebal_every : bars between lambda re-estimation (default 12)
+    train_bars  : rolling training window length in bars (default 1000 ~ 6mo)
+    min_train_bars : minimum bars before first estimation (default 300 ~ 50 days)
+    """
+    from scipy.stats import rankdata as _rankdata
+
+    alpha_ids = sorted(raw_signals.keys())
+    K = len(alpha_ids)
+    if K == 0:
+        return None, "AIPT-SDF(no alphas)"
+
+    tickers = returns_pct.columns.tolist()
+    N = len(tickers)
+    dates = returns_pct.index
+    T = len(dates)
+
+    returns_np = returns_pct.reindex(columns=tickers).values.astype(np.float64)
+
+    # ── Build Z panel (T, N, K): alpha signals as rank-standardized characteristics
+    Z_panel = np.zeros((T, N, K), dtype=np.float64)
+    for k, aid in enumerate(alpha_ids):
+        sig = raw_signals[aid].reindex(index=dates, columns=tickers).values.astype(np.float64)
+        Z_panel[:, :, k] = sig
+
+    # Cross-sectionally rank-standardize each (t, k) to [-0.5, 0.5]
+    for t in range(T):
+        for k in range(K):
+            col = Z_panel[t, :, k]
+            valid = ~np.isnan(col)
+            n_v = valid.sum()
+            if n_v < 3:
+                Z_panel[t, :, k] = 0.0
+                continue
+            r = _rankdata(col[valid], method='average') / n_v - 0.5
+            out = np.zeros(N)
+            out[valid] = r
+            Z_panel[t, :, k] = out
+
+    theta, gamma = _aipt_rff_params(K, P, seed)
+
+    # ── Pre-compute factor returns F_{t+1} = S_t' R_{t+1} / sqrt(N_t)
+    factor_returns  = {}   # return-bar index -> (P,) vector
+    rff_cache       = {}   # signal-bar index -> (S_t, valid_mask, N_t)
+
+    for t in range(T - 1):
+        Z_t  = Z_panel[t]
+        r_t1 = returns_np[t + 1, :]
+        valid = (~np.isnan(r_t1)) & (~np.isnan(Z_t).any(axis=1))
+        N_t = valid.sum()
+        if N_t < 5:
+            continue
+        S_t   = _aipt_rff_signals(Z_t[valid], theta, gamma, P)
+        r_cln = np.nan_to_num(r_t1[valid], nan=0.0)
+        factor_returns[t + 1] = (1.0 / np.sqrt(N_t)) * (S_t.T @ r_cln)
+        rff_cache[t] = (S_t, valid, N_t)
+
+    # ── Rolling SDF estimation -> weight DataFrame
+    all_fr_idx = sorted(factor_returns.keys())
+    weights_np = np.zeros((T, N), dtype=np.float64)
+
+    lambda_hat      = None
+    bars_since_reb  = rebal_every   # force first estimation
+
+    for oos_t in range(1, T):
+        if bars_since_reb >= rebal_every or lambda_hat is None:
+            train_idx = [i for i in all_fr_idx
+                         if i < oos_t and i >= max(0, oos_t - train_bars)]
+            if len(train_idx) < min_train_bars:
+                bars_since_reb += 1
+                continue
+            F_train    = np.vstack([factor_returns[i] for i in train_idx])
+            lambda_hat = _aipt_ridge(F_train, z)
+            bars_since_reb = 0
+
+        sig_bar = oos_t - 1
+        if sig_bar not in rff_cache or lambda_hat is None:
+            bars_since_reb += 1
+            continue
+
+        S_t, valid_mask, N_t = rff_cache[sig_bar]
+        raw_w = np.zeros(N)
+        raw_w[valid_mask] = (1.0 / np.sqrt(N_t)) * (S_t @ lambda_hat)
+        weights_np[oos_t] = raw_w
+        bars_since_reb += 1
+
+    weight_df = pd.DataFrame(weights_np, index=dates, columns=tickers)
+    result = simulate(weight_df, returns_pct, close, universe, max_wt=max_wt)
+    return result, f"AIPT-SDF(K={K},P={P},z={z:.0e},rb={rebal_every},tb={train_bars})"
 
 
 PROPER_STRATEGIES = {
@@ -2667,6 +2958,8 @@ PROPER_STRATEGIES = {
     "kelly_optimal": strategy_kelly_optimal,
     "min_var_bayesian": strategy_min_variance_bayesian,
     "hrp": strategy_hrp,
+    # AIPT SDF on alpha outputs
+    "aipt_sdf": strategy_aipt_sdf,
 }
 
 # ============================================================================
@@ -2704,6 +2997,225 @@ def plot_portfolio_robustness(result, save_path="portfolio_performance.png", boo
     except Exception as e:
         print(f"\nFailed to plot performance: {e}")
 
+
+
+# ============================================================================
+# AIPT-SDF vs EQUAL WEIGHT — TRAIN / VAL / TEST COMPARISON
+# ============================================================================
+
+_SPLITS = {
+    "TRAIN (IS)": (None,           "2024-09-01"),
+    "VAL   (OOS)": ("2024-09-01",  "2025-03-01"),
+    "TEST  (OOS)": ("2025-03-01",  None),
+}
+
+
+def _sim_on_slice(weight_df, returns_pct, close, universe, start, end,
+                  fee_bps, max_wt):
+    """Slice all DataFrames to [start:end] and simulate."""
+    sl = slice(start, end)
+    w   = weight_df.loc[sl]
+    r   = returns_pct.loc[sl]
+    c   = close.loc[sl]
+    u   = universe.loc[sl]
+    if len(w) < 30 or w.abs().sum().sum() < 1e-10:
+        return None
+    return simulate(w, r, c, u, fees_bps=fee_bps, max_wt=max_wt)
+
+
+def _print_split_table(rows):
+    """rows = list of (split, strategy_label, result_or_None)"""
+    hdr = f"  {'Split':<14} {'Strategy':<50} {'Sharpe':>8} {'Fitness':>8} {'AnnRet%':>9} {'TO':>7} {'MaxDD':>7}"
+    print(f"\n{'='*110}")
+    print("  AIPT-SDF vs Equal-Weight — Train / Val / Test")
+    print(f"{'='*110}")
+    print(hdr)
+    print(f"  {'-'*105}")
+    for split, label, res in rows:
+        if res is None:
+            print(f"  {split:<14} {label:<50} {'—':>8}")
+            continue
+        print(f"  {split:<14} {label:<50} "
+              f"{res.sharpe:>+8.3f} {res.fitness:>8.3f} "
+              f"{res.returns_ann*100:>+9.1f}% {res.turnover:>7.3f} "
+              f"{res.max_drawdown:>7.3f}")
+    print(f"{'='*110}\n")
+
+
+def run_aipt_train_val_test(P=200, z=1e-3, seed=42, rebal_every=12,
+                             train_bars=1000, min_train_bars=300,
+                             fee_bps=VAL_FEES, max_wt=MAX_WEIGHT):
+    """
+    Run AIPT-SDF vs ProperEqual across train / val / test periods.
+
+    Loads the full alpha signal history (no date slice), computes:
+      1. AIPT-SDF weights — rolling ridge-Markowitz on RFF-projected alpha signals
+      2. ProperEqual weights — simple equal-weight with proper normalization
+
+    Both use strictly causal (no-lookahead) rolling windows.
+    Reports Sharpe, Fitness, Ann. Return, Turnover, and Max Drawdown per period.
+    """
+    from scipy.stats import rankdata as _rankdata
+
+    print(f"\n{'='*70}")
+    print(f"  AIPT-SDF vs Equal — Full Train/Val/Test")
+    print(f"  P={P}  z={z:.0e}  rebal={rebal_every}  train_bars={train_bars}")
+    print(f"  fee={fee_bps}bps  max_wt={max_wt}")
+    print(f"{'='*70}")
+
+    print("\nLoading full alpha signals...")
+    raw_signals, returns_pct, close, universe = load_full_alpha_signals()
+    if raw_signals is None:
+        return
+
+    alpha_ids = sorted(raw_signals.keys())
+    K = len(alpha_ids)
+    tickers = returns_pct.columns.tolist()
+    N = len(tickers)
+    dates = returns_pct.index
+    T = len(dates)
+    print(f"  K={K} alphas, N={N} tickers, T={T} bars  "
+          f"({dates[0]} to {dates[-1]})")
+
+    returns_np = returns_pct.reindex(columns=tickers).values.astype(np.float64)
+
+    # ── Build Z panel (T, N, K) ──────────────────────────────────────────────
+    print("Building Z panel...")
+    Z_panel = np.zeros((T, N, K), dtype=np.float64)
+    for k, aid in enumerate(alpha_ids):
+        sig = raw_signals[aid].reindex(index=dates, columns=tickers).values.astype(np.float64)
+        Z_panel[:, :, k] = sig
+    for t in range(T):
+        for k in range(K):
+            col = Z_panel[t, :, k]
+            valid = ~np.isnan(col)
+            n_v = valid.sum()
+            if n_v < 3:
+                Z_panel[t, :, k] = 0.0
+                continue
+            r = _rankdata(col[valid], method='average') / n_v - 0.5
+            out = np.zeros(N)
+            out[valid] = r
+            Z_panel[t, :, k] = out
+
+    # ── AIPT factor returns + rolling weights ────────────────────────────────
+    print(f"Computing AIPT factor returns (P={P})...")
+    theta, gamma = _aipt_rff_params(K, P, seed)
+    factor_returns = {}
+    rff_cache      = {}
+    for t in range(T - 1):
+        Z_t   = Z_panel[t]
+        r_t1  = returns_np[t + 1, :]
+        valid = (~np.isnan(r_t1)) & (~np.isnan(Z_t).any(axis=1))
+        N_t   = valid.sum()
+        if N_t < 5:
+            continue
+        S_t = _aipt_rff_signals(Z_t[valid], theta, gamma, P)
+        r_c = np.nan_to_num(r_t1[valid], nan=0.0)
+        factor_returns[t + 1] = (1.0 / np.sqrt(N_t)) * (S_t.T @ r_c)
+        rff_cache[t] = (S_t, valid, N_t)
+
+    print("Rolling SDF estimation...")
+    all_fr_idx  = sorted(factor_returns.keys())
+    aipt_w_np   = np.zeros((T, N), dtype=np.float64)
+    lambda_hat  = None
+    bars_since  = rebal_every
+
+    for oos_t in range(1, T):
+        if bars_since >= rebal_every or lambda_hat is None:
+            train_idx = [i for i in all_fr_idx
+                         if i < oos_t and i >= max(0, oos_t - train_bars)]
+            if len(train_idx) < min_train_bars:
+                bars_since += 1
+                continue
+            F_train    = np.vstack([factor_returns[i] for i in train_idx])
+            lambda_hat = _aipt_ridge(F_train, z)
+            bars_since = 0
+        sig_bar = oos_t - 1
+        if sig_bar not in rff_cache or lambda_hat is None:
+            bars_since += 1
+            continue
+        S_t, vmask, N_t = rff_cache[sig_bar]
+        raw_w = np.zeros(N)
+        raw_w[vmask] = (1.0 / np.sqrt(N_t)) * (S_t @ lambda_hat)
+        aipt_w_np[oos_t] = raw_w
+        bars_since += 1
+
+    aipt_weights = pd.DataFrame(aipt_w_np, index=dates, columns=tickers)
+
+    # ── ProperEqual combined signal (full period) ────────────────────────────
+    print("Building ProperEqual signal...")
+    eq_combined = None
+    for aid, raw_sig in raw_signals.items():
+        normed = proper_normalize_alpha(raw_sig, universe, max_wt=max_wt)
+        eq_combined = normed if eq_combined is None else eq_combined.add(normed, fill_value=0)
+
+    # ── Evaluate each split ──────────────────────────────────────────────────
+    rows = []
+    aipt_label = f"AIPT-SDF(K={K},P={P},z={z:.0e},rb={rebal_every},tb={train_bars})"
+    eq_label   = f"ProperEqual(K={K},mw={max_wt})"
+
+    for split_name, (start, end) in _SPLITS.items():
+        for label, wdf in [(aipt_label, aipt_weights), (eq_label, eq_combined)]:
+            res = _sim_on_slice(wdf, returns_pct, close, universe,
+                                start, end, fee_bps, max_wt)
+            rows.append((split_name, label, res))
+
+    _print_split_table(rows)
+
+    # ── Plot cumulative returns per split ────────────────────────────────────
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        fig, axes = plt.subplots(1, 3, figsize=(18, 6), sharey=False)
+        fig.patch.set_facecolor("#16213e")
+
+        split_items = list(_SPLITS.items())
+        for ax, (split_name, (start, end)) in zip(axes, split_items):
+            ax.set_facecolor("#1a1a2e")
+            for sp in ax.spines.values():
+                sp.set_color("#333")
+            ax.tick_params(colors="white")
+            ax.xaxis.label.set_color("white")
+            ax.yaxis.label.set_color("white")
+            ax.title.set_color("white")
+
+            for label, wdf, color in [
+                (aipt_label, aipt_weights, "#FF5722"),
+                (eq_label,   eq_combined,  "#2196F3"),
+            ]:
+                res = _sim_on_slice(wdf, returns_pct, close, universe,
+                                    start, end, fee_bps, max_wt)
+                if res is None or res.daily_pnl is None:
+                    continue
+                cum = res.daily_pnl.cumsum()
+                short_label = "AIPT-SDF" if "AIPT" in label else "EqualWt"
+                sr = res.sharpe
+                ax.plot(cum.index, cum.values, linewidth=1.5,
+                        color=color, label=f"{short_label}  SR={sr:+.2f}")
+
+            ax.set_title(split_name, fontsize=11, fontweight="bold")
+            ax.set_xlabel("Date")
+            ax.set_ylabel("Cum PnL ($)")
+            ax.legend(facecolor="#1a1a2e", edgecolor="#555",
+                      labelcolor="white", fontsize=8)
+            ax.grid(True, alpha=0.15)
+
+        plt.suptitle(
+            f"AIPT-SDF vs Equal-Weight on Alpha Signals  |  "
+            f"P={P}, z={z:.0e}, {fee_bps}bps fees",
+            fontsize=12, fontweight="bold", color="white",
+        )
+        plt.tight_layout()
+        out = Path("data/aipt_results/aipt_on_alphas.png")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(out, dpi=150, facecolor=fig.get_facecolor())
+        print(f"  Plot saved to {out}")
+        plt.close()
+    except Exception as e:
+        print(f"  Plot failed: {e}")
 
 
 def run_strategy(strategy_name, fee_bps=5.0, **kwargs):
@@ -3203,6 +3715,8 @@ def main():
                         help="Combination strategy")
     parser.add_argument("--compare", action="store_true", help="Compare all strategies")
     parser.add_argument("--scoreboard", action="store_true", help="Show portfolio scoreboard")
+    parser.add_argument("--aipt", action="store_true",
+                        help="AIPT-SDF vs Equal-Weight on alpha signals (train/val/test)")
     parser.add_argument("--validate", type=str, default=None, metavar="STRATEGY",
                         help="Walk-forward validate a strategy within the val set (no test set used)")
     parser.add_argument("--n-trials", type=int, default=300,
@@ -3224,6 +3738,10 @@ def main():
         max_wt=args.mw, ema_halflife=args.hl, max_corr=args.mc,
         fee_bps=args.fees, deadband=args.db,
     )
+
+    if args.aipt:
+        run_aipt_train_val_test(fee_bps=args.fees, max_wt=args.mw)
+        return
 
     if args.validate:
         walk_forward_validate(

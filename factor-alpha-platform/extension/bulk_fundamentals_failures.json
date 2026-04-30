@@ -1,0 +1,5057 @@
+[
+  {
+    "symbol": "ABE",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ABE",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AEAXX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AEAXX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AEAXX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AEAXX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AFTR",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AFTR-UN",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AGGR",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AGGR",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AGGR",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AGGR",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AGGRU",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AGGRU",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AGGRU",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AGGRU",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AGGRW",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AGGRW",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AGGRW",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AGGRW",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AGPXX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AGPXX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AGPXX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AGPXX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AJAX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AJAX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AJAX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AJAX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AJAX-UN",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AJAX-UN",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AJAX-UN",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AJAX-UN",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ALMEX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ALMEX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ALMEX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ALMEX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "APIC",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "APIC",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "APIC",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "APIC",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "APMI",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "APMI",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "APMI",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "APMI",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "APMIU",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "APMIU",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "APMIU",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "APMIU",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "APMIW",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "APMIW",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "APMIW",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "APMIW",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ARTC",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ARTC",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ARTC",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ARTC",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ATA",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ATA",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ATA",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ATA",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ATAQ",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ATAQ",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ATAQ",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ATAQ",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ATSI",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ATSI",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ATSI",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ATSI",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AZNH",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AZNH",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AZNH",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AZNH",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AZSPX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AZSPX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AZSPX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "AZSPX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BADAX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BADAX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BADAX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BADAX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BAMH",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BAMH",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BAMH",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BAMH",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BAMR",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BAMR",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BAMR",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BAMR",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BCF",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BCF",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BCF",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BCF",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BDKNX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BDKNX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BDKNX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BDKNX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BELP",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BELP",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BELP",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BELP",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BETS",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BETS",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BETS",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BETS",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BGIO",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BGIO",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BGIO",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BGIO",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BIGZ",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BIGZ",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BOAC",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BOAC",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BOAC",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BOAC",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BOAC-UN",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BOAC-UN",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BOAC-UN",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BOAC-UN",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BOBS",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BPIAX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BPIAX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BPIAX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BPIAX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BPP",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BPP",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BPP",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BPP",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BRCN",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BRCN",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BRCN",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BRCN",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BRRWU",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BRRWU",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BRRWU",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BRRWU",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BTWN",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BTWN",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BTWN",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BTWN",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BTWNU",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BTWNU",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BTWNU",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BTWNU",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BTWNW",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BTWNW",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BTWNW",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BTWNW",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BVX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BVX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BVX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BVX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BXEAX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BXEYX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BXEYX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BXEYX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "BXEYX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CBST",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CBST",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CBST",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CBST",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CCCM",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CCCMU",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CETU",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CETU",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CETU",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CETU",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CFFVW",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CFFVW",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CFFVW",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CFFVW",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CFV",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CFV",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CFV",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CFV",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CHEKZ",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CHEKZ",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CIGAX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CIGAX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CIGAX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CIGAX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CIGL",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CIGL",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CLDL",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CLDL",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CLDL",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CLDL",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CLDS",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CLDS",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CLDS",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CLDS",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CLE",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CLE",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CLE",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CLE",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CMII",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CMII",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CMII",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CMII",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CMIIW",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CMIIW",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CMIIW",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CMIIW",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CMLT",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CMLT",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CMLT",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CMLT",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CMPOV",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CMPOV",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CMPOV",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CMPOV",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "COX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "COX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "COX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "COX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CPD",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CPD",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CPD",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CPD",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CTC",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CTC",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CTC",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CTC",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CTT",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CTT",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CTT",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CTT",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CWCFX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CWCFX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CWCFX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "CWCFX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "DTOC",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "DTOC",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "DTOC",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "DTOC",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "DWL",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "DWL",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "DWL",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "DWL",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "DYFN",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "DYFN",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "DYFN",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "DYFN",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "DZK",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "DZK",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "DZK",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "DZK",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EARS",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EARS",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EARS",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EARS",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EFL",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EFL",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ELECU",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ELECU",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ELECU",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ELECU",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ELU",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ELU",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ELU",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ELU",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EMBOX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EMBOX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EMBOX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EMBOX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EMISU",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EMISU",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EMISU",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EMISU",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EMWP",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EMWP",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EMWP",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EMWP",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "END",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "END",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "END",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "END",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EOMYX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EOMYX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EOMYX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EOMYX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EQOS",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EQOS",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EQOS",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EQOS",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ESGL",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ESGL",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ETI",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ETI",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ETI",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ETI",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EUFL",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EUFL",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EUFL",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EUFL",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EVAV",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EVAV",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EVAV",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EVAV",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EXN",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EXN",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EXN",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "EXN",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FATAV",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FATBB",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FATBB",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FATBB",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FATBB",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FATBP",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FATBP",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FATBP",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FATBP",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FATBV",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FATBV",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FATBV",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FATBV",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FATBW",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FATBW",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FATBW",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FATBW",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FATIX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FATIX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FATIX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FATIX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FCONX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FCONX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FCONX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FCONX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FCYIX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FCYIX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FCYIX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FCYIX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FFFVX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FFFVX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FFFVX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FFFVX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FGHNX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FGHNX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FGHNX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FGHNX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FHS",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FHS",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FHS",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FHS",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FLDD",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FLDD",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FLDD",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FLDD",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FLE",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FLE",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FLE",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FLE",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FNTC",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FNTC",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FNTC",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FNTC",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FNTEU",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FNTEU",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FNTEU",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FNTEU",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FRBN",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FRBN",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FRBN",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FRBN",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FRBNU",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FRBNU",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FRBNU",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FRBNU",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FRES",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FSCO",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FSCO",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FSNB",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FSNB",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FSNB",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FSNB",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FSNB-UN",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FSNB-UN",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FSNB-UN",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FSNB-UN",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FTOC",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FZADX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FZADX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FZADX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FZADX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FZT",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FZT",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FZT",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FZT",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FZT-UN",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FZT-UN",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FZT-UN",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "FZT-UN",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GASL",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GASL",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GASL",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GASL",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GASX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GASX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GASX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GASX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GDMOX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GDMOX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GDMOX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GDMOX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GEAR",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GEAR",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GEAR",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GEAR",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GEHI",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GFLU",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GFLU",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GFLU",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GFLU",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GFZ",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GFZ",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GFZ",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GFZ",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GLBAV",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GLBAV",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GLBAV",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GLBAV",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GLBKV",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GLBKV",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GLBKV",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GLBKV",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GRCY",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GRCY",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GRCY",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GRCY",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GRCYU",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GRCYU",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GRCYU",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GRCYU",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GSLD",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GSLD",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GSLD",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GSLD",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GTER",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GTER",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GTER",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "GTER",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HAAC",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HAAC",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HAAC",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HAAC",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HAACU",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HAACU",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HAACU",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HAACU",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HAACW",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HAACW",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HAACW",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HAACW",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HILL",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HILL",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HILL",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HILL",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HLEMX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HLEMX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HLEMX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HLEMX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HVBT",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HVBT",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HVBT",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HVBT",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HZON",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HZON",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HZON",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HZON",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HZON-UN",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HZON-UN",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HZON-UN",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "HZON-UN",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "IACA",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "IACVV",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "IACVV",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "IACVV",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "IACVV",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "IMPAX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "IMPAX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "IMPAX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "IMPAX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "IRNT",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "IRNT",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "IRNT",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "IRNT",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "JBR",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "JBR",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "JBR",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "JBR",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "JMG",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "JMG",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "JMPD",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "JMPD",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "JMPD",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "JMPD",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "KCOPX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "KCOPX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "KCOPX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "KCOPX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "KMPA",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "KMPA",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "KMPA",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "KMPA",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "KOR",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "KOR",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "KOR",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "KOR",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "KSICU",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "KSICU",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "KSICU",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "KSICU",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "KSICW",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "KSICW",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "KSICW",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "KSICW",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LACK",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LACK",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LACK",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LACK",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LAWR",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LAWR",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LBDAV",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LBDAV",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LBDAV",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LBDAV",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LBDKV",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LBDKV",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LBDKV",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LBDKV",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LBJ",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LBJ",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LBJ",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LBJ",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LDG",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LDG",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LDG",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LDG",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LDHA",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LDHA",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LDHA",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LDHA",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LDHAU",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LDHAU",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LDHAU",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LDHAU",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LDHAW",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LDHAW",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LDHAW",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LDHAW",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LEDOX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LEDOX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LEDOX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LEDOX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LFG",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LFG",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LFG",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LFG",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LLL",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LLL",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LLL",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LLL",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LMHA",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LMHA",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LMHA",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LMHA",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LMHB",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LMHB",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LMHB",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LMHB",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LVRA",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LVRA",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LVRA",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LVRA",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LVRAU",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LVRAU",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LVRAU",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LVRAU",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LVRAW",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LVRAW",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LVRAW",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "LVRAW",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MCTA",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MCTA",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MCX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MCX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MCX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MCX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MDLQ",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MDLQ",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MDLQ",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MDLQ",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MEACU",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MEACU",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MEACU",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MEACU",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MER",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MER",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MER",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MER",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MEVOX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MEVOX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MEVOX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MEVOX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MFGP",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MFVZX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MFVZX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MFVZX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MFVZX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MICGX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MICGX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MICGX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MICGX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MIDZ",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MIDZ",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MIDZ",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MIDZ",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MIIIU",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MIIIU",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MIIIU",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MIIIU",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MIIIW",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MIIIW",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MIIIW",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MIIIW",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MJID",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MJID",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MKLYU",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MKLYU",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MKLYU",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MKLYU",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MNREX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MNREX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MNREX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MNREX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MNRIX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MNRIX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MNRIX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MNRIX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MTCN",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MTCN",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MTCN",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MTCN",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MTIIX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MTIIX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MTIIX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MTIIX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MTSL",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MTSL",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MTSL",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MTSL",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MULN",
+    "endpoint": "key-metrics",
+    "reason": "write:('PyLong is too large to fit int64', 'Conversion failed for column marketCap with type object')"
+  },
+  {
+    "symbol": "MWFLX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MWFLX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MWFLX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MWFLX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MWFRX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MWFRX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MWFRX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MWFRX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MYT",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MYT",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MYT",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "MYT",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NDVG",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NDVG",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NDVG",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NDVG",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NEED",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NEED",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NEED",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NEED",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NEPT",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NEWTO",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NEWTO",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NEWTO",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NEWTO",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NMK-PB",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NMK-PB",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NMK-PB",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NMK-PB",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NMK-PC",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NMK-PC",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NMK-PC",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NMK-PC",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NSCR",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NSCR",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NSCR",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NSCR",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NSCS",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NSCS",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NSCS",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NSCS",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NVSCX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NVSCX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NVSCX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NVSCX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NWLG",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NWLG",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NWLG",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NWLG",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NXQ",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NXQ",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NXQ",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NXQ",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NXR",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NXR",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NXR",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NXR",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NYMTH",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NYMTH",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NYMTH",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "NYMTH",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "OCA",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "OCA",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "OCA",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "OCA",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "OCA-UN",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "OCA-UN",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "OCA-UN",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "OCA-UN",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "OG",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "OOTO",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "OOTO",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "OOTO",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "OOTO",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PANA",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PANA",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PANA",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PANA",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PASS",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PASS",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PASS",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PASS",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PBB",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PBB",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PBB",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PBB",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PCCT",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PCCT",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PCCT",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PCCT",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PEI",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PEI",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PEI",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PEI",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PGHL",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PGHL",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PGRW",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PGRW",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PGRW",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PGRW",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PGRWU",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PGRWU",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PGRWU",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PGRWU",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PGRWW",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PGRWW",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PGRWW",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PGRWW",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PIAI",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PIAI",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PIAI",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PIAI",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PIAI-UN",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PIAI-UN",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PIAI-UN",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PIAI-UN",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PITA",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PITA",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PPR",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PPR",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PPR",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PPR",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PRB",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PRB",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PRB",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PRB",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PTMN",
+    "endpoint": "key-metrics",
+    "reason": "write:('PyLong is too large to fit int64', 'Conversion failed for column freeCashFlowToFirm with type object')"
+  },
+  {
+    "symbol": "PYS",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PYS",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PYS",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "PYS",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "QNGY",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "QNGY",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "QNGY",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "QNGY",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "QTT",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "QTT",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "QTT",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "QTT",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "QUAKX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "QUAKX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "QUAKX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "QUAKX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "RALS",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "RALS",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "RALS",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "RALS",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "RBNEV",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "RBNEV",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "RBNEV",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "RBNEV",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "RCOR",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "RCOR",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "RCOR",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "RCOR",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "RHJMX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "RHJMX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "RHJMX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "RHJMX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "RHLDV",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "RHLDV",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "RHLDV",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "RHLDV",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "RMVIX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "RMVIX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "RMVIX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "RMVIX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "RUSS",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "RUSS",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "RUSS",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "RUSS",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SAB",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SAB",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SAB",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SAB",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SAF",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SAF",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SAF",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SAF",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SAGG",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SAGG",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SAGG",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SAGG",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SCE-PH",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SCE-PH",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SCE-PH",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SCE-PH",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SECO",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SEPA",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SEPA",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SEPA",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SEPA",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SFC",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SFC",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SFC",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SFC",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SGP",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SGP",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SGP",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SGP",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SHI",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SHI",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SHI",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SHI",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SLHG",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SLHG",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SLHG",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SLHG",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SNP",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SNP",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SNP",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SNP",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SOJA",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SOJA",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SOJA",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SOJA",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SOLSV",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SOLSV",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SPK",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SPK",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SPK",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SPK",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SPKAR",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SPKAR",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SPKAR",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SPKAR",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SSWA",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SSWA",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SSWA",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SSWA",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "STLRU",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "STLRU",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "STLRU",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "STLRU",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SUSLX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SUSLX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SUSLX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SUSLX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SWIR",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SWIR",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SWIR",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "SWIR",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TBSA",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TBSA",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TBSA",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TBSA",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TBSAU",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TBSAU",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TBSAU",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TBSAU",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TBSAW",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TBSAW",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TBSAW",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TBSAW",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TCRZ",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TCRZ",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TCRZ",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TCRZ",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TCTM",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TCVA",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TCVA",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TCVA",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TCVA",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TGHNX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TGHNX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TGHNX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TGHNX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TMTS",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TMTS",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TMTSU",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TMTSU",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TOROV",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TOROV",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TOROV",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TOROV",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TPS",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TPS",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TPS",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TPS",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TPVY",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TPVY",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TPVY",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TPVY",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TRCA",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TRCA",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TRCA",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TRCA",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TRCA-UN",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TRCA-UN",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TRCA-UN",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TRCA-UN",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TYBS",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TYBS",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TYBS",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "TYBS",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "UCOM",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "UCOM",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "UCOM",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "UCOM",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "UTAAU",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "UTAAU",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "UTAAU",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "UTAAU",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "UTME",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "UTME",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "VEDU",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "VEDU",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "VHNA",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "VHNA",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "VHNA",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "VHNA",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "VLI",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "VLI",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "VLI",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "VLI",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "VLNS",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "VLNS",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "VLNS",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "VLNS",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "VLON",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "VLON",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "VLON",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "VLON",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "VOLT",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "VOLT",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "VOLT",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "VOLT",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "VSECU",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "VSECU",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "VSECU",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "VSECU",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "VSNTV",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "WBEV",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "WBEV",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "WBEV",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "WBEV",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "WDCVV",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "WDCVV",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "WDCVV",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "WDCVV",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "WUCT",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "WUCT",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "WUCT",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "WUCT",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "XCRA",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "XCRA",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "XCRA",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "XCRA",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "XCSIX",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "XCSIX",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "XCSIX",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "XCSIX",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "XPAXU",
+    "endpoint": "key-metrics",
+    "reason": "write:('Integer value 2747694810000000000 is outside of the range exactly representable by a IEEE 754 double precision value', 'Conversion failed for column evToEBITDA with type object')"
+  },
+  {
+    "symbol": "XXCH",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "XXCH",
+    "endpoint": "balance-sheet-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "XXCH",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "XXCH",
+    "endpoint": "key-metrics",
+    "reason": "empty"
+  },
+  {
+    "symbol": "YGF",
+    "endpoint": "income-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "YGF",
+    "endpoint": "cash-flow-statement",
+    "reason": "empty"
+  },
+  {
+    "symbol": "ZLS",
+    "endpoint": "key-metrics",
+    "reason": "write:('Integer value 2747694810000000000 is outside of the range exactly representable by a IEEE 754 double precision value', 'Conversion failed for column evToEBITDA with type object')"
+  }
+]

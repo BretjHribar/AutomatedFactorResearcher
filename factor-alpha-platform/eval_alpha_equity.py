@@ -28,13 +28,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # ============================================================================
 
 # Agent 1 ONLY uses the train period (in-sample)
+# Data spans 2016-01-04 to 2026-04-20 (~10.3 years). 8y train / ~2.3y OOS.
 TRAIN_START = "2016-01-01"
-TRAIN_END   = "2023-01-01"   # ~7 years in-sample
+TRAIN_END   = "2024-01-01"   # ~8 years in-sample
 
-# Sub-period splits for stability check (within train)
+# Sub-period splits for stability check (within train) — 3 regimes
 SUBPERIODS = [
-    ("2016-01-01", "2019-07-01", "H1"),
-    ("2019-07-01", "2023-01-01", "H2"),
+    ("2016-01-01", "2018-09-01", "H1"),  # pre-covid
+    ("2018-09-01", "2021-05-01", "H2"),  # covid crash + recovery
+    ("2021-05-01", "2024-01-01", "H3"),  # 2022 bear + 2023 rally
 ]
 
 # Sim parameters
@@ -48,10 +50,10 @@ DECAY         = 0              # Linear decay applied to signal (0 = no decay; e
 COVERAGE_CUTOFF = 0.5          # Ticker must appear in universe > 50% of days
 
 # Quality gates (equities — different from crypto)
-MIN_IS_SHARPE  = 1.25          # Delay=1 equity signals - higher bar than delay=0
-MIN_FITNESS    = 1.0           # Fitness = Sharpe * sqrt(|return_ann| / max(turnover, 0.125))
+MIN_IS_SHARPE  = 2.0           # Delay=1 equity signals - higher bar than delay=0
+MIN_FITNESS    = 2.0           # Fitness = Sharpe * sqrt(|return_ann| / max(turnover, 0.125))
 MIN_IC_MEAN    = 0.0           # Mean IC must be positive (strict for equities)
-CORR_CUTOFF    = 0.65          # Reject if |corr| > 0.65 with existing alpha
+CORR_CUTOFF    = 0.70          # Reject if |corr| > 0.70 with existing alpha
 MIN_SUB_SHARPE = 0.5           # Each sub-period must be positive (bull + bear)
 MAX_TURNOVER   = 0.40          # Reject high-turnover alphas (same as crypto)
 MAX_PNL_KURTOSIS  = 20        # Reject fat-tailed PnL distributions
@@ -104,13 +106,17 @@ def _ensure_schema(conn):
         psr         REAL,
         delay       INTEGER,
         decay       INTEGER,
+        universe    TEXT,
+        max_weight  REAL,
         train_start TEXT,
         train_end   TEXT,
         n_bars      INTEGER,
         evaluated_at TEXT   DEFAULT (datetime('now'))
     )""")
-    # Migrate existing DBs that lack delay/decay columns
-    for col, typedef in (("delay", "INTEGER"), ("decay", "INTEGER")):
+    # Migrate existing DBs that lack newer columns
+    for col, typedef in (("delay", "INTEGER"), ("decay", "INTEGER"),
+                         ("universe", "TEXT"), ("max_weight", "REAL"),
+                         ("neutralization", "TEXT")):
         try:
             conn.execute(f"ALTER TABLE evaluations ADD COLUMN {col} {typedef}")
         except Exception:
@@ -213,8 +219,9 @@ def save_alpha(conn, expression, reasoning, metrics):
 
     c.execute("""INSERT INTO evaluations (alpha_id, sharpe_is, sharpe_train, return_ann,
                  max_drawdown, turnover, fitness, ic_mean, ic_ir, psr,
-                 delay, decay, train_start, train_end, n_bars, evaluated_at)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))""",
+                 delay, decay, train_start, train_end, n_bars, evaluated_at,
+                 universe, max_weight, neutralization)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),?,?,?)""",
               (alpha_id,
                metrics['is_sharpe'], metrics['is_sharpe'],
                metrics.get('returns_ann', 0),
@@ -224,7 +231,8 @@ def save_alpha(conn, expression, reasoning, metrics):
                metrics['deflated_sharpe'],
                DELAY, DECAY,
                TRAIN_START, TRAIN_END,
-               metrics.get('n_bars', 0)))
+               metrics.get('n_bars', 0),
+               UNIVERSE, MAX_WEIGHT, NEUTRALIZE))
     conn.commit()
     print(f"  SAVED as alpha #{alpha_id}")
     return True
@@ -248,6 +256,10 @@ def load_data(split="train"):
     # Convert index to DatetimeIndex if needed
     if not isinstance(universe_df.index, pd.DatetimeIndex):
         universe_df.index = pd.to_datetime(universe_df.index)
+    # Some banded universes (TOP1500TOP2500 etc.) are stored as int64;
+    # process_signal uses pd.DataFrame.where which needs bool.
+    if universe_df.values.dtype != bool:
+        universe_df = universe_df.astype(bool)
 
     # Filter tickers by coverage
     coverage = universe_df.sum(axis=0) / len(universe_df)
@@ -281,11 +293,9 @@ def load_data(split="train"):
             classifications[level] = labels
 
     # Define splits
-    splits = {
-        "train": (TRAIN_START, TRAIN_END),
-        "h1":    (SUBPERIODS[0][0], SUBPERIODS[0][1]),
-        "h2":    (SUBPERIODS[1][0], SUBPERIODS[1][1]),
-    }
+    splits = {"train": (TRAIN_START, TRAIN_END)}
+    for sp_start, sp_end, sp_name in SUBPERIODS:
+        splits[sp_name.lower()] = (sp_start, sp_end)
     if split not in splits:
         raise ValueError(f"Agent 1 only uses train splits: {list(splits.keys())}")
 
@@ -513,6 +523,7 @@ def eval_full(expression, conn):
         "icir": icir,
         "stability_h1": stability.get("H1", 0),
         "stability_h2": stability.get("H2", 0),
+        "stability_h3": stability.get("H3", 0),
         "deflated_sharpe": dsr,
         "n_trials": n_trials,
         "pnl_vec": is_m["pnl_vec"],
@@ -603,6 +614,32 @@ def main():
                         help="Override global DECAY (linear decay window, 0=off). "
                              "Higher decay = smoother positions = lower turnover = better Fitness. "
                              "Useful when signal turnover > 0.125 and Fitness is the binding gate.")
+    parser.add_argument("--neutralize", type=str, default=None,
+                        choices=["subindustry", "industry", "sector", "market", "none"],
+                        help="Override global NEUTRALIZE. Default: subindustry (GICS 8-digit). "
+                             "'market' = demean across whole universe. 'none' = no neutralization.")
+    parser.add_argument("--universe", type=str, default=None,
+                        help="Override global UNIVERSE (default TOP1000). Available masks live in "
+                             "data/fmp_cache/universes/*.parquet (e.g. TOP500, TOP2000, TOP1500TOP2500, "
+                             "MCAP_500M_2B). Different universes change MAX_WEIGHT default — pass "
+                             "--max-weight if needed.")
+    parser.add_argument("--delay", type=int, default=None,
+                        help="Override global DELAY (default 1). Use 0 for closing-auction execution "
+                             "where signal at T trades at T's close. NOTE: delay=0 alphas saved this way "
+                             "are NOT comparable to delay=1 alphas — tag with notes accordingly.")
+    parser.add_argument("--max-weight", type=float, default=None,
+                        help="Override per-name weight cap (default 0.005 for TOP1000). "
+                             "For smaller universes scale up: e.g. 0.01 for TOP500, 0.002 for TOP3000.")
+    parser.add_argument("--min-sharpe", type=float, default=None,
+                        help="Override the IS-Sharpe save gate (default 2.0). Use higher for "
+                             "high-SR-only research lanes (e.g. 3.5 for delay=0 microstructure).")
+    parser.add_argument("--min-fitness", type=float, default=None,
+                        help="Override the Fitness save gate (default 2.0).")
+    parser.add_argument("--train-start", type=str, default=None,
+                        help="Override TRAIN_START (default 2016-01-01).")
+    parser.add_argument("--train-end", type=str, default=None,
+                        help="Override TRAIN_END (default 2024-01-01). Tightening this leaves "
+                             "more out-of-sample window for val/test.")
     args = parser.parse_args()
 
     os.makedirs(os.path.dirname(DB_PATH) or ".", exist_ok=True)
@@ -618,10 +655,27 @@ def main():
         parser.print_help()
         return
 
-    # Allow --decay to override the global at runtime
-    global DECAY
+    # Allow runtime overrides for the module-level config constants
+    global DECAY, NEUTRALIZE, UNIVERSE, DELAY, MAX_WEIGHT, MIN_IS_SHARPE, MIN_FITNESS, \
+           TRAIN_START, TRAIN_END
     if args.decay is not None:
         DECAY = args.decay
+    if args.neutralize is not None:
+        NEUTRALIZE = args.neutralize
+    if args.universe is not None:
+        UNIVERSE = args.universe
+    if args.delay is not None:
+        DELAY = args.delay
+    if args.max_weight is not None:
+        MAX_WEIGHT = args.max_weight
+    if args.min_sharpe is not None:
+        MIN_IS_SHARPE = args.min_sharpe
+    if args.min_fitness is not None:
+        MIN_FITNESS = args.min_fitness
+    if args.train_start is not None:
+        TRAIN_START = args.train_start
+    if args.train_end is not None:
+        TRAIN_END = args.train_end
 
     conn = get_conn()
     expression = args.expr
@@ -649,10 +703,13 @@ def main():
     print(f"  ICIR:         {result['icir']:.3f}")
 
     print(f"\n  --- SUB-PERIOD STABILITY ---")
-    print(f"  H1 ({SUBPERIODS[0][0][:7]} to {SUBPERIODS[0][1][:7]}): {result['stability_h1']:+.3f}")
-    print(f"  H2 ({SUBPERIODS[1][0][:7]} to {SUBPERIODS[1][1][:7]}): {result['stability_h2']:+.3f}")
-    both_pos = result['stability_h1'] > MIN_SUB_SHARPE and result['stability_h2'] > MIN_SUB_SHARPE
-    print(f"  Stable:       {'YES (both >= ' + str(MIN_SUB_SHARPE) + ')' if both_pos else 'NO'}")
+    sub_sharpes = []
+    for sp_start, sp_end, sp_name in SUBPERIODS:
+        sr = result[f'stability_{sp_name.lower()}']
+        sub_sharpes.append(sr)
+        print(f"  {sp_name} ({sp_start[:7]} to {sp_end[:7]}): {sr:+.3f}")
+    all_pos = all(sr > MIN_SUB_SHARPE for sr in sub_sharpes)
+    print(f"  Stable:       {'YES (all >= ' + str(MIN_SUB_SHARPE) + ')' if all_pos else 'NO'}")
 
     print(f"\n  --- DEFLATED SHARPE (trial #{result['n_trials']}) ---")
     print(f"  DSR:          {result['deflated_sharpe']:.3f}  (informational)")
@@ -671,8 +728,9 @@ def main():
          f"Fitness >= {MIN_FITNESS}: {result['is_fitness']:.3f}"),
         (result['ic_mean'] > MIN_IC_MEAN,
          f"Mean IC > {MIN_IC_MEAN}: {result['ic_mean']:+.4f}"),
-        (result['stability_h1'] > MIN_SUB_SHARPE and result['stability_h2'] > MIN_SUB_SHARPE,
-         f"Sub-period Sharpe > {MIN_SUB_SHARPE}: H1={result['stability_h1']:+.2f} H2={result['stability_h2']:+.2f}"),
+        (all(result[f'stability_{n.lower()}'] > MIN_SUB_SHARPE for _, _, n in SUBPERIODS),
+         f"Sub-period Sharpe > {MIN_SUB_SHARPE}: " +
+         " ".join(f"{n}={result[f'stability_{n.lower()}']:+.2f}" for _, _, n in SUBPERIODS)),
         (result['turnover'] <= MAX_TURNOVER,
          f"Turnover <= {MAX_TURNOVER}: {result['turnover']:.4f}"),
         (result['pnl_kurtosis'] <= MAX_PNL_KURTOSIS,

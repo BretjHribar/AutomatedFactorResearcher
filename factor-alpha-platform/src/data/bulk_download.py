@@ -847,7 +847,9 @@ def build_matrices(
         "rd_expense": "researchAndDevelopmentExpenses",
         "ebitda": "ebitda",
         "eps": "eps",
-        "eps_diluted": "epsdiluted",
+        "eps_diluted": "epsDiluted",   # FMP schema is camelCase: epsDiluted (not epsdiluted)
+        "shares_out": "weightedAverageShsOut",        # only present in income files
+        "shares_out_diluted": "weightedAverageShsOutDil",
         "sales": "revenue",
         "cost_of_revenue": "costOfRevenue",
         "sga_expense": "sellingGeneralAndAdministrativeExpenses",
@@ -864,7 +866,10 @@ def build_matrices(
         "cash": "cashAndCashEquivalents",
         "inventory": "inventory",
         "total_liabilities": "totalLiabilities",
-        "shares_out": "weightedAverageShsOut",
+        # NOTE: shares-outstanding columns live in income statement files, not
+        # balance sheet files. The previous mapping ("shares_out": "weightedAverageShsOut")
+        # silently produced an all-NaN matrix because the column doesn't exist
+        # in balance/. Source it from income_map above.
         "goodwill": "goodwill",
         "intangibles": "intangibleAssets",
         "net_debt": "netDebt",
@@ -878,28 +883,44 @@ def build_matrices(
         "cashflow_op": "operatingCashFlow",
         "capex": "capitalExpenditure",
         "free_cashflow": "freeCashFlow",
-        "dividends_paid": "dividendsPaid",
+        # FMP renamed dividend & financing fields. Old names dividendsPaid /
+        # debtRepayment are no longer in the cashflow files; use the new ones.
+        "dividends_paid": "commonDividendsPaid",
+        "dividends_paid_net": "netDividendsPaid",
         "depreciation": "depreciationAndAmortization",
         "stock_repurchase": "commonStockRepurchased",
-        "debt_repayment": "debtRepayment",
+        "debt_repayment": "longTermNetDebtIssuance",  # signed: negative=repayment
+        "net_debt_issuance": "netDebtIssuance",
+        "net_stock_issuance": "netStockIssuance",
     }
 
+    # The FMP key-metrics endpoint schema (current as of 2026) provides:
+    #   evToEBITDA, evToSales, evToFreeCashFlow, evToOperatingCashFlow,
+    #   returnOnEquity, returnOnAssets, returnOnInvestedCapital,
+    #   earningsYield, freeCashFlowYield, currentRatio, marketCap,
+    #   enterpriseValue, investedCapital, ...
+    # It DOES NOT directly provide: peRatio, pbRatio, debtToEquity,
+    # revenuePerShare, bookValuePerShare, freeCashFlowPerShare,
+    # tangibleBookValuePerShare. Those are computed below from primary fields
+    # (see "Derived ratios" block).
     metric_map = {
         "enterprise_value": "enterpriseValue",
         "invested_capital": "investedCapital",
         "market_cap_metric": "marketCap",
-        "pe_ratio": "peRatio",
-        "pb_ratio": "pbRatio",
-        "ev_to_ebitda": "enterpriseValueOverEBITDA",
-        "debt_to_equity": "debtToEquity",
+        "ev_to_ebitda": "evToEBITDA",          # was "enterpriseValueOverEBITDA" — endpoint changed
+        "ev_to_sales": "evToSales",
+        "ev_to_revenue_metric": "evToSales",   # alias
+        "ev_to_fcf_metric": "evToFreeCashFlow",
+        "ev_to_ocf": "evToOperatingCashFlow",
         "current_ratio": "currentRatio",
-        "roe": "roe",
-        "roa": "roic",
-        "dividend_yield": "dividendYield",
-        "revenue_per_share": "revenuePerShare",
-        "book_value_per_share": "bookValuePerShare",
-        "tangible_book_per_share": "tangibleBookValuePerShare",
-        "fcf_per_share": "freeCashFlowPerShare",
+        "roe": "returnOnEquity",                # was "roe" — endpoint changed
+        "roa": "returnOnAssets",                # was "roic" (wrong field anyway)
+        "roic": "returnOnInvestedCapital",
+        "earnings_yield_metric": "earningsYield",
+        "fcf_yield_metric": "freeCashFlowYield",
+        "intangibles_to_assets": "intangiblesToTotalAssets",
+        "capex_to_revenue": "capexToRevenue",
+        "income_quality": "incomeQuality",
     }
 
     fund_configs = [
@@ -1019,15 +1040,66 @@ def build_matrices(
     if "total_debt" in matrices and "cash" in matrices:
         matrices["net_debt_calc"] = matrices["total_debt"] - matrices["cash"]
 
-    # Sales per share
+    # Sales per share / revenue per share (same thing)
     if "revenue" in matrices and "shares_out" in matrices:
         so = matrices["shares_out"].replace(0, np.nan)
         matrices["sales_ps"] = matrices["revenue"] / so
+        matrices["revenue_per_share"] = matrices["sales_ps"]
 
     # FCF per share
     if "free_cashflow" in matrices and "shares_out" in matrices:
         so = matrices["shares_out"].replace(0, np.nan)
         matrices["fcf_per_share"] = matrices["free_cashflow"] / so
+
+    # ── Derived ratios (FMP key-metrics endpoint no longer provides these) ──
+    # P/E ratio: only when EPS is positive; clip to |PE| < 1000 to suppress
+    # tiny-eps blow-ups that would dominate cross-sectional ranks.
+    if "close" in matrices and "eps" in matrices:
+        eps_safe = matrices["eps"].where(matrices["eps"] > 0)
+        pe = matrices["close"] / eps_safe
+        matrices["pe_ratio"] = pe.where(pe.abs() < 1000)
+
+    # P/B ratio: market_cap / book equity, with equity > 0 and |PB| < 100 clip.
+    if "close" in matrices and "shares_out" in matrices and "total_equity" in matrices:
+        mcap = matrices["close"] * matrices["shares_out"]
+        eq_safe = matrices["total_equity"].where(matrices["total_equity"] > 0)
+        pb = mcap / eq_safe
+        matrices["pb_ratio"] = pb.where(pb.abs() < 100)
+
+    # Debt-to-equity: total_debt / total_equity (no clip — leverage can legitimately
+    # be >> 100 for distressed names; rank() handles outliers downstream)
+    if "total_debt" in matrices and "total_equity" in matrices:
+        eq_safe = matrices["total_equity"].where(matrices["total_equity"] > 0)
+        matrices["debt_to_equity"] = matrices["total_debt"] / eq_safe
+
+    # Book value per share + tangible book per share
+    if "total_equity" in matrices and "shares_out" in matrices:
+        so = matrices["shares_out"].replace(0, np.nan)
+        matrices["bookvalue_ps"] = matrices["total_equity"] / so
+        matrices["book_value_per_share"] = matrices["bookvalue_ps"]
+        if "intangibles" in matrices and "goodwill" in matrices:
+            tangible_eq = (
+                matrices["total_equity"]
+                - matrices["intangibles"].fillna(0)
+                - matrices["goodwill"].fillna(0)
+            )
+            matrices["tangible_book_per_share"] = tangible_eq / so
+
+    # `sharesout` is an alias-form used by some saved alphas.
+    if "shares_out" in matrices and "sharesout" not in matrices:
+        matrices["sharesout"] = matrices["shares_out"]
+
+    # Dividend yield from cashflow (annualized) / market cap
+    if "dividends_paid" in matrices and "market_cap" in matrices:
+        # FMP cashflow dividends_paid is per-period (typically negative outflow).
+        # Use absolute value scaled by 4 for quarterly→annual approximation.
+        annual_div = matrices["dividends_paid"].abs() * 4
+        mc_safe = matrices["market_cap"].where(matrices["market_cap"] > 0)
+        matrices["dividend_yield"] = annual_div / mc_safe
+
+    # `cashflow_dividends` is an alias used by some downstream code
+    if "dividends_paid" in matrices and "cashflow_dividends" not in matrices:
+        matrices["cashflow_dividends"] = matrices["dividends_paid"]
 
     # Inventory turnover = COGS / Inventory
     if "cost_of_revenue" in matrices and "inventory" in matrices:
@@ -1050,6 +1122,30 @@ def build_matrices(
                 matrices[f"parkinson_volatility_{window}"] = np.sqrt(ratio.rolling(window).mean() / (4 * np.log(2)))
 
     logger.info(f"Matrices built: {len(matrices)} fields x {len(tickers)} tickers x {len(all_dates)} days")
+
+    # Build-time coverage guard: any field that ends up 100% NaN is almost
+    # certainly a schema-mismatch bug (e.g. mapped FMP column doesn't exist
+    # in the cached files). Surface it loudly here — historically these went
+    # undetected because matrices were pre-allocated as NaN-filled DataFrames
+    # and the per-symbol fill loop silently skips missing columns.
+    empty_fields = []
+    for name, df in matrices.items():
+        if name.startswith("_"):
+            continue
+        if not isinstance(df, pd.DataFrame):
+            continue
+        arr = df.values
+        if not np.issubdtype(arr.dtype, np.floating):
+            continue
+        if not (~np.isnan(arr)).any():
+            empty_fields.append(name)
+    if empty_fields:
+        logger.error(
+            "BUILD INTEGRITY: %d fields are 100%% NaN — likely a column-name "
+            "mismatch in income_map/balance_map/cashflow_map/metric_map: %s",
+            len(empty_fields),
+            ", ".join(empty_fields),
+        )
 
     # Save metadata
     meta = {

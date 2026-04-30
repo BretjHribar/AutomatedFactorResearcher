@@ -69,4 +69,5 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "benchmark: marks benchmark tests",
     "e2e: marks end-to-end tests",
+    "network: marks tests that require external network access",
 ]

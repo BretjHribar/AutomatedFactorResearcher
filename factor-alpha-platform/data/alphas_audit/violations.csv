@@ -1,0 +1,13 @@
+alpha_a,alpha_b,corr,expr_a,expr_b
+23,31,0.7465846149438056,Abs(momentum_20d),"Decay_exp(sqrt(momentum_20d), 6)"
+44,113,0.7258279165368872,"stddev(df_max(momentum_20d, vwap_deviation), 6)","stddev(df_max(add(upper_shadow, add(vwap_deviation, vwap_deviation)), df_max(ran"
+68,107,0.725417920639706,"stddev(df_min(df_min(Abs(adv20), historical_volatility_20), df_min(ts_rank(lower","stddev(df_min(df_min(Abs(momentum_20d), rank(lower_shadow)), ts_min(momentum_20d"
+23,57,0.717214190324601,Abs(momentum_20d),"Abs(multiply(subtract(subtract(momentum_20d, returns), Decay_exp(open_close_rang"
+31,68,0.7139321065957281,"Decay_exp(sqrt(momentum_20d), 6)","stddev(df_min(df_min(Abs(adv20), historical_volatility_20), df_min(ts_rank(lower"
+23,157,0.7127223981914391,Abs(momentum_20d),"Abs(multiply(subtract(momentum_20d, returns), ts_skewness(df_min(low, parkinson_"
+156,159,0.7093337037110081,"Abs(multiply(subtract(subtract(momentum_20d, returns), zscore_cs(low)), true_div","Abs(multiply(subtract(subtract(momentum_20d, returns), zscore_cs(low)), true_div"
+190,196,0.7052649946052695,"stddev(df_min(df_min(Abs(momentum_20d), rank(lower_shadow)), correlation(df_max(","stddev(df_min(df_min(Abs(momentum_20d), rank(lower_shadow)), correlation(df_max("
+23,191,0.7043187942625273,Abs(momentum_20d),"Abs(multiply(ts_sum(returns, 120), ts_rank(correlation(historical_volatility_10,"
+23,192,0.7042731774068183,Abs(momentum_20d),"Abs(multiply(ts_sum(returns, 120), ts_rank(beta_to_btc, 30)))"
+44,68,0.7004305776795035,"stddev(df_max(momentum_20d, vwap_deviation), 6)","stddev(df_min(df_min(Abs(adv20), historical_volatility_20), df_min(ts_rank(lower"
+44,62,0.7000220548587485,"stddev(df_max(momentum_20d, vwap_deviation), 6)","stddev(df_max(add(upper_shadow, add(vwap_deviation, vwap_deviation)), df_max(std"

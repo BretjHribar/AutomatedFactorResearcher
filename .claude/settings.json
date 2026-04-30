@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(schtasks /create /tn \"AIPT_KuCoin_Trader_P1000\" /tr \"C:\\\\Users\\\\breth\\\\PycharmProjects\\\\AutomatedFactorResearcher\\\\factor-alpha-platform\\\\prod\\\\scripts\\\\run_aipt_trader_p1000.bat\" /sc daily /st 00:05:00 /du 0024:00 /ri 240 /ru \"breth\" /f)",
+      "PowerShell(schtasks /query /tn \"AIPT_KuCoin_Trader_P1000\" /fo LIST /v)",
+      "Bash(python aipt_kucoin.py --run)",
+      "Bash(python eval_portfolio.py --aipt)",
+      "Bash(python -)",
+      "Bash(python -c ' *)",
+      "Bash(python3)",
+      "Bash(python backtest_voc_postfix.py)",
+      "Bash(tasklist)",
+      "Bash(taskkill //F //FI \"IMAGENAME eq python.exe\" //FI \"WINDOWTITLE eq backtest_voc_postfix*\")",
+      "Bash(ps -W)",
+      "Bash(python backtest_voc_iter.py)",
+      "Bash(python backtest_voc_iter2.py)",
+      "Bash(python -c \"import sqlite3; con = sqlite3.connect\\('factor-alpha-platform/data/alphas.db'\\); cur = con.execute\\(\\\\\"SELECT COUNT\\(*\\), source FROM alphas WHERE archived=0 AND asset_class='crypto' AND interval='4h' GROUP BY source ORDER BY 1 DESC\\\\\"\\); [print\\(r\\) for r in cur]; con.close\\(\\)\")"
+    ]
+  }
+}

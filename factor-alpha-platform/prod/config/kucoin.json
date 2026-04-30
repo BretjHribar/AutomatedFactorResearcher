@@ -49,14 +49,15 @@
         "performance_logs": "prod/logs/kucoin/performance"
     },
     "alphas": [
-        {"id": "IB12", "expression": "rank((delay(close, 1) - open) + ts_rank(volume, 20))", "weight": 1.0},
-        {"id": "C10", "expression": "multiply(ts_delta(close, 6), ts_kurtosis(volume, 60))", "weight": 1.0},
-        {"id": "C11", "expression": "multiply(Sign(sma(returns, 120)), true_divide(volume_momentum_5_20, historical_volatility_60))", "weight": 1.0},
-        {"id": "C13", "expression": "multiply(Sign(momentum_60d), true_divide(volume_momentum_5_20, parkinson_volatility_20))", "weight": 1.0},
-        {"id": "C15", "expression": "sma(multiply(ts_delta(close, 6), true_divide(high_low_range, open_close_range)), 6)", "weight": 1.0},
-        {"id": "C23", "expression": "df_min(df_max(add(add(add(zscore_cs(sma(true_divide(lower_shadow, df_max(high_low_range, 0.001)), 120)), zscore_cs(sma(taker_buy_ratio, 120))), zscore_cs(sma(ts_delta(s_log_1p(adv60), 30), 120))), zscore_cs(sma(funding_rate_avg_7d, 60))), -3), 3)", "weight": 1.0, "_note": "Uses taker_buy_ratio/funding — will be SKIPPED if data missing"},
-        {"id": "C25", "expression": "df_min(df_max(add(add(add(add(zscore_cs(sma(true_divide(lower_shadow, df_max(high_low_range, 0.001)), 120)), zscore_cs(sma(taker_buy_ratio, 120))), zscore_cs(sma(ts_delta(s_log_1p(adv60), 30), 120))), zscore_cs(sma(funding_rate_avg_7d, 60))), zscore_cs(Decay_exp(ts_corr(log_returns, delay(log_returns, 6), 120), 0.02))), -3), 3)", "weight": 1.0, "_note": "Uses Binance-specific fields — will be SKIPPED if missing"},
-        {"id": "C30", "expression": "df_min(df_max(add(add(add(add(zscore_cs(sma(ts_corr(close_position_in_range, taker_buy_ratio, 60), 120)), zscore_cs(sma(taker_buy_ratio, 120))), zscore_cs(sma(ts_delta(s_log_1p(adv60), 30), 120))), zscore_cs(sma(funding_rate_avg_7d, 60))), zscore_cs(Decay_exp(ts_corr(log_returns, delay(log_returns, 6), 120), 0.02))), -3), 3)", "weight": 1.0}
-    ],
-    "_alpha_note": "Includes all Binance alphas. Those using Binance-only fields (taker_buy_ratio, funding_rate, beta_to_btc) will be automatically skipped at runtime via missing-field detection. Only OHLCV-based alphas will run on KuCoin."
+        {"id": "A20", "expression": "zscore_cs(true_divide(sma(log_returns, 120), df_max(sma(parkinson_volatility_20, 120), 0.001)))", "weight": 1.0},
+        {"id": "A21", "expression": "zscore_cs(sma(upper_shadow, 30))", "weight": 1.0},
+        {"id": "A22", "expression": "zscore_cs(sma(ts_zscore(turnover, 240), 60))", "weight": 1.0},
+        {"id": "A23", "expression": "Abs(momentum_20d)", "weight": 1.0},
+        {"id": "A24", "expression": "ts_zscore(ts_sum(multiply(momentum_20d, returns), 180), 180)", "weight": 1.0},
+        {"id": "A25", "expression": "add(ts_rank(low, 240), open_close_range)", "weight": 1.0},
+        {"id": "A26", "expression": "df_min(ts_rank(adv20, 90), Decay_exp(square(momentum_5d), 36))", "weight": 1.0},
+        {"id": "A27", "expression": "ts_zscore(rank(adv20), 240)", "weight": 1.0},
+        {"id": "A28", "expression": "stddev(ts_sum(momentum_20d, 60), 6)", "weight": 1.0},
+        {"id": "A29", "expression": "stddev(multiply(volume_momentum_5_20, momentum_20d), 18)", "weight": 1.0}
+    ]
 }
