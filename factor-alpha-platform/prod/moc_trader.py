@@ -121,12 +121,18 @@ def load_fmp_data():
 
 
 def load_alphas():
-    """Load all non-archived IB alphas from database."""
+    """Load all non-archived equity alphas from database.
+
+    Was filtering on `asset_class='equities_ib'` from the original
+    data/ib_alphas.db, but that DB was lost during the 2026-04-30 cleanup.
+    Now points at data/alpha_results.db (canonical, 81 archived=0 equity
+    alphas — primarily the SMALLCAP_D0 set researched in Apr 2026).
+    """
     conn = sqlite3.connect(str(DB_PATH))
     rows = conn.execute("""
         SELECT a.id, a.expression, COALESCE(e.ic_mean, 0), COALESCE(e.sharpe_is, 0)
         FROM alphas a LEFT JOIN evaluations e ON e.alpha_id = a.id
-        WHERE a.archived = 0 AND a.asset_class = 'equities_ib'
+        WHERE a.archived = 0 AND a.asset_class = 'equities'
         ORDER BY COALESCE(e.sharpe_is, 0) DESC
     """).fetchall()
     conn.close()

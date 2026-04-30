@@ -2,11 +2,11 @@
     "strategy": {
         "name": "IB Closing Auction L/S Equity",
         "version": "1.0.0",
-        "universe": "TOP2000TOP3000",
+        "universe": "MCAP_100M_500M",
         "neutralization": "subindustry",
         "pre_neutralize_alphas": true,
         "combiner": "equal_weight",
-        "max_stock_weight": 0.01,
+        "max_stock_weight": 0.02,
         "bars_per_day": 1,
         "rebalance_frequency": "daily"
     },
@@ -47,7 +47,7 @@
         "min_borrow_availability": true,
         "price_validation_tolerance_pct": 2.0,
         "max_daily_turnover_pct": 200.0,
-        "stale_data_halt_hours": 48
+        "stale_data_halt_hours": 720
     },
     "fees": {
         "model": "ibkr_tiered",
@@ -64,7 +64,7 @@
         "max_order_pct": 0.01
     },
     "paths": {
-        "db": "data/ib_alphas.db",
+        "db": "data/alpha_results.db",
         "matrices": "data/fmp_cache/matrices",
         "universes": "data/fmp_cache/universes",
         "classifications": "data/fmp_cache/classifications.json",
