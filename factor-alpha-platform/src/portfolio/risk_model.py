@@ -1,5 +1,16 @@
 """
-Multi-factor risk model for cross-sectional alpha neutralization.
+Multi-factor risk model — both cross-sectional alpha neutralization
+AND covariance-decomposition builders for the QP optimizer.
+
+Cov-decomposition builders (used by src/portfolio/qp.py):
+  build_diagonal   : Σ ≈ diag(σ²)
+  build_pca        : Σ ≈ B_pca B_pca' + diag(s²)
+  build_style      : Σ ≈ B_style Σ_F B_style' + diag(s²)
+  build_style_pca  : Σ ≈ B_style Σ_F B_style' + B_pca B_pca' + diag(s²)
+Each returns (L_list, s²) where L_list is a list of (N, K_k) matrices and
+the QP risk term is ½λ (Σ_k ||L_k' w||² + s²·w²).
+
+Cross-sectional neutralization (style factors):
 
 Standard Barra-ish style factors built from already-cached fundamental and
 price matrices:
@@ -32,8 +43,102 @@ factors are missing.
 from __future__ import annotations
 import numpy as np
 import pandas as pd
-from typing import Optional
+from typing import Optional, List, Tuple
 
+
+# ---------------------------------------------------------------------------
+# Cov-decomposition builders for the QP risk term ½λ (Σ_k ||L_k' w||² + s²·w²)
+# ---------------------------------------------------------------------------
+
+def build_diagonal(vol_vec: np.ndarray) -> Tuple[List[np.ndarray], np.ndarray]:
+    """Diagonal-only risk: Σ ≈ diag(σ²). Returns ([], σ²)."""
+    return [], np.maximum(vol_vec.astype(float) ** 2, 1e-8)
+
+
+def build_pca(R_window: np.ndarray, k: int) -> Tuple[List[np.ndarray], np.ndarray]:
+    """K-factor PCA decomposition: Σ ≈ B B' + diag(s²).
+
+    R_window: (T, N) returns matrix.
+    Returns ([B], s²) where B is (N, k).
+    """
+    T, N = R_window.shape
+    R = R_window - R_window.mean(axis=0, keepdims=True)
+    cov = (R.T @ R) / max(T - 1, 1)
+    cov = (cov + cov.T) * 0.5 + 1e-10 * np.eye(N)
+    try:
+        eigvals, eigvecs = np.linalg.eigh(cov)
+    except np.linalg.LinAlgError:
+        return [], np.maximum(np.diag(cov), 1e-8)
+    order = np.argsort(eigvals)[::-1]
+    eigvals = eigvals[order]; eigvecs = eigvecs[:, order]
+    k_use = min(k, int(np.sum(eigvals > 1e-12)))
+    if k_use == 0:
+        return [], np.maximum(np.diag(cov), 1e-8)
+    B = eigvecs[:, :k_use] * np.sqrt(np.maximum(eigvals[:k_use], 0.0))[None, :]
+    if k_use < k:
+        B = np.hstack([B, np.zeros((N, k - k_use))])
+    common = np.sum(B ** 2, axis=1)
+    s2 = np.maximum(np.diag(cov) - common, 1e-8)
+    return [B], s2
+
+
+def _style_decompose(R_window: np.ndarray, B_style: np.ndarray
+                     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Cross-sectional regression of returns on style loadings.
+
+    For each historical day τ: r_τ = B_style @ f_τ + e_τ.
+    Returns (L_style, E, s²) where:
+      L_style = B_style @ chol(Σ_F)   shape (N, K)
+      E       = residual returns       shape (T, N)
+      s²      = idiosyncratic variance shape (N,)
+    """
+    T, N = R_window.shape
+    K = B_style.shape[1]
+    BtB = B_style.T @ B_style + 1e-10 * np.eye(K)
+    BtB_inv = np.linalg.pinv(BtB)
+    F = R_window @ B_style @ BtB_inv         # (T, K) factor returns
+    E = R_window - F @ B_style.T              # (T, N) residual returns
+    F_dm = F - F.mean(axis=0, keepdims=True)
+    Sigma_F = (F_dm.T @ F_dm) / max(T - 1, 1)
+    Sigma_F = (Sigma_F + Sigma_F.T) * 0.5 + 1e-10 * np.eye(K)
+    try:
+        L = np.linalg.cholesky(Sigma_F)
+    except np.linalg.LinAlgError:
+        ev, V = np.linalg.eigh(Sigma_F)
+        L = V @ np.diag(np.sqrt(np.maximum(ev, 0.0)))
+    L_style = B_style @ L                     # (N, K)
+    s2 = np.maximum(np.var(E, axis=0, ddof=1), 1e-8)
+    return L_style, E, s2
+
+
+def build_style(R_window: np.ndarray, B_style: np.ndarray
+                ) -> Tuple[List[np.ndarray], np.ndarray]:
+    """Style-factor risk model. Returns ([L_style], s²)."""
+    if B_style is None or B_style.shape[1] == 0:
+        return [], np.maximum(np.var(R_window, axis=0, ddof=1), 1e-8)
+    L_style, _E, s2 = _style_decompose(R_window, B_style)
+    return [L_style], s2
+
+
+def build_style_pca(R_window: np.ndarray, B_style: np.ndarray, k_pca: int
+                    ) -> Tuple[List[np.ndarray], np.ndarray]:
+    """Style + PCA-on-residual risk model.
+
+    Σ ≈ B_style Σ_F B_style' + B_pca B_pca' + diag(s²).
+    Returns ([L_style, B_pca], s²).
+    """
+    if B_style is None or B_style.shape[1] == 0:
+        return build_pca(R_window, k_pca)
+    L_style, E, _s2_pre = _style_decompose(R_window, B_style)
+    pca_Ls, s2 = build_pca(E, k_pca)
+    if pca_Ls:
+        return [L_style, pca_Ls[0]], s2
+    return [L_style], s2
+
+
+# ---------------------------------------------------------------------------
+# Cross-sectional helpers (shared)
+# ---------------------------------------------------------------------------
 
 def _zscore_cs(df: pd.DataFrame) -> pd.DataFrame:
     """Cross-sectional z-score per row, with NaN-safe std."""
