@@ -1,6 +1,22 @@
 # Automated Factor Researcher
 
-An automated equity factor alpha research, backtesting, combination, and portfolio optimization platform comparable to [WorldQuant BRAIN / WebSim](https://platform.worldquantbrain.com/). Designed for systematic discovery and evaluation of cross-sectional equity alpha factors using the same expression language, operator library, simulation methodology, and neutralization framework as WorldQuant.
+An automated factor alpha research, backtesting, combination, and portfolio optimization platform. Started as a [WorldQuant BRAIN / WebSim](https://platform.worldquantbrain.com/) replica for cross-sectional equity factors and now drives both **equity (daily, MCAP_100M_500M)** and **crypto (4h, KuCoin futures)** through a single config-driven pipeline.
+
+## Active Research Pipeline
+
+**See [PIPELINE.md](PIPELINE.md)** for the authoritative reference: file map, config schema, stage details, acceptance targets, DB schemas, and how to add a new market / combiner / risk model.
+
+```
+prod/config/research_equity.json   →  src/pipeline/runner.py  →  PipelineResult
+prod/config/research_crypto.json
+```
+
+| Test | Cell | Target | Status |
+|------|------|-------:|:------:|
+| Equity reproduction | equal × diag, FULL net SR | +4.98 ± 0.10 | PASS |
+| Crypto reproduction | topn_train(50), TRAIN gross SR | +5.30 ± 0.10 | PASS |
+
+Run the regression gate: `python tools/test_pipeline_acceptance.py`
 
 ## Replication Accuracy
 

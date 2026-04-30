@@ -28,6 +28,27 @@ data/processed/
 data/cache/
 data/quality_reports/
 
+# Data caches (matrices + DBs are local-only; never commit)
+data/fmp_cache/
+data/kucoin_cache/
+data/binance_cache/
+data/binance_futures_15m/
+data/walkforward_cache/
+data/aipt_results/
+data/crypto_results/
+data/kucoin_results/
+data/alphas_audit/
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/*.npz
+data/*.npy
+
+# Logs (research + prod)
+logs/
+prod/logs/
+prod/state/
+
 # Keep test fixtures
 !tests/fixtures/sample_data/
 
