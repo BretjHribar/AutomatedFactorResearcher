@@ -940,12 +940,39 @@ def save_reconciliation(date, target_shares, fills, account_summary_start,
 # MAIN TRADING WORKFLOW
 # ============================================================================
 
+def is_us_equity_trading_day(d: dt.date) -> bool:
+    """True if `d` is a regular NYSE trading day (not weekend, not holiday).
+
+    Uses pandas_market_calendars for the authoritative NYSE schedule.
+    Falls back to weekday-only check if the lib is unavailable.
+    """
+    try:
+        import pandas_market_calendars as mcal
+        nyse = mcal.get_calendar("NYSE")
+        sched = nyse.schedule(start_date=str(d), end_date=str(d))
+        return len(sched) > 0
+    except ImportError:
+        # Fallback: weekday only (will incorrectly run on holidays — log warning)
+        log.warning("pandas_market_calendars not installed; falling back to weekday-only check")
+        return d.weekday() < 5  # Mon=0..Fri=4
+
+
 def run_trading_workflow(mode="dry-run", port=IB_PORT_PAPER, gmv_override=None,
-                         check_borrow_only=False, no_qp=False):
+                         check_borrow_only=False, no_qp=False, force=False):
     """Main daily trading pipeline."""
     today = dt.date.today()
     t0 = time.time()
     booksize = gmv_override or TARGET_GMV
+
+    # Phase 0: market-day gate — exit early on weekends + NYSE holidays.
+    # `--force` overrides for manual / smoke-test runs.
+    if not is_us_equity_trading_day(today) and not force:
+        log.info("=" * 90)
+        log.info(f"  IB MOC TRADER — {today.isoformat()} ({today.strftime('%A')}) — "
+                 f"NOT A NYSE TRADING DAY")
+        log.info(f"  Skipping daily run. Use --force to override.")
+        log.info("=" * 90)
+        return
 
     log.info("=" * 90)
     log.info(f"  IB MOC TRADER v{CFG['strategy']['version']} — {today.isoformat()} — {mode.upper()}")
@@ -1275,6 +1302,9 @@ def main():
     parser.add_argument("--no-qp", action="store_true",
                         help="Disable QP optimization layer (use equal-weight "
                              "signal-as-portfolio, the pre-2026-05-01 behaviour)")
+    parser.add_argument("--force", action="store_true",
+                        help="Bypass the NYSE trading-day check (use for "
+                             "manual / smoke tests on weekends or holidays)")
     args = parser.parse_args()
 
     mode = "live" if args.live else "dry-run"
@@ -1282,6 +1312,7 @@ def main():
         mode=mode, port=args.port, gmv_override=args.gmv,
         check_borrow_only=args.check_borrow,
         no_qp=args.no_qp,
+        force=args.force,
     )
 
 
