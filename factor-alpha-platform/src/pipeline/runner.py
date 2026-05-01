@@ -260,12 +260,19 @@ def _split_metrics(g, n, w, *, train_end, val_end, bars_per_year):
         sr_n = nn.mean() / nn.std() * ann if nn.std() > 0 else float("nan")
         ret_g = gg.mean() * bars_per_year
         ret_n = nn.mean() * bars_per_year
+        # Max drawdown — peak-to-trough on the cumulative compounding curve.
+        eq_g = (1.0 + gg).cumprod()
+        eq_n = (1.0 + nn).cumprod()
+        mdd_g = float((eq_g / eq_g.cummax() - 1.0).min()) if len(eq_g) else float("nan")
+        mdd_n = float((eq_n / eq_n.cummax() - 1.0).min()) if len(eq_n) else float("nan")
         out[lab] = {
             "n_bars":  int(len(gg)),
             "SR_gross": float(sr_g),
             "SR_net":   float(sr_n),
             "ret_ann_gross": float(ret_g),
             "ret_ann_net":   float(ret_n),
+            "max_dd_gross":  mdd_g,
+            "max_dd_net":    mdd_n,
         }
     return out
 

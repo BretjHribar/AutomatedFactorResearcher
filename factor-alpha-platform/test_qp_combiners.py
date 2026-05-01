@@ -52,22 +52,56 @@ def main():
                   flush=True)
 
     # Final summary table
+    # Per-split SR table
     print("\n" + "=" * 90)
-    print("SUMMARY: net SR by (combiner × risk_model)")
+    print("SUMMARY (1/3): net SR by (combiner × risk_model)")
     print("=" * 90)
     print(f"{'combiner':10s} | {'risk':10s} | "
-          f"{'TRAIN':>7s} | {'VAL':>7s} | {'TEST':>7s} | {'FULL':>7s} | "
-          f"{'TO%/d':>6s} | {'cost(bps)':>9s}")
+          f"{'TRAIN':>7s} | {'VAL':>7s} | {'TEST':>7s} | {'V+T':>7s} | {'FULL':>7s} | "
+          f"{'TO%/d':>6s} | {'cost%/yr':>8s}")
     print("-" * 90)
     for cname, _ in COMBINERS:
         for rname in RISK_MODELS:
             res = results[(cname, rname)]
             m = res.metrics
-            cost_bps_per_day = float(res.cost.mean()) * 1e4
+            cost_yr = float(res.cost.mean()) * 252 * 100
             print(f"{cname:10s} | {rname:10s} | "
                   f"{m['TRAIN']['SR_net']:+7.2f} | {m['VAL']['SR_net']:+7.2f} | "
-                  f"{m['TEST']['SR_net']:+7.2f} | {m['FULL']['SR_net']:+7.2f} | "
-                  f"{m['_turnover_per_bar']*100:6.1f} | {cost_bps_per_day:9.2f}")
+                  f"{m['TEST']['SR_net']:+7.2f} | {m['VAL+TEST']['SR_net']:+7.2f} | "
+                  f"{m['FULL']['SR_net']:+7.2f} | "
+                  f"{m['_turnover_per_bar']*100:6.1f} | {cost_yr:7.2f}%")
+
+    # Per-split ann return table (net of fees)
+    print("\n" + "=" * 90)
+    print("SUMMARY (2/3): net ann return %/yr")
+    print("=" * 90)
+    print(f"{'combiner':10s} | {'risk':10s} | "
+          f"{'TRAIN':>7s} | {'VAL':>7s} | {'TEST':>7s} | {'V+T':>7s} | {'FULL':>7s}")
+    print("-" * 90)
+    for cname, _ in COMBINERS:
+        for rname in RISK_MODELS:
+            res = results[(cname, rname)]
+            m = res.metrics
+            print(f"{cname:10s} | {rname:10s} | "
+                  f"{m['TRAIN']['ret_ann_net']*100:+6.1f}% | {m['VAL']['ret_ann_net']*100:+6.1f}% | "
+                  f"{m['TEST']['ret_ann_net']*100:+6.1f}% | {m['VAL+TEST']['ret_ann_net']*100:+6.1f}% | "
+                  f"{m['FULL']['ret_ann_net']*100:+6.1f}%")
+
+    # Per-split max drawdown table (net of fees, % decline peak-to-trough)
+    print("\n" + "=" * 90)
+    print("SUMMARY (3/3): net max drawdown %")
+    print("=" * 90)
+    print(f"{'combiner':10s} | {'risk':10s} | "
+          f"{'TRAIN':>7s} | {'VAL':>7s} | {'TEST':>7s} | {'V+T':>7s} | {'FULL':>7s}")
+    print("-" * 90)
+    for cname, _ in COMBINERS:
+        for rname in RISK_MODELS:
+            res = results[(cname, rname)]
+            m = res.metrics
+            print(f"{cname:10s} | {rname:10s} | "
+                  f"{m['TRAIN']['max_dd_net']*100:+6.1f}% | {m['VAL']['max_dd_net']*100:+6.1f}% | "
+                  f"{m['TEST']['max_dd_net']*100:+6.1f}% | {m['VAL+TEST']['max_dd_net']*100:+6.1f}% | "
+                  f"{m['FULL']['max_dd_net']*100:+6.1f}%")
 
     base_full = results[("equal", "diagonal")].metrics["FULL"]["SR_net"]
     print(f"\nSANITY: equal/diag FULL net SR = {base_full:+.3f}  (prior baseline ~4.98)")

@@ -243,6 +243,95 @@ def signal_to_target_shares(signal_row, close_prices, booksize=BOOKSIZE):
     return target_shares[target_shares != 0]
 
 
+def apply_qp_optimization(
+    signal_row: pd.Series,
+    matrices: dict,
+    current_positions: dict,
+    *,
+    booksize: float,
+    max_w: float = 0.02,
+    lambda_risk: float = 5.0,
+    kappa_tc: float = 30.0,
+    commission_per_share: float = 0.0045,
+    impact_bps: float = 0.5,
+    vol_window: int = 60,
+) -> pd.Series:
+    """Single-day QP solve over the equal-weight composite signal.
+
+    Adds:
+      • per-name vol-aware risk penalty (½λ σ²_i w_i²)
+      • L1 t-cost penalty against current positions (κ_i |w_i − w_prev,i|)
+      • dollar-neutral constraint (sum(w) == 0)
+      • per-name cap |w_i| ≤ max_w, gross leverage ‖w‖₁ ≤ 1
+
+    On failure, falls back to the input signal_row.
+
+    Args:
+        signal_row: pd.Series of (ticker → equal-weight composite alpha forecast).
+        matrices:    must contain 'close'.
+        current_positions: {ticker: dollar_position}; empty dict ⇒ w_prev=0
+                           (first day / dry-run).
+        booksize:    used to convert current_positions → w_prev fractions.
+        max_w / lambda_risk / kappa_tc / commission_per_share / impact_bps:
+                     match research_equity.json defaults.
+        vol_window:  rolling stddev window in bars for diagonal risk model.
+    """
+    from src.portfolio.qp import solve_qp
+    from src.portfolio.risk_model import build_diagonal
+
+    close_df = matrices["close"]
+    rets = close_df.pct_change(fill_method=None)
+    vol = rets.rolling(vol_window, min_periods=20).std().shift(1).bfill().fillna(0.02)
+    last_close = close_df.iloc[-1]
+    last_vol = vol.iloc[-1]
+
+    # Active = ticker has a forecast, a positive price, and a positive vol.
+    sig_idx = signal_row.index
+    active_mask = (
+        last_close.reindex(sig_idx).fillna(0) > 0
+    ) & (
+        last_vol.reindex(sig_idx).fillna(0) > 0
+    )
+    active = sig_idx[active_mask]
+    if len(active) < 10:
+        log.warning(f"  QP: only {len(active)} active tickers — skipping, returning input signal")
+        return signal_row
+
+    alpha = signal_row.reindex(active).fillna(0).values.astype(float)
+    prices = last_close.reindex(active).values.astype(float)
+    sig = last_vol.reindex(active).values.astype(float)
+
+    # w_prev from current $ positions (or zeros for cold-start / dry-run)
+    if current_positions:
+        wp_dollars = pd.Series(current_positions, dtype=float).reindex(active).fillna(0.0)
+        w_prev = (wp_dollars / float(booksize)).values
+    else:
+        w_prev = np.zeros(len(active))
+
+    # Diagonal risk model — single-day, no factor model in prod (yet)
+    L_list, s2 = build_diagonal(sig)
+
+    w_new = solve_qp(
+        alpha, w_prev, prices, L_list, s2,
+        lambda_risk=lambda_risk,
+        kappa_tc=kappa_tc,
+        max_w=max_w,
+        commission_per_share=commission_per_share,
+        impact_bps=impact_bps,
+        dollar_neutral=True,
+        max_gross_leverage=1.0,
+    )
+    if w_new is None:
+        log.warning("  QP: solver returned None — falling back to input signal_row")
+        return signal_row
+
+    out = pd.Series(0.0, index=signal_row.index)
+    out.loc[active] = w_new
+    log.info(f"  QP optimized: {(out > 1e-6).sum()}L / {(out < -1e-6).sum()}S, "
+             f"|w|.sum() = {out.abs().sum():.4f}, w_prev L1 = {abs(w_prev).sum():.4f}")
+    return out
+
+
 # ============================================================================
 # IB CONNECTION
 # ============================================================================
@@ -852,7 +941,7 @@ def save_reconciliation(date, target_shares, fills, account_summary_start,
 # ============================================================================
 
 def run_trading_workflow(mode="dry-run", port=IB_PORT_PAPER, gmv_override=None,
-                         check_borrow_only=False):
+                         check_borrow_only=False, no_qp=False):
     """Main daily trading pipeline."""
     today = dt.date.today()
     t0 = time.time()
@@ -927,6 +1016,39 @@ def run_trading_workflow(mode="dry-run", port=IB_PORT_PAPER, gmv_override=None,
     n_long  = (signal_row > 1e-6).sum()
     n_short = (signal_row < -1e-6).sum()
     log.info(f"  Positions: {n_long} long, {n_short} short")
+
+    # ── Phase 3.5: QP optimization (per-name risk + t-cost) ──────────
+    # Single-day QP over the equal-weight composite. Replaces the
+    # signal-as-portfolio handoff that previously went straight to
+    # signal_to_target_shares — adds risk-aware sizing and a κ·|w−w_prev|
+    # t-cost penalty against current positions.
+    if not no_qp:
+        # Probe IB for current positions BEFORE the QP so w_prev is realistic.
+        # In dry-run / first-day, this is just an empty dict (w_prev = 0).
+        early_positions = {}
+        if mode == "live" and not check_borrow_only:
+            log.info("\nPhase 3.5a: Querying IB for current positions (for QP w_prev)...")
+            try:
+                _probe_ib = IBConnection(host=IB_HOST, port=port, client_id=IB_CLIENT_ID)
+                if _probe_ib.connect():
+                    early_positions = _probe_ib.get_positions() or {}
+                    log.info(f"  Current positions for w_prev: {len(early_positions)}")
+                    _probe_ib.disconnect()
+            except Exception as e:
+                log.warning(f"  Could not probe IB for positions: {e} -- using w_prev=0")
+
+        log.info("\nPhase 3.5b: Single-day QP optimization (equal-weight + diag risk + t-cost)...")
+        signal_row = apply_qp_optimization(
+            signal_row, matrices,
+            current_positions=early_positions,
+            booksize=booksize,
+            max_w=MAX_WEIGHT,
+        )
+        n_long  = (signal_row > 1e-6).sum()
+        n_short = (signal_row < -1e-6).sum()
+        log.info(f"  Post-QP positions: {n_long} long, {n_short} short")
+    else:
+        log.info("\nPhase 3.5: QP DISABLED (no_qp=True) — using equal-weight signal-as-portfolio")
 
     # ── Phase 4: Target shares ────────────────────────────────────────
     log.info("\nPhase 4: Converting to target shares...")
@@ -1150,12 +1272,16 @@ def main():
                         help=f"Override target GMV (default: ${TARGET_GMV:,.0f})")
     parser.add_argument("--check-borrow", action="store_true",
                         help="Check borrow availability only (no trading)")
+    parser.add_argument("--no-qp", action="store_true",
+                        help="Disable QP optimization layer (use equal-weight "
+                             "signal-as-portfolio, the pre-2026-05-01 behaviour)")
     args = parser.parse_args()
 
     mode = "live" if args.live else "dry-run"
     run_trading_workflow(
         mode=mode, port=args.port, gmv_override=args.gmv,
         check_borrow_only=args.check_borrow,
+        no_qp=args.no_qp,
     )
 
 
