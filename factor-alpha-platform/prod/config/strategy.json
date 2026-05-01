@@ -32,8 +32,9 @@
     },
     "ibkr": {
         "host": "127.0.0.1",
-        "port_paper": 7497,
-        "port_live": 7496,
+        "port_paper": 4002,
+        "port_live": 4001,
+        "_port_note": "IB Gateway defaults: 4001 live / 4002 paper. (TWS uses 7496/7497.)",
         "client_id": 10,
         "gateway_version": "10.19+",
         "api_type": "ib_insync",
