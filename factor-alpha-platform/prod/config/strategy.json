@@ -6,6 +6,7 @@
         "neutralization": "subindustry",
         "pre_neutralize_alphas": true,
         "combiner": "equal_weight",
+        "min_alpha_sharpe": 5.0,
         "max_stock_weight": 0.02,
         "bars_per_day": 1,
         "rebalance_frequency": "daily"
@@ -36,6 +37,9 @@
         "port_live": 4001,
         "_port_note": "IB Gateway defaults: 4001 live / 4002 paper. (TWS uses 7496/7497.)",
         "client_id": 10,
+        "client_id_order_entry": 10,
+        "client_id_live_bar": 11,
+        "client_id_position_probe": 12,
         "gateway_version": "10.19+",
         "api_type": "ib_insync",
         "paper_username": "jogxzg790",

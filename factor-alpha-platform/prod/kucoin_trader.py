@@ -171,6 +171,21 @@ def save_paper_positions(positions: dict):
     with open(POSITIONS_FILE, "w") as f:
         json.dump(positions, f, indent=2)
 
+
+def processed_bar_log(bar_time) -> Path | None:
+    """Return an existing trade log for bar_time, if this bar already ran."""
+    target = pd.Timestamp(bar_time)
+    for path in sorted(TRADE_LOG_DIR.glob("trade_*.json"), reverse=True):
+        try:
+            with open(path) as f:
+                data = json.load(f)
+            logged_bar = data.get("bar_time")
+            if logged_bar and pd.Timestamp(logged_bar) == target:
+                return path
+        except Exception:
+            continue
+    return None
+
 # ============================================================================
 # UNIFIED LOG (same format as Binance/IB)
 # ============================================================================
@@ -284,6 +299,10 @@ def run_pipeline(live: bool = False):
     signal_row = signal_df.iloc[-1].dropna()
     signal_time = signal_df.index[-1]
     log.info(f"  Signal: {signal_time} | {(signal_row > 0).sum()}L / {(signal_row < 0).sum()}S")
+    existing_log = processed_bar_log(signal_time)
+    if existing_log is not None:
+        log.warning(f"ABORT: bar {signal_time} already processed in {existing_log}")
+        return
     
     # Phase 4: Target portfolio
     log.info("\nPhase 4: Target portfolio...")

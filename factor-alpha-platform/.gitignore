@@ -48,6 +48,7 @@ data/*.npy
 logs/
 prod/logs/
 prod/state/
+prod/stats/output/
 
 # Keep test fixtures
 !tests/fixtures/sample_data/

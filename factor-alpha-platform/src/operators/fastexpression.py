@@ -122,7 +122,7 @@ class FastExpressionLexer:
             elif ch.isalpha() or ch == '_':
                 tokens.append(self._read_ident())
             else:
-                self.pos += 1  # skip unknown chars
+                raise SyntaxError(f"Unexpected character {ch!r} at position {self.pos}")
 
         tokens.append(_Token(_TT.EOF, None))
         return tokens
@@ -238,6 +238,8 @@ class FastExpressionParser:
 
     def parse(self) -> _ASTNode:
         node = self._parse_ternary()
+        if self._current().type != _TT.EOF:
+            raise SyntaxError(f"Unexpected trailing token: {self._current()}")
         return node
 
     def _parse_ternary(self) -> _ASTNode:
@@ -694,13 +696,24 @@ class FastExpressionEngine:
 
         return func(*call_args, **eval_kwargs)
 
+    def _eval_group_level_arg(self, node: _ASTNode) -> Any:
+        """Resolve a group argument without confusing it for a data field.
+
+        Group matrices are also available as data fields for legacy alphas, so
+        `group_rank(x, subindustry)` needs this special path: the second
+        argument means the group level name, not the encoded parquet matrix.
+        """
+        if isinstance(node, _IdentNode) and node.name in _GROUP_LEVELS:
+            return node.name
+        return self._eval(node)
+
     def _eval_group_neutralize(self, node: _FunctionCallNode) -> pd.DataFrame:
         """Evaluate group_neutralize / IndNeutralize."""
         if len(node.args) < 2:
             raise ValueError("group_neutralize requires at least 2 arguments: (alpha, group_level)")
 
         alpha_df = self._eval(node.args[0])
-        group_level = self._eval(node.args[1])  # returns string like "subindustry"
+        group_level = self._eval_group_level_arg(node.args[1])
 
         if isinstance(group_level, str) and group_level in self.groups:
             return ops.group_neutralize(alpha_df, self.groups[group_level])
@@ -714,7 +727,7 @@ class FastExpressionEngine:
             raise ValueError("group_rank requires at least 2 arguments: (alpha, group_level)")
 
         alpha_df = self._eval(node.args[0])
-        group_level = self._eval(node.args[1])
+        group_level = self._eval_group_level_arg(node.args[1])
 
         if isinstance(group_level, str) and group_level in self.groups:
             return ops.group_rank(alpha_df, self.groups[group_level])
@@ -727,7 +740,7 @@ class FastExpressionEngine:
         if len(node.args) < 2:
             raise ValueError(f"{node.name} requires (alpha, group_level)")
         alpha_df = self._eval(node.args[0])
-        group_level = self._eval(node.args[1])
+        group_level = self._eval_group_level_arg(node.args[1])
         if isinstance(group_level, str) and group_level in self.groups:
             return func(alpha_df, self.groups[group_level])
         raise ValueError(f"Unknown group level: '{group_level}'")
@@ -738,7 +751,7 @@ class FastExpressionEngine:
             raise ValueError("group_mean requires (alpha, weight, group_level)")
         alpha_df = self._eval(node.args[0])
         weight_df = self._eval(node.args[1])
-        group_level = self._eval(node.args[2])
+        group_level = self._eval_group_level_arg(node.args[2])
         if isinstance(group_level, str) and group_level in self.groups:
             return ops.group_mean(alpha_df, self.groups[group_level], weight_df)
         raise ValueError(f"Unknown group level: '{group_level}'")
@@ -748,7 +761,7 @@ class FastExpressionEngine:
         if len(node.args) < 3:
             raise ValueError("group_backfill requires (alpha, group_level, window)")
         alpha_df = self._eval(node.args[0])
-        group_level = self._eval(node.args[1])
+        group_level = self._eval_group_level_arg(node.args[1])
         window = int(self._eval(node.args[2]))
         if isinstance(group_level, str) and group_level in self.groups:
             return ops.group_backfill(alpha_df, self.groups[group_level], window)

@@ -37,6 +37,7 @@ import time
 from collections import OrderedDict
 from pathlib import Path
 from typing import Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import numpy as np
 import pandas as pd
@@ -60,10 +61,22 @@ def load_config() -> dict:
 
 CFG = load_config()
 
+def _cfg_time(value: str) -> dt.time:
+    return dt.time(*[int(x) for x in value.split(":")])
+
+
+def now_eastern() -> dt.datetime:
+    try:
+        return dt.datetime.now(ZoneInfo("America/New_York"))
+    except ZoneInfoNotFoundError:
+        return pd.Timestamp.now(tz="America/New_York").to_pydatetime()
+
+
 # Extract commonly used values
 UNIVERSE       = CFG["strategy"]["universe"]
 NEUTRALIZE     = CFG["strategy"]["neutralization"]
 PRE_NEUTRALIZE = CFG["strategy"]["pre_neutralize_alphas"]
+MIN_ALPHA_SR   = float(CFG["strategy"].get("min_alpha_sharpe", 5.0))
 MAX_WEIGHT     = CFG["strategy"]["max_stock_weight"]
 BOOKSIZE       = CFG["account"]["booksize"]
 TARGET_GMV     = CFG["account"]["target_gmv"]
@@ -75,6 +88,20 @@ IB_HOST        = CFG["ibkr"]["host"]
 IB_PORT_PAPER  = CFG["ibkr"]["port_paper"]
 IB_PORT_LIVE   = CFG["ibkr"]["port_live"]
 IB_CLIENT_ID   = CFG["ibkr"]["client_id"]
+IB_CLIENT_ID_ORDER_ENTRY = int(CFG["ibkr"].get("client_id_order_entry", IB_CLIENT_ID))
+IB_CLIENT_ID_LIVE_BAR = int(CFG["ibkr"].get("client_id_live_bar", IB_CLIENT_ID + 1))
+IB_CLIENT_ID_POSITION_PROBE = int(CFG["ibkr"].get("client_id_position_probe", IB_CLIENT_ID + 2))
+
+def validate_ib_client_ids() -> None:
+    ids = {
+        "order_entry": IB_CLIENT_ID_ORDER_ENTRY,
+        "live_bar": IB_CLIENT_ID_LIVE_BAR,
+        "position_probe": IB_CLIENT_ID_POSITION_PROBE,
+    }
+    if len(set(ids.values())) != len(ids):
+        raise ValueError(f"IB client ids must be unique per connection role: {ids}")
+
+validate_ib_client_ids()
 
 DB_PATH        = PROJECT_ROOT / CFG["paths"]["db"]
 MATRICES_DIR   = PROJECT_ROOT / CFG["paths"]["matrices"]
@@ -85,7 +112,11 @@ FILL_LOG_DIR   = PROJECT_ROOT / CFG["paths"]["fill_logs"]
 PERF_LOG_DIR   = PROJECT_ROOT / CFG["paths"]["performance_logs"]
 BORROW_LOG_DIR = PROJECT_ROOT / CFG["paths"]["borrow_logs"]
 
-MOC_DEADLINE   = dt.time(*[int(x) for x in CFG["execution"]["moc_deadline_et"].split(":")])
+SIGNAL_COMPUTE_TIME = _cfg_time(CFG["execution"]["signal_compute_time_et"])
+SUBMIT_DEADLINE = _cfg_time(CFG["execution"].get(
+    "submit_deadline_et", CFG["execution"]["moc_deadline_et"]
+))
+MOC_DEADLINE = _cfg_time(CFG["execution"]["moc_deadline_et"])
 
 # Create log dirs
 for d in [TRADE_LOG_DIR, FILL_LOG_DIR, PERF_LOG_DIR, BORROW_LOG_DIR]:
@@ -121,22 +152,22 @@ def load_fmp_data():
 
 
 def load_alphas():
-    """Load all non-archived equity alphas from database.
-
-    Was filtering on `asset_class='equities_ib'` from the original
-    data/ib_alphas.db, but that DB was lost during the 2026-04-30 cleanup.
-    Now points at data/alpha_results.db (canonical, 81 archived=0 equity
-    alphas — primarily the SMALLCAP_D0 set researched in Apr 2026).
-    """
+    """Load the configured production alpha set from the canonical database."""
     conn = sqlite3.connect(str(DB_PATH))
     rows = conn.execute("""
         SELECT a.id, a.expression, COALESCE(e.ic_mean, 0), COALESCE(e.sharpe_is, 0)
-        FROM alphas a LEFT JOIN evaluations e ON e.alpha_id = a.id
-        WHERE a.archived = 0 AND a.asset_class = 'equities'
-        ORDER BY COALESCE(e.sharpe_is, 0) DESC
-    """).fetchall()
+        FROM alphas a JOIN evaluations e ON e.alpha_id = a.id
+        WHERE a.archived = 0
+          AND a.asset_class = 'equities'
+          AND e.universe = ?
+          AND e.sharpe_is >= ?
+          AND COALESCE(e.neutralization, ?) = ?
+        ORDER BY e.sharpe_is DESC
+    """, (UNIVERSE, MIN_ALPHA_SR, NEUTRALIZE, NEUTRALIZE)).fetchall()
     conn.close()
-    log.info(f"Loaded {len(rows)} alphas from DB")
+    log.info(f"Loaded {len(rows)} alphas from DB "
+             f"(universe={UNIVERSE}, Sharpe>={MIN_ALPHA_SR:.2f}, "
+             f"neutralization={NEUTRALIZE})")
     return rows
 
 
@@ -354,11 +385,11 @@ class IBConnection:
             self.connected = True
             accts = self.ib.managedAccounts()
             is_paper = "DU" in str(accts) or self.port == IB_PORT_PAPER
-            log.info(f"Connected to IB {self.host}:{self.port}")
+            log.info(f"Connected to IB {self.host}:{self.port} (clientId={self.client_id})")
             log.info(f"  Accounts: {accts} | Paper: {is_paper}")
             return True
         except Exception as e:
-            log.warning(f"IB connect failed: {e}")
+            log.warning(f"IB connect failed (clientId={self.client_id}): {e}")
             self.connected = False
             return False
 
@@ -510,13 +541,17 @@ class IBConnection:
 
         from ib_insync import Stock, Order
         records = []
+        submitted = []
 
         for sym, shares in order_diffs.items():
             if shares == 0:
                 continue
             try:
                 contract = Stock(sym, "SMART", "USD")
-                self.ib.qualifyContracts(contract)
+                qualified = self.ib.qualifyContracts(contract)
+                if not qualified:
+                    raise RuntimeError("QUALIFY_FAILED")
+                contract = qualified[0]
                 action = "BUY" if shares > 0 else "SELL"
                 order = Order(
                     action=action,
@@ -525,11 +560,13 @@ class IBConnection:
                     tif="DAY",
                 )
                 trade = self.ib.placeOrder(contract, order)
-                records.append({
+                record = {
                     "symbol": sym, "action": action, "quantity": abs(shares),
                     "order_type": "MOC", "order_id": trade.order.orderId,
-                    "status": "SUBMITTED", "timestamp": dt.datetime.now().isoformat(),
-                })
+                    "status": "PendingSubmit", "timestamp": dt.datetime.now().isoformat(),
+                }
+                records.append(record)
+                submitted.append((record, trade))
                 log.info(f"  ORDER: {action} {abs(shares)} {sym} MOC (id={trade.order.orderId})")
             except Exception as e:
                 log.error(f"  FAILED {sym}: {e}")
@@ -538,6 +575,21 @@ class IBConnection:
                     "quantity": abs(shares), "order_type": "MOC",
                     "status": f"FAILED: {e}", "timestamp": dt.datetime.now().isoformat(),
                 })
+
+        if submitted:
+            self.ib.sleep(1)
+            for record, trade in submitted:
+                status = trade.orderStatus.status or record["status"]
+                last_msg = trade.log[-1].message if trade.log else ""
+                if status in {"Cancelled", "Inactive"}:
+                    record["status"] = f"FAILED: {status} {last_msg}".strip()
+                else:
+                    record["status"] = status
+                record["filled"] = float(trade.orderStatus.filled or 0)
+                record["remaining"] = float(trade.orderStatus.remaining or 0)
+                perm_id = trade.orderStatus.permId or trade.order.permId
+                if perm_id:
+                    record["perm_id"] = int(perm_id)
 
         return records
 
@@ -818,7 +870,8 @@ def save_trade_log(date, target_portfolio, current_positions, order_diffs,
                    order_records, account_summary, signal_date, mode,
                    borrow_summary, risk_messages, target_gmv):
     """Save comprehensive daily trade log."""
-    log_path = TRADE_LOG_DIR / f"trade_{date.isoformat()}.json"
+    mode_suffix = "" if mode == "live" else f"_{mode.replace('-', '_')}"
+    log_path = TRADE_LOG_DIR / f"trade_{date.isoformat()}{mode_suffix}.json"
 
     trade_log = {
         "date": date.isoformat(),
@@ -1045,6 +1098,14 @@ def run_trading_workflow(mode="dry-run", port=IB_PORT_PAPER, gmv_override=None,
     log.info("=" * 90)
 
     # ── Phase 1: Data Integrity ───────────────────────────────────────
+    if mode == "live" and not check_borrow_only and not force:
+        now_et = now_eastern()
+        if now_et.time() < SIGNAL_COMPUTE_TIME:
+            log.error(f"  TOO EARLY FOR LIVE SIGNAL RUN: now={now_et.time().replace(microsecond=0)} ET, "
+                      f"signal_compute_time_et={SIGNAL_COMPUTE_TIME}")
+            log.error("  Today's delay=0 live bar should be built close to the closing auction; aborting.")
+            return
+
     log.info("\nPhase 1: Data integrity checks...")
     matrices, universe_df, classifications, valid_tickers = load_fmp_data()
     close_df = matrices["close"]
@@ -1067,19 +1128,25 @@ def run_trading_workflow(mode="dry-run", port=IB_PORT_PAPER, gmv_override=None,
     # VWAP — far closer to the auction-final VWAP than the (H+L+C)/3 proxy.
     # Falls back gracefully if IB is unreachable (dry-run, network issue, etc.).
     early_ib = None
+    early_probe = None
     if mode == "live" and not check_borrow_only:
         try:
-            _probe = IBConnection(host=IB_HOST, port=port, client_id=IB_CLIENT_ID)
-            if _probe.connect():
-                early_ib = _probe.ib
-                log.info("  IB early-connect OK for live VWAP")
+            early_probe = IBConnection(host=IB_HOST, port=port, client_id=IB_CLIENT_ID_LIVE_BAR)
+            if early_probe.connect():
+                early_ib = early_probe.ib
+                log.info(f"  IB early-connect OK for live VWAP (clientId={IB_CLIENT_ID_LIVE_BAR})")
             else:
                 log.warning("  IB early-connect failed; live_bar will use (H+L+C)/3 fallback")
         except Exception as e:
             log.warning(f"  IB early-connect raised {type(e).__name__}; "
                         f"live_bar will use (H+L+C)/3 fallback")
 
-    matrices, live_quotes, flagged_tickers = append_live_bar(matrices, ib=early_ib)
+    try:
+        matrices, live_quotes, flagged_tickers = append_live_bar(matrices, ib=early_ib)
+    finally:
+        if early_probe and early_probe.connected:
+            early_probe.disconnect()
+            log.info("  IB early-connect closed after live-bar construction")
 
     # Update close reference to use LIVE prices (today's estimated close)
     close_df = matrices["close"]
@@ -1136,14 +1203,17 @@ def run_trading_workflow(mode="dry-run", port=IB_PORT_PAPER, gmv_override=None,
         early_positions = {}
         if mode == "live" and not check_borrow_only:
             log.info("\nPhase 3.5a: Querying IB for current positions (for QP w_prev)...")
+            _probe_ib = None
             try:
-                _probe_ib = IBConnection(host=IB_HOST, port=port, client_id=IB_CLIENT_ID)
+                _probe_ib = IBConnection(host=IB_HOST, port=port, client_id=IB_CLIENT_ID_POSITION_PROBE)
                 if _probe_ib.connect():
                     early_positions = _probe_ib.get_positions() or {}
                     log.info(f"  Current positions for w_prev: {len(early_positions)}")
-                    _probe_ib.disconnect()
             except Exception as e:
                 log.warning(f"  Could not probe IB for positions: {e} -- using w_prev=0")
+            finally:
+                if _probe_ib and _probe_ib.connected:
+                    _probe_ib.disconnect()
 
         log.info("\nPhase 3.5b: Single-day QP optimization (equal-weight + diag risk + t-cost)...")
         signal_row = apply_qp_optimization(
@@ -1175,7 +1245,7 @@ def run_trading_workflow(mode="dry-run", port=IB_PORT_PAPER, gmv_override=None,
     log.info(f"  Positions:   {len(target_shares)} total")
 
     # ── Phase 5: IB Connection & Borrow Check ─────────────────────────
-    ib_conn = IBConnection(host=IB_HOST, port=port, client_id=IB_CLIENT_ID)
+    ib_conn = IBConnection(host=IB_HOST, port=port, client_id=IB_CLIENT_ID_ORDER_ENTRY)
     current_positions = {}
     account_summary = {}
     account_summary_start = {}  # For end-of-day PnL calculation
@@ -1238,7 +1308,13 @@ def run_trading_workflow(mode="dry-run", port=IB_PORT_PAPER, gmv_override=None,
                     ib_conn.disconnect()
                     return
         else:
-            log.warning("  IB unavailable — falling back to dry-run")
+            if mode == "live":
+                log.error("  IB unavailable in LIVE mode -- HALTING instead of falling back to dry-run")
+                save_trade_log(today, target_shares, current_positions, {},
+                               [], account_summary, signal_date, "halted_ib_unavailable",
+                               {}, ["IB unavailable in LIVE mode"], booksize)
+                return
+            log.warning("  IB unavailable -- falling back to dry-run")
             mode = "dry-run"
     else:
         log.info("\nPhase 5: DRY-RUN -- skipping IB connection")
@@ -1308,15 +1384,21 @@ def run_trading_workflow(mode="dry-run", port=IB_PORT_PAPER, gmv_override=None,
     log.info("")
     if mode == "live" and ib_conn.connected:
         # Deadline check
-        now_et = dt.datetime.now()
-        if now_et.time() > MOC_DEADLINE:
-            log.error(f"  PAST MOC DEADLINE ({MOC_DEADLINE}) — ABORTING")
+        now_et = now_eastern()
+        if now_et.time() > SUBMIT_DEADLINE and not force:
+            log.error(f"  PAST SUBMIT DEADLINE ({SUBMIT_DEADLINE} ET; "
+                      f"now={now_et.time().replace(microsecond=0)} ET) — ABORTING")
             ib_conn.disconnect()
             return
+        if now_et.time() > SUBMIT_DEADLINE and force:
+            log.warning(f"  PAST SUBMIT DEADLINE ({SUBMIT_DEADLINE} ET; "
+                        f"now={now_et.time().replace(microsecond=0)} ET) -- "
+                        "attempting because --force was supplied")
 
         log.info(f"Phase 8: Submitting {len(order_diffs)} MOC orders...")
         order_records = ib_conn.submit_moc_orders(order_diffs)
-        log.info(f"  Submitted {len(order_records)} orders")
+        accepted = sum(1 for r in order_records if not str(r.get("status", "")).startswith("FAILED"))
+        log.info(f"  Accepted {accepted}/{len(order_records)} orders")
         ib_conn.ib.sleep(2)
     else:
         log.info("Phase 8: DRY-RUN -- Orders that WOULD be placed:")

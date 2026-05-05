@@ -42,7 +42,6 @@ from src.portfolio.risk_model import (
     build_diagonal, build_pca, build_style, build_style_pca, build_style_factors,
     build_ipca, build_crypto_ipca_characteristics,
 )
-from src.portfolio.qp import run_walkforward
 from src.pipeline.fees import make_cost_fn
 
 
@@ -113,13 +112,21 @@ def _load_universe_and_matrices(cfg: dict, *, root: Path):
     else:
         raise ValueError(f"unknown returns_source {rsource!r}")
 
+    groups = {}
+    for level in ("sector", "industry", "subindustry"):
+        if level in mats:
+            groups[level] = mats[level].ffill().iloc[-1].reindex(tickers)
+
     classifications = None
     if cfg.get("preprocessing", {}).get("demean_method") == "subindustry":
         sub_field = cfg["preprocessing"].get("subindustry_field", "subindustry")
-        path = matrices_dir / f"{sub_field}.parquet"
-        classifications = pd.read_parquet(path).iloc[-1].reindex(tickers)
+        if sub_field in groups:
+            classifications = groups[sub_field]
+        else:
+            path = matrices_dir / f"{sub_field}.parquet"
+            classifications = pd.read_parquet(path).ffill().iloc[-1].reindex(tickers)
 
-    return uni, dates, tickers, mats, close, ret, classifications
+    return uni, dates, tickers, mats, close, ret, classifications, groups
 
 
 # ---------------------------------------------------------------------------
@@ -167,6 +174,7 @@ def _build_combined(cfg, alpha_signals, train_sharpes, mats, uni, ret):
     params = dict(cb.get("params", {}))
     if name not in _COMBINERS:
         raise ValueError(f"unknown combiner {name!r}")
+    params["signals_are_preprocessed"] = True
     if name == "topn_train":
         params["train_sharpes"] = train_sharpes
     return _COMBINERS[name](alpha_signals, mats, uni, ret, **params)
@@ -340,7 +348,7 @@ def run(config: str | Path | dict, *, root: Optional[Path] = None,
     bars_per_year = int(cfg["annualization"]["bars_per_year"])
 
     # Stage 0
-    uni, dates, tickers, mats, close, ret, classifications = \
+    uni, dates, tickers, mats, close, ret, classifications, groups = \
         _load_universe_and_matrices(cfg, root=root)
     if verbose:
         print(f"[0] {len(tickers)} tickers, {len(dates)} bars  ({dates[0]} -> {dates[-1]})", flush=True)
@@ -350,7 +358,7 @@ def run(config: str | Path | dict, *, root: Optional[Path] = None,
     if verbose:
         print(f"[1] {len(rows)} alpha expressions, {len(train_sharpes)} train_sharpes", flush=True)
 
-    engine = FastExpressionEngine(data_fields=mats)
+    engine = FastExpressionEngine(data_fields=mats, groups=groups)
     pre = cfg["preprocessing"]
     alpha_signals = {}
     n_skip = 0
@@ -381,6 +389,8 @@ def run(config: str | Path | dict, *, root: Optional[Path] = None,
     # Stage 5 — optional QP
     qp_cfg = cfg.get("qp", {})
     if qp_cfg.get("enabled", False):
+        from src.portfolio.qp import run_walkforward
+
         rm = cfg["risk_model"]
         rfn = _build_risk_model_fn(rm["name"], rm.get("params", {}), mats, dates, tickers)
         adv_cap = qp_cfg.get("adv_cap")

@@ -48,13 +48,25 @@ def process_signal(alpha_df, universe_df=None, max_wt=0.01):
 # COMBINER: EQUAL WEIGHT
 # ============================================================================
 
+def _prepare_signals(alpha_signals, universe_df=None, max_wt=0.01,
+                     signals_are_preprocessed=False):
+    if signals_are_preprocessed:
+        return {aid: raw.fillna(0.0) for aid, raw in alpha_signals.items()}
+    return {
+        aid: process_signal(raw, universe_df=universe_df, max_wt=max_wt)
+        for aid, raw in alpha_signals.items()
+    }
+
+
 def combiner_equal(alpha_signals, matrices, universe_df, returns_df,
-                   max_wt=0.01):
+                   max_wt=0.01, signals_are_preprocessed=False):
     """Equal-weight: average all alpha signals after per-alpha normalization."""
     combined = None
     n = 0
-    for aid, raw in alpha_signals.items():
-        normed = process_signal(raw, universe_df=universe_df, max_wt=max_wt)
+    for aid, normed in _prepare_signals(
+        alpha_signals, universe_df=universe_df, max_wt=max_wt,
+        signals_are_preprocessed=signals_are_preprocessed,
+    ).items():
         if combined is None:
             combined = normed.copy()
         else:
@@ -70,16 +82,16 @@ def combiner_equal(alpha_signals, matrices, universe_df, returns_df,
 # ============================================================================
 
 def combiner_adaptive(alpha_signals, matrices, universe_df, returns_df,
-                      lookback=504, max_wt=0.01):
+                      lookback=504, max_wt=0.01, signals_are_preprocessed=False):
     """Adaptive: weight by rolling expected factor return (positive ER only)."""
     close_df = matrices["close"]
     dates = close_df.index
     tickers = close_df.columns.tolist()
 
-    normed_signals = {
-        aid: process_signal(raw, universe_df=universe_df, max_wt=max_wt)
-        for aid, raw in alpha_signals.items()
-    }
+    normed_signals = _prepare_signals(
+        alpha_signals, universe_df=universe_df, max_wt=max_wt,
+        signals_are_preprocessed=signals_are_preprocessed,
+    )
 
     ret_df = returns_df.reindex(index=dates, columns=tickers)
     fr_data = {}
@@ -108,16 +120,16 @@ def combiner_adaptive(alpha_signals, matrices, universe_df, returns_df,
 # ============================================================================
 
 def combiner_risk_parity(alpha_signals, matrices, universe_df, returns_df,
-                         lookback=504, max_wt=0.01):
+                         lookback=504, max_wt=0.01, signals_are_preprocessed=False):
     """Risk Parity: weight inversely by rolling factor volatility."""
     close_df = matrices["close"]
     dates = close_df.index
     tickers = close_df.columns.tolist()
 
-    normed_signals = {
-        aid: process_signal(raw, universe_df=universe_df, max_wt=max_wt)
-        for aid, raw in alpha_signals.items()
-    }
+    normed_signals = _prepare_signals(
+        alpha_signals, universe_df=universe_df, max_wt=max_wt,
+        signals_are_preprocessed=signals_are_preprocessed,
+    )
 
     ret_df = returns_df.reindex(index=dates, columns=tickers)
     fr_data = {}
@@ -148,7 +160,7 @@ def combiner_risk_parity(alpha_signals, matrices, universe_df, returns_df,
 # ============================================================================
 
 def combiner_billions(alpha_signals, matrices, universe_df, returns_df,
-                      optim_lookback=60, max_wt=0.01):
+                      optim_lookback=60, max_wt=0.01, signals_are_preprocessed=False):
     """
     BILLIONS regression combiner — Kakushadze "How to Combine a Billion Alphas".
 
@@ -177,10 +189,10 @@ def combiner_billions(alpha_signals, matrices, universe_df, returns_df,
     n_alphas = len(aid_list)
 
     # Step 0: normalize each alpha's raw signal
-    normed_signals = {
-        aid: process_signal(raw, universe_df=universe_df, max_wt=max_wt)
-        for aid, raw in alpha_signals.items()
-    }
+    normed_signals = _prepare_signals(
+        alpha_signals, universe_df=universe_df, max_wt=max_wt,
+        signals_are_preprocessed=signals_are_preprocessed,
+    )
 
     # Step 1: compute factor returns (daily scalar PnL per alpha)
     ret_df = returns_df.reindex(index=dates, columns=tickers)
@@ -281,7 +293,7 @@ def combiner_billions(alpha_signals, matrices, universe_df, returns_df,
 # ============================================================================
 
 def combiner_ic_weighted(alpha_signals, matrices, universe_df, returns_df,
-                         lookback=126, max_wt=0.01):
+                         lookback=126, max_wt=0.01, signals_are_preprocessed=False):
     """
     IC-weighted: weight each alpha by its rolling mean cross-sectional IC.
 
@@ -294,10 +306,10 @@ def combiner_ic_weighted(alpha_signals, matrices, universe_df, returns_df,
     dates = close_df.index
     tickers = close_df.columns.tolist()
 
-    normed_signals = {
-        aid: process_signal(raw, universe_df=universe_df, max_wt=max_wt)
-        for aid, raw in alpha_signals.items()
-    }
+    normed_signals = _prepare_signals(
+        alpha_signals, universe_df=universe_df, max_wt=max_wt,
+        signals_are_preprocessed=signals_are_preprocessed,
+    )
 
     ret_df = returns_df.reindex(index=dates, columns=tickers)
 
@@ -327,7 +339,7 @@ def combiner_ic_weighted(alpha_signals, matrices, universe_df, returns_df,
 # ============================================================================
 
 def combiner_sharpe_weighted(alpha_signals, matrices, universe_df, returns_df,
-                             lookback=252, max_wt=0.01):
+                             lookback=252, max_wt=0.01, signals_are_preprocessed=False):
     """
     Sharpe-weighted: weight each alpha by its rolling standalone Sharpe ratio
     of factor returns. Negative-Sharpe alphas get zero weight.
@@ -336,10 +348,10 @@ def combiner_sharpe_weighted(alpha_signals, matrices, universe_df, returns_df,
     dates = close_df.index
     tickers = close_df.columns.tolist()
 
-    normed_signals = {
-        aid: process_signal(raw, universe_df=universe_df, max_wt=max_wt)
-        for aid, raw in alpha_signals.items()
-    }
+    normed_signals = _prepare_signals(
+        alpha_signals, universe_df=universe_df, max_wt=max_wt,
+        signals_are_preprocessed=signals_are_preprocessed,
+    )
 
     ret_df = returns_df.reindex(index=dates, columns=tickers)
     fr_data = {}
@@ -370,7 +382,8 @@ def combiner_sharpe_weighted(alpha_signals, matrices, universe_df, returns_df,
 # ============================================================================
 
 def combiner_topn_train(alpha_signals, matrices, universe_df, returns_df, *,
-                        train_sharpes, top_n=30, max_wt=None):
+                        train_sharpes, top_n=30, max_wt=None,
+                        signals_are_preprocessed=False):
     """Equal-weight the top-N alphas by precomputed TRAIN Sharpe.
 
     Convention matches the canonical eval framework (update_wq_alphas_db.py):
@@ -401,19 +414,26 @@ def combiner_topn_train(alpha_signals, matrices, universe_df, returns_df, *,
     selected_ids = [aid for aid, _ in sorted(eligible.items(),
                                               key=lambda kv: -kv[1])[:top_n]]
 
-    sig_sum = None
-    for aid in selected_ids:
-        s = alpha_signals[aid].replace([np.inf, -np.inf], np.nan)
-        mu = s.mean(axis=1)
-        sd = s.std(axis=1).replace(0, np.nan)
-        s_zs = s.sub(mu, axis=0).div(sd, axis=0)
-        sig_sum = s_zs if sig_sum is None else sig_sum.add(s_zs, fill_value=0)
-    avg_sig = sig_sum / len(selected_ids)
+    if signals_are_preprocessed:
+        sig_sum = None
+        for aid in selected_ids:
+            s = alpha_signals[aid].replace([np.inf, -np.inf], np.nan).fillna(0.0)
+            sig_sum = s if sig_sum is None else sig_sum.add(s, fill_value=0)
+        out = (sig_sum / len(selected_ids)).fillna(0.0)
+    else:
+        sig_sum = None
+        for aid in selected_ids:
+            s = alpha_signals[aid].replace([np.inf, -np.inf], np.nan)
+            mu = s.mean(axis=1)
+            sd = s.std(axis=1).replace(0, np.nan)
+            s_zs = s.sub(mu, axis=0).div(sd, axis=0)
+            sig_sum = s_zs if sig_sum is None else sig_sum.add(s_zs, fill_value=0)
+        avg_sig = sig_sum / len(selected_ids)
 
-    s = avg_sig.replace([np.inf, -np.inf], np.nan)
-    demean = s.sub(s.mean(axis=1), axis=0)
-    gross = demean.abs().sum(axis=1).replace(0, np.nan)
-    out = demean.div(gross, axis=0).fillna(0)
+        s = avg_sig.replace([np.inf, -np.inf], np.nan)
+        demean = s.sub(s.mean(axis=1), axis=0)
+        gross = demean.abs().sum(axis=1).replace(0, np.nan)
+        out = demean.div(gross, axis=0).fillna(0)
     if max_wt is not None:
         out = out.clip(lower=-max_wt, upper=max_wt)
     return out
@@ -424,7 +444,8 @@ def combiner_topn_train(alpha_signals, matrices, universe_df, returns_df, *,
 # ============================================================================
 
 def combiner_topn_sharpe(alpha_signals, matrices, universe_df, returns_df,
-                          lookback=252, top_n=10, max_wt=0.01):
+                          lookback=252, top_n=10, max_wt=0.01,
+                          signals_are_preprocessed=False):
     """
     Top-N: at each bar, equal-weight the N alphas with highest rolling Sharpe.
     Combats noise from low-quality alphas dragging down composite.
@@ -433,10 +454,10 @@ def combiner_topn_sharpe(alpha_signals, matrices, universe_df, returns_df,
     dates = close_df.index
     tickers = close_df.columns.tolist()
 
-    normed_signals = {
-        aid: process_signal(raw, universe_df=universe_df, max_wt=max_wt)
-        for aid, raw in alpha_signals.items()
-    }
+    normed_signals = _prepare_signals(
+        alpha_signals, universe_df=universe_df, max_wt=max_wt,
+        signals_are_preprocessed=signals_are_preprocessed,
+    )
 
     ret_df = returns_df.reindex(index=dates, columns=tickers)
     fr_data = {}
