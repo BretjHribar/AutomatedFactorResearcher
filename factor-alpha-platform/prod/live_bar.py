@@ -25,6 +25,8 @@ import datetime as dt
 import logging
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
@@ -32,13 +34,23 @@ import pandas as pd
 import requests
 
 log = logging.getLogger("moc_prod")
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # FMP API config
 FMP_API_KEY = os.environ.get(
     "FMP_API_KEY", "C6T2KGmSbbsDL3sM7gjx680hmUTiEXfy"
 )
 FMP_BATCH_QUOTE_URL = "https://financialmodelingprep.com/stable/batch-quote"
+FMP_INTRADAY_CHART_URL = "https://financialmodelingprep.com/stable/historical-chart/5min"
 BATCH_SIZE = 100  # FMP supports comma-separated batch
+_quote_tape_dir = Path(os.environ.get("LIVE_QUOTE_TAPE_DIR", "prod/logs/live_quotes"))
+LIVE_QUOTE_TAPE_DIR = _quote_tape_dir if _quote_tape_dir.is_absolute() else PROJECT_ROOT / _quote_tape_dir
+ENABLE_IB_LIVE_VWAP = os.environ.get("ENABLE_IB_LIVE_VWAP", "0") == "1"
+ENABLE_FMP_INTRADAY_VWAP = os.environ.get("ENABLE_FMP_INTRADAY_VWAP", "1") != "0"
+FMP_INTRADAY_MAX_WORKERS = int(os.environ.get("FMP_INTRADAY_MAX_WORKERS", "12"))
+FMP_INTRADAY_TIMEOUT_SEC = float(os.environ.get("FMP_INTRADAY_TIMEOUT_SEC", "12"))
+QUOTE_TAPE_MIN_SNAPSHOTS = int(os.environ.get("QUOTE_TAPE_MIN_SNAPSHOTS", "8"))
+QUOTE_TAPE_MIN_SPAN_MINUTES = float(os.environ.get("QUOTE_TAPE_MIN_SPAN_MINUTES", "120"))
 
 
 def fetch_fmp_live_quotes(tickers: list[str]) -> dict[str, dict]:
@@ -69,6 +81,195 @@ def fetch_fmp_live_quotes(tickers: list[str]) -> dict[str, dict]:
 
     log.info(f"  FMP live quotes: {len(quotes)}/{len(tickers)} tickers received")
     return quotes
+
+
+def save_fmp_quote_snapshot(quotes: dict[str, dict],
+                            captured_at: Optional[pd.Timestamp] = None) -> Path | None:
+    """Persist the FMP batch quote snapshot for intraday VWAP reconstruction."""
+    if not quotes:
+        return None
+    captured_at = captured_at or pd.Timestamp.utcnow()
+    if captured_at.tzinfo is None:
+        captured_at = captured_at.tz_localize("UTC")
+    LIVE_QUOTE_TAPE_DIR.mkdir(parents=True, exist_ok=True)
+    path = LIVE_QUOTE_TAPE_DIR / f"fmp_quotes_{captured_at.date().isoformat()}.csv"
+
+    rows = []
+    for sym, q in quotes.items():
+        rows.append({
+            "captured_at_utc": captured_at.isoformat(),
+            "symbol": sym,
+            "price": q.get("price"),
+            "volume": q.get("volume"),
+            "open": q.get("open"),
+            "dayHigh": q.get("dayHigh"),
+            "dayLow": q.get("dayLow"),
+            "previousClose": q.get("previousClose"),
+            "source_timestamp": q.get("timestamp"),
+        })
+
+    df = pd.DataFrame(rows)
+    df.to_csv(path, mode="a", header=not path.exists(), index=False)
+    log.info(f"  Quote snapshot appended: {path} ({len(rows)} rows)")
+    return path
+
+
+def _quote_tape_vwap_for_symbol(df: pd.DataFrame) -> float | None:
+    """Compute cumulative-volume VWAP from repeated quote snapshots."""
+    if len(df) < QUOTE_TAPE_MIN_SNAPSHOTS:
+        return None
+    work = df.copy()
+    work["captured_at_utc"] = pd.to_datetime(work["captured_at_utc"], utc=True, errors="coerce")
+    work["price"] = pd.to_numeric(work["price"], errors="coerce")
+    work["volume"] = pd.to_numeric(work["volume"], errors="coerce")
+    work = work.dropna(subset=["captured_at_utc", "price", "volume"])
+    work = work[(work["price"] > 0) & (work["volume"] >= 0)]
+    if len(work) < QUOTE_TAPE_MIN_SNAPSHOTS:
+        return None
+    work = work.sort_values("captured_at_utc")
+    span_min = (work["captured_at_utc"].iloc[-1] - work["captured_at_utc"].iloc[0]).total_seconds() / 60
+    if span_min < QUOTE_TAPE_MIN_SPAN_MINUTES:
+        return None
+
+    vol_delta = work["volume"].diff()
+    first_volume = work["volume"].iloc[0]
+    # If the collector was already running near the open, include first
+    # cumulative volume. Otherwise use only observed increments.
+    first_et = work["captured_at_utc"].iloc[0].tz_convert("America/New_York").time()
+    if first_et <= dt.time(10, 0):
+        vol_delta.iloc[0] = first_volume
+    else:
+        vol_delta.iloc[0] = np.nan
+
+    vol_delta = vol_delta.clip(lower=0)
+    valid = (vol_delta > 0) & work["price"].notna()
+    if not valid.any():
+        return None
+    denom = float(vol_delta[valid].sum())
+    if denom <= 0:
+        return None
+    return float((work.loc[valid, "price"] * vol_delta[valid]).sum() / denom)
+
+
+def load_quote_tape_vwap(tickers: list[str],
+                         today: Optional[dt.date] = None) -> tuple[dict[str, float], dict]:
+    """Compute VWAP from the local FMP quote snapshot tape if enough history exists."""
+    today = today or dt.date.today()
+    path = LIVE_QUOTE_TAPE_DIR / f"fmp_quotes_{today.isoformat()}.csv"
+    if not path.exists():
+        return {}, {"path": str(path), "reason": "missing_tape"}
+
+    try:
+        tape = pd.read_csv(path)
+    except Exception as e:
+        log.warning(f"  Quote tape read failed: {e}")
+        return {}, {"path": str(path), "reason": "read_failed"}
+
+    tape = tape[tape["symbol"].isin(tickers)]
+    out = {}
+    for sym, sdf in tape.groupby("symbol", sort=False):
+        v = _quote_tape_vwap_for_symbol(sdf)
+        if v is not None and v > 0:
+            out[sym] = v
+
+    meta = {
+        "path": str(path),
+        "symbols": len(out),
+        "rows": int(len(tape)),
+        "min_snapshots": QUOTE_TAPE_MIN_SNAPSHOTS,
+        "min_span_minutes": QUOTE_TAPE_MIN_SPAN_MINUTES,
+    }
+    log.info(f"  Quote-tape VWAP: {len(out)}/{len(tickers)} tickers from {path.name}")
+    return out, meta
+
+
+def _intraday_rows_to_vwap(rows: list[dict],
+                           today: Optional[dt.date] = None) -> float | None:
+    """Compute today's VWAP from FMP intraday OHLCV bars."""
+    if not rows:
+        return None
+    today = today or dt.date.today()
+    df = pd.DataFrame(rows)
+    if df.empty or "date" not in df.columns:
+        return None
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    df = df[df["date"].dt.date == today]
+    if df.empty:
+        return None
+
+    for col in ["high", "low", "close", "volume"]:
+        df[col] = pd.to_numeric(df.get(col), errors="coerce")
+    df = df.dropna(subset=["high", "low", "close", "volume"])
+    df = df[df["volume"] > 0]
+    if df.empty:
+        return None
+
+    typical = (df["high"] + df["low"] + df["close"]) / 3.0
+    denom = float(df["volume"].sum())
+    if denom <= 0:
+        return None
+    return float((typical * df["volume"]).sum() / denom)
+
+
+def fetch_fmp_intraday_vwap(tickers: list[str],
+                            today: Optional[dt.date] = None,
+                            max_workers: int = FMP_INTRADAY_MAX_WORKERS) -> tuple[dict[str, float], dict]:
+    """
+    Fetch FMP 5-minute bars and compute true intraday VWAP from bar volume.
+
+    This is much slower than batch quote, but far more faithful than a
+    one-shot (H+L+C)/3 daily proxy. It is intended as the reliable live-bar
+    fallback when we do not yet have a full-day local quote tape.
+    """
+    today = today or dt.date.today()
+    tickers = sorted(set(tickers))
+    out: dict[str, float] = {}
+    errors: dict[str, str] = {}
+
+    def fetch_one(sym: str) -> tuple[str, float | None, str | None]:
+        try:
+            resp = requests.get(
+                FMP_INTRADAY_CHART_URL,
+                params={"symbol": sym, "apikey": FMP_API_KEY},
+                timeout=FMP_INTRADAY_TIMEOUT_SEC,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if not isinstance(data, list):
+                return sym, None, "bad_response"
+            vwap = _intraday_rows_to_vwap(data, today=today)
+            if vwap is None or vwap <= 0:
+                return sym, None, "no_vwap"
+            return sym, vwap, None
+        except Exception as e:
+            return sym, None, str(e)[:120]
+
+    if not tickers:
+        return {}, {"errors": errors}
+
+    t0 = time.time()
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = [pool.submit(fetch_one, sym) for sym in tickers]
+        for fut in as_completed(futures):
+            sym, vwap, err = fut.result()
+            if vwap is not None:
+                out[sym] = vwap
+            elif err:
+                errors[sym] = err
+
+    meta = {
+        "requested": len(tickers),
+        "received": len(out),
+        "errors": len(errors),
+        "elapsed_sec": round(time.time() - t0, 2),
+        "interval": "5min",
+    }
+    log.info(f"  FMP intraday VWAP: {len(out)}/{len(tickers)} tickers "
+             f"in {meta['elapsed_sec']:.1f}s")
+    if errors:
+        sample = list(errors.items())[:5]
+        log.warning(f"  FMP intraday VWAP missing {len(errors)} tickers; sample={sample}")
+    return out, meta
 
 
 def detect_corporate_actions(
@@ -119,6 +320,7 @@ def construct_live_bar(
     quotes: dict[str, dict],
     flagged_tickers: list[str],
     ib_vwap: dict[str, float] | None = None,
+    vwap_sources: dict[str, str] | None = None,
 ) -> dict[str, pd.DataFrame]:
     """
     Append today's estimated bar to each matrix.
@@ -134,9 +336,9 @@ def construct_live_bar(
                  / dollars_traded by ~5-15% with non-stationary intraday curve, so
                  1-bar carry-forward is the lesser evil. Volume-sensitive alphas
                  are now structurally 1 bar stale; tag them as such if used.
-      - vwap   = IB live VWAP if `ib_vwap` is supplied (preferred — true rolling
-                 volume-weighted price for the day). Falls back to (H+L+C)/3
-                 typical-price proxy ONLY when IB's VWAP is unavailable.
+      - vwap   = live intraday VWAP when available, sourced from quote tape,
+                 FMP 5-minute bars, or IB stream. Falls back to (H+L+C)/3
+                 only when no intraday volume-weighted estimate exists.
       - returns = (live_close - yesterday_close) / yesterday_close
 
     Flagged tickers (splits/dividends) get NaN to exclude them from signals.
@@ -155,6 +357,8 @@ def construct_live_bar(
         "volume": {},
     }
 
+    n_vwap_tape = 0
+    n_vwap_fmp_intraday = 0
     n_vwap_ib = 0
     n_vwap_fallback = 0
 
@@ -210,7 +414,13 @@ def construct_live_bar(
             ibv = ib_vwap.get(sym) if ib_vwap else None
             if ibv is not None and ibv > 0:
                 vwap_row[sym] = float(ibv)
-                n_vwap_ib += 1
+                source = (vwap_sources or {}).get(sym, "ib_stream")
+                if source == "quote_tape":
+                    n_vwap_tape += 1
+                elif source == "fmp_intraday":
+                    n_vwap_fmp_intraday += 1
+                else:
+                    n_vwap_ib += 1
                 continue
             h = live_data["high"].get(sym)
             l = live_data["low"].get(sym)
@@ -225,7 +435,9 @@ def construct_live_bar(
             index=[today],
         )
         extended["vwap"] = pd.concat([matrices["vwap"], vwap_live])
-        log.info(f"  VWAP: IB live={n_vwap_ib}  (H+L+C)/3 fallback={n_vwap_fallback}")
+        log.info("  VWAP: quote_tape=%s fmp_intraday=%s ib_stream=%s "
+                 "typical_price_fallback=%s",
+                 n_vwap_tape, n_vwap_fmp_intraday, n_vwap_ib, n_vwap_fallback)
 
     # Recompute returns from extended close
     if "close" in extended:
@@ -285,16 +497,20 @@ def fetch_ib_live_vwap(ib, tickers: list[str], batch_size: int = 50,
 
 
 def append_live_bar(matrices: dict[str, pd.DataFrame],
-                    ib=None) -> tuple[dict[str, pd.DataFrame], dict, list[str]]:
+                    ib=None,
+                    vwap_tickers: Optional[list[str]] = None
+                    ) -> tuple[dict[str, pd.DataFrame], dict, list[str]]:
     """
     Full pipeline: fetch → detect corp actions → construct → return extended matrices.
 
-    If `ib` (an ib_insync.IB instance) is supplied, also pulls live VWAP from
-    IB and uses it instead of the (H+L+C)/3 proxy.
+    `vwap_tickers` should be the active strategy universe. VWAP is expensive
+    to improve, so inactive names can safely use the cheaper fallback while
+    symbols that can trade receive quote-tape, FMP intraday, or IB estimates.
 
     Returns: (extended_matrices, live_quotes, flagged_tickers)
     """
     tickers = matrices["close"].columns.tolist()
+    vwap_tickers = sorted(set(vwap_tickers or tickers).intersection(tickers))
     hist_close = matrices["close"].iloc[-1]
     today = dt.date.today()
 
@@ -336,21 +552,50 @@ def append_live_bar(matrices: dict[str, pd.DataFrame],
     t0 = time.time()
     quotes = fetch_fmp_live_quotes(tickers)
     log.info(f"  Quotes fetched in {time.time()-t0:.1f}s")
+    save_fmp_quote_snapshot(quotes)
 
     if len(quotes) < 50:
         log.error(f"  Only {len(quotes)} quotes received — aborting live bar")
         return matrices, quotes, []
 
-    # Step 1b: IB live VWAP (more accurate than typical-price proxy)
-    ib_vwap = {}
-    if ib is not None:
+    # Step 1b: Build the best available live VWAP map for tradeable names.
+    live_vwap: dict[str, float] = {}
+    vwap_sources: dict[str, str] = {}
+    if ib is not None and ENABLE_IB_LIVE_VWAP:
         try:
             t1 = time.time()
-            ib_vwap = fetch_ib_live_vwap(ib, tickers)
+            ib_vwap = fetch_ib_live_vwap(ib, vwap_tickers)
             log.info(f"  IB VWAP fetched in {time.time()-t1:.1f}s "
                      f"({len(ib_vwap)} tickers)")
+            live_vwap.update(ib_vwap)
+            vwap_sources.update({sym: "ib_stream" for sym in ib_vwap})
         except Exception as e:
-            log.warning(f"  IB VWAP fetch failed; will fall back to (H+L+C)/3: {e}")
+            log.warning(f"  IB VWAP fetch failed; will use non-IB VWAP sources: {e}")
+    elif ib is not None:
+        log.info("  IB live VWAP disabled; set ENABLE_IB_LIVE_VWAP=1 to use it")
+
+    missing_vwap = [sym for sym in vwap_tickers if sym not in live_vwap]
+    if ENABLE_FMP_INTRADAY_VWAP and missing_vwap:
+        fmp_vwap, _ = fetch_fmp_intraday_vwap(missing_vwap, today=today)
+        for sym, vwap in fmp_vwap.items():
+            if sym not in live_vwap:
+                live_vwap[sym] = vwap
+                vwap_sources[sym] = "fmp_intraday"
+    elif missing_vwap:
+        log.info("  FMP intraday VWAP disabled; %s active tickers will use fallback",
+                 len(missing_vwap))
+
+    missing_vwap = [sym for sym in vwap_tickers if sym not in live_vwap]
+    if missing_vwap:
+        tape_vwap, _ = load_quote_tape_vwap(missing_vwap, today=today)
+        for sym, vwap in tape_vwap.items():
+            live_vwap[sym] = vwap
+            vwap_sources[sym] = "quote_tape"
+    final_missing_vwap = [sym for sym in vwap_tickers if sym not in live_vwap]
+    if final_missing_vwap:
+        log.warning("  Live VWAP unavailable for %s active tickers; "
+                    "using typical-price fallback for those symbols",
+                    len(final_missing_vwap))
 
     # Step 2: Detect corporate actions
     log.info("  Checking for splits/dividends...")
@@ -358,7 +603,13 @@ def append_live_bar(matrices: dict[str, pd.DataFrame],
 
     # Step 3: Construct and append live bar
     log.info("  Constructing live bar...")
-    extended = construct_live_bar(matrices, quotes, flagged, ib_vwap=ib_vwap)
+    extended = construct_live_bar(
+        matrices,
+        quotes,
+        flagged,
+        ib_vwap=live_vwap,
+        vwap_sources=vwap_sources,
+    )
 
     return extended, quotes, flagged
 

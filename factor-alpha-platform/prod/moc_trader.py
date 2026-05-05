@@ -43,7 +43,7 @@ import numpy as np
 import pandas as pd
 
 # Local imports
-from live_bar import append_live_bar
+from live_bar import ENABLE_IB_LIVE_VWAP, append_live_bar
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -1123,26 +1123,35 @@ def run_trading_workflow(mode="dry-run", port=IB_PORT_PAPER, gmv_override=None,
     # ── Phase 1b: Construct live bar (TODAY's estimated OHLCV) ────────
     log.info("\nPhase 1b: Constructing today's live bar...")
     log.info("  delay=0 requires today's OHLCV for alpha evaluation")
+    active_vwap_tickers = universe_df.columns[
+        universe_df.iloc[-1].fillna(False).astype(bool)
+    ].tolist()
+    log.info(f"  Active VWAP universe: {len(active_vwap_tickers)} tickers")
 
-    # Open an early IB connection so live_bar can pull IB's running daily
-    # VWAP — far closer to the auction-final VWAP than the (H+L+C)/3 proxy.
-    # Falls back gracefully if IB is unreachable (dry-run, network issue, etc.).
+    # IB streaming VWAP is opt-in because delayed/no-subscription paper feeds
+    # can return no values while consuming most of the MOC deadline window.
     early_ib = None
     early_probe = None
-    if mode == "live" and not check_borrow_only:
+    if mode == "live" and not check_borrow_only and ENABLE_IB_LIVE_VWAP:
         try:
             early_probe = IBConnection(host=IB_HOST, port=port, client_id=IB_CLIENT_ID_LIVE_BAR)
             if early_probe.connect():
                 early_ib = early_probe.ib
                 log.info(f"  IB early-connect OK for live VWAP (clientId={IB_CLIENT_ID_LIVE_BAR})")
             else:
-                log.warning("  IB early-connect failed; live_bar will use (H+L+C)/3 fallback")
+                log.warning("  IB early-connect failed; live_bar will use non-IB VWAP sources")
         except Exception as e:
             log.warning(f"  IB early-connect raised {type(e).__name__}; "
-                        f"live_bar will use (H+L+C)/3 fallback")
+                        f"live_bar will use non-IB VWAP sources")
+    elif mode == "live" and not check_borrow_only:
+        log.info("  IB streaming VWAP disabled; using quote tape/FMP intraday VWAP")
 
     try:
-        matrices, live_quotes, flagged_tickers = append_live_bar(matrices, ib=early_ib)
+        matrices, live_quotes, flagged_tickers = append_live_bar(
+            matrices,
+            ib=early_ib,
+            vwap_tickers=active_vwap_tickers,
+        )
     finally:
         if early_probe and early_probe.connected:
             early_probe.disconnect()
