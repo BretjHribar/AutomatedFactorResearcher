@@ -48,7 +48,10 @@
         "min_borrow_availability": true,
         "price_validation_tolerance_pct": 2.0,
         "max_daily_turnover_pct": 200.0,
-        "stale_data_halt_hours": 720
+        "stale_data_halt_hours": 96,
+        "_stale_data_halt_hours_note": "96h covers Mon-after-Fri-close (Fri 00:00 timestamp → Mon 15:30 ET trader run = ~63.5h). The trading-day check below is the BINDING gate. The hours-stale check uses bar-timestamp-at-midnight as the reference, so anything tighter than 96h false-positives on Monday runs. Was 720 (30d, useless) → 18 (false-positives Mondays) → 96 (catches >4-day staleness without false-positives).",
+        "require_last_bar_is_prev_trading_day": true,
+        "_last_bar_check_note": "Hard halt unless matrices.close.index[-1] equals the previous NYSE trading day. Calendar-aware so weekends/holidays don't false-positive."
     },
     "fees": {
         "model": "ibkr_tiered",

@@ -68,7 +68,7 @@ def stats(w, label):
     w_a = w.loc[common].fillna(0)
     r_a = returns.loc[common].fillna(0)
     port = (w_a.shift(1) * r_a).sum(axis=1)
-    to   = (w_a - w_a.shift(1)).abs().sum(axis=1) / 2.0
+    to   = (w_a - w_a.shift(1)).abs().sum(axis=1)
     m = (port.index >= TRAIN_START) & (port.index <= TRAIN_END)
     p = port[m].dropna()
     ann = np.sqrt(BARS_PER_YEAR)

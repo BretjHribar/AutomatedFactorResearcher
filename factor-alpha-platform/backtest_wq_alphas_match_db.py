@@ -63,7 +63,7 @@ def compute_stats(w: pd.DataFrame, returns: pd.DataFrame,
     r = returns.loc[common_idx].fillna(0)
 
     port = (w.shift(1) * r).sum(axis=1)
-    to = (w - w.shift(1)).abs().sum(axis=1) / 2.0
+    to = (w - w.shift(1)).abs().sum(axis=1)
 
     # Slice window
     m = (port.index >= start) & (port.index <= end)
@@ -89,7 +89,7 @@ def compute_stats(w: pd.DataFrame, returns: pd.DataFrame,
     ic_std = float(np.std(ic_vals)) if ic_vals else float("nan")
     ic_ir = ic_mean / ic_std * np.sqrt(BARS_PER_YEAR) if ic_std > 0 else float("nan")
 
-    net = port - to * fee_bps / 10000.0 * 2.0
+    net = port - to * fee_bps / 10000.0
     ann = np.sqrt(BARS_PER_YEAR)
 
     cum = port.cumsum()

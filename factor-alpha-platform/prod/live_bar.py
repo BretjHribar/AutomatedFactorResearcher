@@ -118,17 +118,25 @@ def construct_live_bar(
     matrices: dict[str, pd.DataFrame],
     quotes: dict[str, dict],
     flagged_tickers: list[str],
+    ib_vwap: dict[str, float] | None = None,
 ) -> dict[str, pd.DataFrame]:
     """
     Append today's estimated bar to each matrix.
 
     For each field, construct a single-row DataFrame for today and concat:
-      - close  = current price (~3:40 PM, best estimate of today's close)
+      - close  = current price (~3:40 PM snapshot — last continuous trade pre-auction;
+                 paper IB MOC fills land here, NOT at the auction match)
       - open   = today's actual open
       - high   = today's intraday high
       - low    = today's intraday low
-      - volume = today's volume so far (partial day)
-      - vwap   = estimated as (high + low + close) / 3  (typical price proxy)
+      - volume = YESTERDAY'S full-day volume carried forward.
+                 Mid-day partial volume mis-states volume_ratio / volume_momentum
+                 / dollars_traded by ~5-15% with non-stationary intraday curve, so
+                 1-bar carry-forward is the lesser evil. Volume-sensitive alphas
+                 are now structurally 1 bar stale; tag them as such if used.
+      - vwap   = IB live VWAP if `ib_vwap` is supplied (preferred — true rolling
+                 volume-weighted price for the day). Falls back to (H+L+C)/3
+                 typical-price proxy ONLY when IB's VWAP is unavailable.
       - returns = (live_close - yesterday_close) / yesterday_close
 
     Flagged tickers (splits/dividends) get NaN to exclude them from signals.
@@ -136,6 +144,7 @@ def construct_live_bar(
     today = pd.Timestamp(dt.date.today())
     ref_cols = matrices["close"].columns.tolist()
     hist_close = matrices["close"].iloc[-1]
+    hist_volume = matrices["volume"].iloc[-1] if "volume" in matrices else None
 
     # Build live row for each field
     live_data = {
@@ -145,6 +154,9 @@ def construct_live_bar(
         "low": {},
         "volume": {},
     }
+
+    n_vwap_ib = 0
+    n_vwap_fallback = 0
 
     for sym in ref_cols:
         if sym in flagged_tickers:
@@ -170,7 +182,14 @@ def construct_live_bar(
         live_data["open"][sym] = q.get("open", price)
         live_data["high"][sym] = q.get("dayHigh", price)
         live_data["low"][sym] = q.get("dayLow", price)
-        live_data["volume"][sym] = q.get("volume", 0)
+        # Carry-forward yesterday's volume — partial-day volume is an unreliable
+        # input for volume-derived alphas; structural 1-day stale is preferable
+        # to a biased projection.
+        if hist_volume is not None and sym in hist_volume.index:
+            yv = hist_volume.get(sym)
+            live_data["volume"][sym] = float(yv) if pd.notna(yv) else np.nan
+        else:
+            live_data["volume"][sym] = np.nan
 
     # Convert to single-row DataFrames
     extended = {}
@@ -184,15 +203,21 @@ def construct_live_bar(
         else:
             extended[name] = df
 
-    # Compute vwap as typical price = (H + L + C) / 3
+    # VWAP — prefer IB's live VWAP, fall back to typical price (H+L+C)/3
     if "vwap" in matrices:
         vwap_row = {}
         for sym in ref_cols:
+            ibv = ib_vwap.get(sym) if ib_vwap else None
+            if ibv is not None and ibv > 0:
+                vwap_row[sym] = float(ibv)
+                n_vwap_ib += 1
+                continue
             h = live_data["high"].get(sym)
             l = live_data["low"].get(sym)
             c = live_data["close"].get(sym)
             if h and l and c and not (np.isnan(h) or np.isnan(l) or np.isnan(c)):
                 vwap_row[sym] = (h + l + c) / 3.0
+                n_vwap_fallback += 1
             else:
                 vwap_row[sym] = np.nan
         vwap_live = pd.DataFrame(
@@ -200,6 +225,7 @@ def construct_live_bar(
             index=[today],
         )
         extended["vwap"] = pd.concat([matrices["vwap"], vwap_live])
+        log.info(f"  VWAP: IB live={n_vwap_ib}  (H+L+C)/3 fallback={n_vwap_fallback}")
 
     # Recompute returns from extended close
     if "close" in extended:
@@ -217,9 +243,54 @@ def construct_live_bar(
     return extended
 
 
-def append_live_bar(matrices: dict[str, pd.DataFrame]) -> tuple[dict[str, pd.DataFrame], dict, list[str]]:
+def fetch_ib_live_vwap(ib, tickers: list[str], batch_size: int = 50,
+                       settle_sec: float = 4.0) -> dict[str, float]:
+    """Pull each ticker's live (intraday) VWAP from IB.
+
+    IB delivers a running daily VWAP via the standard real-time market-data
+    stream; ib_insync surfaces it as `Ticker.vwap`. Requires either a real-time
+    market-data subscription or `reqMarketDataType(3)` for delayed (which is
+    what most paper accounts have).
+
+    Returns: {symbol: vwap_float}. Missing/zero values are dropped.
+    """
+    from ib_insync import Stock
+    out = {}
+    if ib is None:
+        return out
+    try:
+        ib.reqMarketDataType(3)   # delayed feed (paper accounts lack realtime)
+    except Exception as e:
+        log.warning(f"  ib.reqMarketDataType(3) failed: {e}")
+
+    for i in range(0, len(tickers), batch_size):
+        batch = tickers[i:i + batch_size]
+        reqs = []
+        for sym in batch:
+            try:
+                c = Stock(sym, "SMART", "USD")
+                ib.qualifyContracts(c)
+                td = ib.reqMktData(c, snapshot=False)
+                reqs.append((sym, c, td))
+            except Exception:
+                continue
+        ib.sleep(settle_sec)
+        for sym, c, td in reqs:
+            v = getattr(td, "vwap", None)
+            if v is not None and v > 0:
+                out[sym] = float(v)
+            ib.cancelMktData(c)
+    log.info(f"  IB VWAP: {len(out)}/{len(tickers)} tickers received")
+    return out
+
+
+def append_live_bar(matrices: dict[str, pd.DataFrame],
+                    ib=None) -> tuple[dict[str, pd.DataFrame], dict, list[str]]:
     """
     Full pipeline: fetch → detect corp actions → construct → return extended matrices.
+
+    If `ib` (an ib_insync.IB instance) is supplied, also pulls live VWAP from
+    IB and uses it instead of the (H+L+C)/3 proxy.
 
     Returns: (extended_matrices, live_quotes, flagged_tickers)
     """
@@ -233,10 +304,35 @@ def append_live_bar(matrices: dict[str, pd.DataFrame]) -> tuple[dict[str, pd.Dat
         log.info(f"  Matrices already include today ({last_date}), skipping live bar")
         return matrices, {}, []
 
+    # Calendar-aware staleness — refuse to append a live bar if we'd be
+    # stitching it onto a cache with missing trading days. The downstream
+    # rolling-window operators read across the hole.
+    try:
+        import pandas_market_calendars as mcal
+        nyse = mcal.get_calendar("NYSE")
+        sched = nyse.schedule(start_date=str(last_date),
+                              end_date=str(today))
+        sched_dates = [d.date() for d in sched.index]
+        prior_days = [d for d in sched_dates if d < today]
+        if prior_days:
+            expected_last = prior_days[-1]
+            if last_date != expected_last:
+                missing_n = (expected_last - last_date).days
+                log.error(f"  REFUSING to append live bar: cache last={last_date} "
+                          f"but previous trading day is {expected_last} "
+                          f"({missing_n} calendar-day gap). Run data refresh first.")
+                raise RuntimeError(
+                    f"Cache stale by {missing_n} calendar days; refresh required "
+                    f"before live trading."
+                )
+    except ImportError:
+        log.warning("  pandas_market_calendars not installed; cannot run "
+                    "trading-day staleness check in live_bar")
+
     log.info(f"  Historical data ends: {last_date}")
     log.info(f"  Fetching live quotes for {len(tickers)} tickers...")
 
-    # Step 1: Fetch live quotes
+    # Step 1: Fetch live quotes (FMP)
     t0 = time.time()
     quotes = fetch_fmp_live_quotes(tickers)
     log.info(f"  Quotes fetched in {time.time()-t0:.1f}s")
@@ -245,13 +341,24 @@ def append_live_bar(matrices: dict[str, pd.DataFrame]) -> tuple[dict[str, pd.Dat
         log.error(f"  Only {len(quotes)} quotes received — aborting live bar")
         return matrices, quotes, []
 
+    # Step 1b: IB live VWAP (more accurate than typical-price proxy)
+    ib_vwap = {}
+    if ib is not None:
+        try:
+            t1 = time.time()
+            ib_vwap = fetch_ib_live_vwap(ib, tickers)
+            log.info(f"  IB VWAP fetched in {time.time()-t1:.1f}s "
+                     f"({len(ib_vwap)} tickers)")
+        except Exception as e:
+            log.warning(f"  IB VWAP fetch failed; will fall back to (H+L+C)/3: {e}")
+
     # Step 2: Detect corporate actions
     log.info("  Checking for splits/dividends...")
     clean, flagged = detect_corporate_actions(quotes, hist_close)
 
     # Step 3: Construct and append live bar
     log.info("  Constructing live bar...")
-    extended = construct_live_bar(matrices, quotes, flagged)
+    extended = construct_live_bar(matrices, quotes, flagged, ib_vwap=ib_vwap)
 
     return extended, quotes, flagged
 

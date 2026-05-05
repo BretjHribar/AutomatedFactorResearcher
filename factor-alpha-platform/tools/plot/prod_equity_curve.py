@@ -58,7 +58,8 @@ def main():
         for split in ("TRAIN", "VAL", "TEST", "VAL+TEST", "FULL"):
             s = m[split]
             print(f"  {split:9s}  SR_g={s['SR_gross']:+5.2f}  SR_n={s['SR_net']:+5.2f}  "
-                  f"ret_n={s['ret_ann_net']*100:+6.1f}%/yr  n={s['n_bars']}", flush=True)
+                  f"ret_n={s['ret_ann_net']*100:+6.1f}%/yr  "
+                  f"maxDD={s['max_dd_net']*100:+6.1f}%  n={s['n_bars']}", flush=True)
         print()
 
     # Plot equity curves (gross + net) for both
@@ -83,11 +84,14 @@ def main():
                       label=f"{label}  GROSS SR_FULL={m['FULL']['SR_gross']:+.2f}")
 
     for ax in axes:
+        ax.set_yscale("log")
         ax.axvline(train_end, color="grey", ls=":", lw=0.8, alpha=0.7)
         ax.axvline(val_end,   color="grey", ls=":", lw=0.8, alpha=0.7)
-        ax.text(train_end, ax.get_ylim()[0], " TRAIN | VAL", fontsize=9, color="grey", va="bottom")
-        ax.text(val_end,   ax.get_ylim()[0], " VAL | TEST",  fontsize=9, color="grey", va="bottom")
-        ax.set_yscale("log")
+        # axes-relative y so we don't disturb the data range
+        ax.text(train_end, 0.98, " TRAIN | VAL", fontsize=9, color="grey",
+                 va="top", ha="left", transform=ax.get_xaxis_transform())
+        ax.text(val_end, 0.98, " VAL | TEST", fontsize=9, color="grey",
+                 va="top", ha="left", transform=ax.get_xaxis_transform())
         ax.grid(True, alpha=0.3)
         ax.legend(loc="upper left", fontsize=10)
         ax.set_ylabel("Equity (log, start=1.0)")
@@ -100,7 +104,7 @@ def main():
     axes[1].set_xlabel("Date")
 
     fig.tight_layout()
-    fig.savefig(OUT_PNG, dpi=130, bbox_inches="tight")
+    fig.savefig(OUT_PNG, dpi=130)  # don't use bbox_inches="tight" — it can blow up if labels query log-axis ylim before data is plotted
     print(f"=== saved: {OUT_PNG.relative_to(ROOT)} ===", flush=True)
 
 

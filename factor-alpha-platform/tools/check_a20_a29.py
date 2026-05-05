@@ -57,7 +57,7 @@ for (aid, expr, sr_db, to_db, ic_db, ra_db, tstart, tend, nb_db) in rows:
     w_a = w.loc[common].fillna(0)
     r_a = returns.loc[common].fillna(0)
     port = (w_a.shift(1) * r_a).sum(axis=1).dropna()
-    to = (w_a - w_a.shift(1)).abs().sum(axis=1) / 2.0
+    to = (w_a - w_a.shift(1)).abs().sum(axis=1)
     m = (port.index >= pd.Timestamp(tstart)) & (port.index <= pd.Timestamp(tend))
     p = port[m]
     tt = to.loc[p.index]

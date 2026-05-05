@@ -56,7 +56,7 @@ def compute_stats(w, returns, start, end):
     w = w.loc[common_idx].fillna(0)
     r = returns.loc[common_idx].fillna(0)
     port = (w.shift(1) * r).sum(axis=1)
-    to   = (w - w.shift(1)).abs().sum(axis=1) / 2.0
+    to   = (w - w.shift(1)).abs().sum(axis=1)
     m = (port.index >= start) & (port.index <= end)
     port = port[m].dropna(); to = to.loc[port.index]
 

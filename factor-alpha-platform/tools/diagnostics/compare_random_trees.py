@@ -340,7 +340,7 @@ def run_aipt_on_panel(Z_panel_3d: np.ndarray, returns_np: np.ndarray, dates,
         bar_dates.append(dates[oos_t])
 
         if prev_w is not None:
-            turnovers.append(np.abs(w_norm - prev_w).sum() / 2.0)
+            turnovers.append(np.abs(w_norm - prev_w).sum())
         else:
             turnovers.append(0.0)
         prev_w = w_norm.copy()

@@ -7,6 +7,9 @@ Cov-decomposition builders (used by src/portfolio/qp.py):
   build_pca        : Σ ≈ B_pca B_pca' + diag(s²)
   build_style      : Σ ≈ B_style Σ_F B_style' + diag(s²)
   build_style_pca  : Σ ≈ B_style Σ_F B_style' + B_pca B_pca' + diag(s²)
+  build_ipca       : Σ ≈ B_ipca Σ_F B_ipca' + diag(s²)  where
+                     B_ipca,t = Z_t Γ — Bianchi-Babiak (2022) instrumented PCA
+                     with time-varying loadings driven by characteristics.
 Each returns (L_list, s²) where L_list is a list of (N, K_k) matrices and
 the QP risk term is ½λ (Σ_k ||L_k' w||² + s²·w²).
 
@@ -136,6 +139,99 @@ def build_style_pca(R_window: np.ndarray, B_style: np.ndarray, k_pca: int
     return [L_style], s2
 
 
+def build_ipca(R_window: np.ndarray, Z_window: np.ndarray, Z_today: np.ndarray,
+               k: int, *, n_iter: int = 50, tol: float = 1e-6
+               ) -> Tuple[List[np.ndarray], np.ndarray]:
+    """Bianchi-Babiak (2022) instrumented PCA risk model.
+
+    Returns model:  r_{i,t+1} = Z_{i,t}' Γ f_{t+1} + ε_{i,t+1}
+    where Γ ∈ R^{L×K} is a constant coefficient matrix mapping the L
+    characteristics in Z_{i,t} to K latent factor loadings.  Loadings are
+    *time-varying* through Z_t even though Γ is fit once on the window.
+
+    Estimation: alternating least squares.
+        Step (a): given Γ, solve T cross-sectional regressions for f_t.
+        Step (b): given {f_t}, solve one stacked LS for vec(Γ).
+        Iterate until ‖ΔΓ‖ < tol or n_iter exhausted.
+        Identification: Γ'Γ = I_K (QR-orthogonalize each iteration).
+
+    Then for risk: B_today = Z_today @ Γ (N×K), Σ_F = sample cov of {f_t}.
+    Σ ≈ B_today Σ_F B_today' + diag(σ²_e). Returns ([L_ipca], s²)
+    where L_ipca = B_today @ chol(Σ_F).
+
+    R_window: (T, N) returns matrix (point-in-time, t = end-of-bar)
+    Z_window: (T, N, L) characteristics observable at end of each bar
+    Z_today : (N, L) characteristics observed at the bar we're sizing
+    k       : number of latent factors (Bianchi-Babiak default = 3)
+    """
+    T, N = R_window.shape
+    L = Z_window.shape[2]
+    if T < 5 or k < 1 or L < k:
+        return build_diagonal(np.std(R_window, axis=0, ddof=1) if T > 1 else np.ones(N))
+
+    R = R_window - R_window.mean(axis=0, keepdims=True)
+    Z = np.where(np.isfinite(Z_window), Z_window, 0.0).astype(np.float64)
+    Z_t0 = np.where(np.isfinite(Z_today), Z_today, 0.0).astype(np.float64)
+    R = np.where(np.isfinite(R), R, 0.0).astype(np.float64)
+
+    rng = np.random.default_rng(0)
+    Gamma, _ = np.linalg.qr(rng.standard_normal((L, k)))
+    F = np.zeros((T, k))
+
+    for it in range(n_iter):
+        # Step (a): estimate f_t given Γ
+        for t in range(T):
+            ZG = Z[t] @ Gamma                               # (N, K)
+            A = ZG.T @ ZG + 1e-8 * np.eye(k)
+            try:
+                F[t] = np.linalg.solve(A, ZG.T @ R[t])
+            except np.linalg.LinAlgError:
+                F[t] = 0.0
+
+        # Step (b): estimate Γ given {f_t} via stacked LS.
+        # design[(t,i), (k,l)] = F[t,k] · Z[t,i,l] ;   target = R[t,i]
+        # Solving with vec_Gamma layout (k_outer, l_inner) → reshape (K, L).T → (L, K)
+        F_kron_Z = (F[:, None, :, None] * Z[:, :, None, :])  # (T, N, K, L)
+        big_X = F_kron_Z.reshape(T * N, k * L)
+        big_y = R.reshape(T * N)
+        try:
+            vec_G, *_ = np.linalg.lstsq(big_X, big_y, rcond=None)
+        except np.linalg.LinAlgError:
+            break
+        Gamma_new = vec_G.reshape(k, L).T                   # (L, K)
+        # Re-orthonormalize for identification
+        Gamma_new, _ = np.linalg.qr(Gamma_new)
+        diff = np.linalg.norm(Gamma_new - Gamma) / (np.linalg.norm(Gamma) + 1e-10)
+        Gamma = Gamma_new
+        if diff < tol:
+            break
+
+    # Final f_t with converged Γ
+    for t in range(T):
+        ZG = Z[t] @ Gamma
+        A = ZG.T @ ZG + 1e-8 * np.eye(k)
+        try:
+            F[t] = np.linalg.solve(A, ZG.T @ R[t])
+        except np.linalg.LinAlgError:
+            F[t] = 0.0
+
+    B_today = Z_t0 @ Gamma                                  # (N, K)
+    F_dm = F - F.mean(axis=0, keepdims=True)
+    Sigma_F = (F_dm.T @ F_dm) / max(T - 1, 1)
+    Sigma_F = (Sigma_F + Sigma_F.T) * 0.5 + 1e-10 * np.eye(k)
+    try:
+        chol = np.linalg.cholesky(Sigma_F)
+    except np.linalg.LinAlgError:
+        ev, V = np.linalg.eigh(Sigma_F)
+        chol = V @ np.diag(np.sqrt(np.maximum(ev, 0.0)))
+    L_ipca = B_today @ chol                                 # (N, K)
+
+    # Per-name residual variance over the window
+    resid = R - np.einsum("til,lk,tk->ti", Z, Gamma, F)
+    s2 = np.maximum(np.var(resid, axis=0, ddof=1), 1e-8)
+    return [L_ipca], s2
+
+
 # ---------------------------------------------------------------------------
 # Cross-sectional helpers (shared)
 # ---------------------------------------------------------------------------
@@ -218,6 +314,52 @@ def build_style_factors(matrices: dict) -> pd.DataFrame:
         factors["leverage"] = _zscore_cs(lev)
     elif "debt_to_equity" in matrices:
         factors["leverage"] = _zscore_cs(matrices["debt_to_equity"])
+
+    return factors
+
+
+def build_crypto_ipca_characteristics(matrices: dict) -> dict:
+    """Crypto-perp characteristic stack for build_ipca, per Bianchi-Babiak (2022).
+
+    Their five canonical return drivers — liquidity, size, market beta,
+    reversal, downside risk — translated to KuCoin 4h fields. All factors are
+    z-scored cross-sectionally per bar so Γ scaling is comparable across
+    factors.
+
+    Returns dict[name -> DataFrame(date×ticker)]. The runner stacks these into
+    a (T, N, L) tensor and slices for IPCA fitting.
+    """
+    factors = {}
+
+    # 1. liquidity — log dollar-traded over 60 bars (rebal cadence)
+    if "adv60" in matrices:
+        factors["liquidity"] = _zscore_cs(np.log1p(matrices["adv60"].clip(lower=0)))
+
+    # 2. size — turnover-weighted size proxy: log(close × adv60)
+    if "close" in matrices and "adv60" in matrices:
+        size_raw = matrices["close"] * matrices["adv60"]
+        factors["size"] = _zscore_cs(np.log1p(size_raw.clip(lower=0)))
+
+    # 3. market_beta — direct field on KuCoin (rolling beta to BTC)
+    if "beta_to_btc" in matrices:
+        factors["market_beta"] = _zscore_cs(matrices["beta_to_btc"])
+
+    # 4. momentum — slow trend (60d, like Bianchi-Babiak's MOM_60)
+    if "momentum_60d" in matrices:
+        factors["momentum"] = _zscore_cs(matrices["momentum_60d"])
+
+    # 5. reversal — short-window negative momentum (1-3d at 4h cadence)
+    if "momentum_5d" in matrices:
+        factors["reversal"] = _zscore_cs(-matrices["momentum_5d"])
+
+    # 6. downside_risk — Parkinson 60-bar vol (lower = quality)
+    if "parkinson_volatility_60" in matrices:
+        factors["downside_risk"] = _zscore_cs(-matrices["parkinson_volatility_60"])
+
+    # 7. trade_intensity — volume_ratio z (relative-to-history flow)
+    if "volume_ratio_20d" in matrices:
+        factors["trade_intensity"] = _zscore_cs(np.log1p(
+            matrices["volume_ratio_20d"].clip(lower=0)))
 
     return factors
 

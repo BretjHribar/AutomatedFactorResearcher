@@ -117,7 +117,7 @@ def backtest_train(w, label):
     w_a = w.loc[common].fillna(0)
     r_a = returns.loc[common].fillna(0)
     port = (w_a.shift(1) * r_a).sum(axis=1)
-    to   = (w_a - w_a.shift(1)).abs().sum(axis=1) / 2.0
+    to   = (w_a - w_a.shift(1)).abs().sum(axis=1)
     m = (port.index >= TRAIN_START) & (port.index <= TRAIN_END)
     return stats(port[m], to.loc[port[m].index], label)
 
@@ -141,5 +141,5 @@ for label, w in [("avg(z-sig)", w_avg_sig), ("avg(w)", w_avg_w)]:
     w_a = w.loc[common].fillna(0)
     r_a = returns.loc[common].fillna(0)
     port = (w_a.shift(1) * r_a).sum(axis=1)
-    to   = (w_a - w_a.shift(1)).abs().sum(axis=1) / 2.0
+    to   = (w_a - w_a.shift(1)).abs().sum(axis=1)
     stats(port, to, f"{label} FULL")

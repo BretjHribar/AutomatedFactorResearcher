@@ -80,12 +80,12 @@ def backtest_signal(w: pd.DataFrame, returns: pd.DataFrame, oos_start: pd.Timest
     # Lag: holdings at bar t earn return over t->t+1 which lands at bar t+1.
     # port_t+1 = w_t · r_{t+1}   ⇒  use w.shift(1) * r (index r to its bar)
     port = (w.shift(1) * r).sum(axis=1)
-    turnover = (w - w.shift(1)).abs().sum(axis=1) / 2.0
+    turnover = (w - w.shift(1)).abs().sum(axis=1)
 
     # Drop first bar (no prev weights)
     port = port.iloc[1:]
     turnover = turnover.iloc[1:]
-    net = port - turnover * taker_bps / 10000.0 * 2.0
+    net = port - turnover * taker_bps / 10000.0
 
     # OOS slice
     mask = port.index >= oos_start

@@ -146,7 +146,7 @@ def run_config(P: int, rebal_every: int, z: float = 1e-3, seed: int = 42,
         bar_dates.append(dates[oos_t])
 
         if prev_weights is not None:
-            turnovers.append(np.abs(w_norm - prev_weights).sum() / 2.0)
+            turnovers.append(np.abs(w_norm - prev_weights).sum())
         else:
             turnovers.append(0.0)
         prev_weights = w_norm.copy()

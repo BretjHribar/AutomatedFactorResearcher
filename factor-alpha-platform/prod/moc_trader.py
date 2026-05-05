@@ -406,6 +406,15 @@ class IBConnection:
         results = {}
         batch_size = 50  # IB rate limit: ~50 concurrent market data requests
 
+        # Paper accounts (and many live accounts without realtime entitlement)
+        # return error 10089 on default reqMktData — no shortable data is
+        # delivered, so every ticker falls through to HARD_TO_BORROW. Switch to
+        # delayed data (type 3) so shortableShares actually populates.
+        try:
+            self.ib.reqMarketDataType(3)
+        except Exception as e:
+            log.warning(f"  reqMarketDataType(3) failed (will use realtime): {e}")
+
         for i in range(0, len(tickers), batch_size):
             batch = tickers[i:i + batch_size]
             contracts = []
@@ -428,19 +437,30 @@ class IBConnection:
                     results[sym] = {"shortable": False, "shares": 0,
                                     "fee_rate": None, "status": f"REQ_FAILED: {e}"}
 
-            # Wait for data to arrive
-            self.ib.sleep(3)
+            # Wait for data to arrive (delayed data takes longer)
+            self.ib.sleep(5)
 
             for sym, c, td in reqs:
                 shares_avail = getattr(td, "shortableShares", None)
-                # IB shortable indicator: >2.5 = easy to borrow, 1.5-2.5 = limited, <1.5 = hard
+                # IB shortable INDICATOR: >2.5 easy, 1.5-2.5 limited, <1.5 hard.
+                # This is informational; the binding signal for order placement
+                # is shares_avail > 0.
                 shortable_val = getattr(td, "shortable", None)
 
                 if shares_avail is not None and shares_avail > 0:
-                    status = "EASY" if (shortable_val and shortable_val > 2.5) else "LIMITED"
+                    if shortable_val is not None:
+                        if shortable_val > 2.5:
+                            status = "EASY"
+                        elif shortable_val > 1.5:
+                            status = "LIMITED"
+                        else:
+                            status = "HARD"
+                    else:
+                        status = "AVAILABLE"
                     results[sym] = {
                         "shortable": True,
                         "shares": int(shares_avail),
+                        "shortable_indicator": float(shortable_val) if shortable_val is not None else None,
                         "fee_rate": getattr(td, "shortFeeRate", None),
                         "status": status,
                     }
@@ -448,8 +468,9 @@ class IBConnection:
                     results[sym] = {
                         "shortable": False,
                         "shares": 0,
+                        "shortable_indicator": float(shortable_val) if shortable_val is not None else None,
                         "fee_rate": None,
-                        "status": "HARD_TO_BORROW",
+                        "status": "NO_DATA" if shares_avail is None else "HARD_TO_BORROW",
                     }
 
                 # Cancel market data to free slot
@@ -683,13 +704,50 @@ def run_data_integrity_checks(matrices, universe_df, classifications,
     warnings = []
     fails = []
 
-    # A. FMP data freshness
+    # A. FMP data freshness — TWO checks. The hours-based check is a coarse
+    # belt; the trading-day check is the real gate. The previous trading day's
+    # close MUST be the last row in matrices, otherwise time-series operators
+    # read across data holes and the live-bar appended for today is preceded
+    # by stale rows.
     last_date = matrices["close"].index[-1]
     stale_hours = (dt.datetime.now() - last_date).total_seconds() / 3600
     if stale_hours > CFG["risk"]["stale_data_halt_hours"]:
-        fails.append(f"FAIL: FMP data {stale_hours:.0f}h stale (last: {last_date.date()})")
+        fails.append(f"FAIL: FMP data {stale_hours:.0f}h stale "
+                     f"(threshold {CFG['risk']['stale_data_halt_hours']}h, last: {last_date.date()})")
     else:
         log.info(f"  [OK] FMP freshness: {last_date.date()} ({stale_hours:.0f}h ago)")
+
+    # A2. Trading-day-aware staleness — the binding check.
+    if CFG["risk"].get("require_last_bar_is_prev_trading_day", True):
+        try:
+            import pandas_market_calendars as mcal
+            nyse = mcal.get_calendar("NYSE")
+            today = dt.date.today()
+            sched = nyse.schedule(start_date=str(today - dt.timedelta(days=10)),
+                                   end_date=str(today))
+            sched_dates = [d.date() for d in sched.index]
+            # Most-recent COMPLETED trading day = the last sched date strictly
+            # before today (today's session may not yet be closed when trader
+            # runs at 14:30 CDT).
+            prior_days = [d for d in sched_dates if d < today]
+            if not prior_days:
+                fails.append(f"FAIL: NYSE calendar returned no prior trading day before {today}")
+            else:
+                expected_last = prior_days[-1]
+                if last_date.date() != expected_last:
+                    fails.append(
+                        f"FAIL: matrices end at {last_date.date()} but the "
+                        f"previous trading day is {expected_last}. Cache is "
+                        f"missing {(expected_last - last_date.date()).days} "
+                        f"calendar days; halting before trading on stale data."
+                    )
+                else:
+                    log.info(f"  [OK] Last bar = previous trading day ({expected_last})")
+        except ImportError:
+            log.warning("  pandas_market_calendars not installed; skipping "
+                        "trading-day-aware staleness check (HOURS gate ONLY)")
+        except Exception as e:
+            fails.append(f"FAIL: trading-day staleness check raised {type(e).__name__}: {e}")
 
     # B. Universe coverage
     n_active = int(universe_df.iloc[-1].sum())
@@ -698,13 +756,19 @@ def run_data_integrity_checks(matrices, universe_df, classifications,
     else:
         log.info(f"  [OK] Universe: {n_active} active tickers")
 
-    # C. Classification hierarchy
+    # C. Classification hierarchy — sector should refine to industry, industry
+    # to subindustry. FMP often has industry == subindustry for many names, so
+    # allow EQUALITY (not strict less-than). The real failure mode we're
+    # guarding against is a degenerate case where subindustry collapses to
+    # << industry, which means the subindustry classifier broke.
     n_sector = len(classifications.get("sector", pd.Series()).unique())
     n_industry = len(classifications.get("industry", pd.Series()).unique())
     n_subindustry = len(classifications.get("subindustry", pd.Series()).unique())
-    if not (n_sector < n_industry < n_subindustry):
-        fails.append(f"FAIL: Classification hierarchy broken: "
-                    f"sector={n_sector}, industry={n_industry}, subindustry={n_subindustry}")
+    hierarchy_ok = (n_sector <= n_industry <= n_subindustry) and n_subindustry >= 20
+    if not hierarchy_ok:
+        fails.append(f"FAIL: Classification hierarchy degenerate: "
+                    f"sector={n_sector}, industry={n_industry}, subindustry={n_subindustry} "
+                    f"(need sector<=industry<=subindustry, subindustry>=20)")
     else:
         log.info(f"  [OK] Classifications: {n_sector} sectors, {n_industry} industries, {n_subindustry} subindustries")
 
@@ -998,7 +1062,24 @@ def run_trading_workflow(mode="dry-run", port=IB_PORT_PAPER, gmv_override=None,
     # ── Phase 1b: Construct live bar (TODAY's estimated OHLCV) ────────
     log.info("\nPhase 1b: Constructing today's live bar...")
     log.info("  delay=0 requires today's OHLCV for alpha evaluation")
-    matrices, live_quotes, flagged_tickers = append_live_bar(matrices)
+
+    # Open an early IB connection so live_bar can pull IB's running daily
+    # VWAP — far closer to the auction-final VWAP than the (H+L+C)/3 proxy.
+    # Falls back gracefully if IB is unreachable (dry-run, network issue, etc.).
+    early_ib = None
+    if mode == "live" and not check_borrow_only:
+        try:
+            _probe = IBConnection(host=IB_HOST, port=port, client_id=IB_CLIENT_ID)
+            if _probe.connect():
+                early_ib = _probe.ib
+                log.info("  IB early-connect OK for live VWAP")
+            else:
+                log.warning("  IB early-connect failed; live_bar will use (H+L+C)/3 fallback")
+        except Exception as e:
+            log.warning(f"  IB early-connect raised {type(e).__name__}; "
+                        f"live_bar will use (H+L+C)/3 fallback")
+
+    matrices, live_quotes, flagged_tickers = append_live_bar(matrices, ib=early_ib)
 
     # Update close reference to use LIVE prices (today's estimated close)
     close_df = matrices["close"]

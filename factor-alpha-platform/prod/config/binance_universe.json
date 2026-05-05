@@ -1,0 +1,43 @@
+{
+    "_doc": "Binance 4h factor-research universe. Same construction recipe as KUCOIN_TOP30_4h (TOP30 by ADV, 60d rebalance, 365d min history, vol-rank-95 exclusion). Built by tools/build_kucoin_universe.py — file is exchange-agnostic. Splits include the longer Binance history; TEST window matches KuCoin (Jan 1 2026 +).",
+    "exchange": "binance",
+    "interval": "4h",
+    "bars_per_day": 6,
+
+    "universe": {
+        "name": "BINANCE_TOP30_4h",
+        "method": "top_n_by_adv",
+        "top_n": 30,
+        "rebalance_days": 60,
+        "min_history_days": 365,
+
+        "exclusion": {
+            "method": "vol_rank",
+            "field": "parkinson_volatility_60",
+            "percentile_threshold": 95,
+            "scope": "train_window"
+        },
+
+        "weighting": {
+            "method": "equal"
+        }
+    },
+
+    "data": {
+        "matrices_dir": "data/binance_cache/matrices/4h",
+        "adv_field": "adv20",
+        "close_field": "close"
+    },
+
+    "splits": {
+        "train_start": "2020-01-01",
+        "train_end": "2025-09-01",
+        "val_end": "2026-01-01"
+    },
+
+    "output": {
+        "universe_dir": "data/binance_cache/universes",
+        "filename_template": "{name}.parquet",
+        "legacy_backup_suffix": ".legacy.parquet"
+    }
+}

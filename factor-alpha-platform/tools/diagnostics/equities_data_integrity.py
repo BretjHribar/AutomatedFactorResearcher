@@ -14,6 +14,8 @@ Equities Data Integrity Dashboard — analogous to data_integrity_dashboard.py
   8. Price sanity (negative, zero, extreme returns)
   9. Cross-matrix consistency (close vs returns alignment)
  10. Universe membership consistency (TOP500/1000/2000 row sums)
+ 11. **Calendar continuity** — index has every NYSE trading day, no holes
+ 12. **End-staleness** — last bar is the previous NYSE trading day (or today)
 
 Exit code 0 = ALL GREEN, 1 = FAILURES.
 """
@@ -24,7 +26,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
 
 # ── Config / thresholds ──────────────────────────────────────────────────────
@@ -298,6 +300,92 @@ def audit_matrices_dir(name: str, mdir: Path, report: CheckReport):
                    f"comparison): " + ", ".join(no_data[:5]))
 
 
+def audit_calendar_continuity(name: str, mdir: Path, report: CheckReport):
+    """Check that the date index covers every NYSE trading day with no holes,
+    and that the last bar is the previous NYSE trading day or today.
+
+    A hole is the silent killer for delay-0 strategies — every rolling-window
+    operator (sma, momentum_60d, parkinson_volatility_60, etc.) reads across
+    the gap and produces corrupted values for many subsequent bars."""
+    print(f"\n{'='*100}")
+    print(f"CALENDAR CONTINUITY: {name}")
+    print(f"{'='*100}")
+    if not mdir.exists():
+        return
+    close_path = mdir / "close.parquet"
+    if not close_path.exists():
+        return
+    close = pd.read_parquet(close_path)
+    if not isinstance(close.index, pd.DatetimeIndex):
+        return
+
+    cached_dates = set(close.index.date)
+    first, last = close.index.min().date(), close.index.max().date()
+
+    try:
+        import pandas_market_calendars as mcal
+        nyse = mcal.get_calendar("NYSE")
+        sched = nyse.schedule(start_date=str(first), end_date=str(last))
+        expected = set(d.date() for d in sched.index)
+        cal_label = "NYSE"
+    except ImportError:
+        rng = pd.bdate_range(first, last)
+        expected = set(d.date() for d in rng)
+        cal_label = "weekday-only-fallback"
+
+    missing = sorted(expected - cached_dates)
+    extra   = sorted(cached_dates - expected)
+
+    if missing:
+        report.add(f"{name}/calendar_holes", "FAIL",
+                   f"{len(missing)} {cal_label} trading days missing from "
+                   f"close.parquet. First few: {missing[:10]}"
+                   + (f", ...+{len(missing)-10} more" if len(missing) > 10 else ""))
+    else:
+        report.add(f"{name}/calendar_holes", "PASS",
+                   f"no missing trading days ({cal_label}, "
+                   f"{len(cached_dates)} cached over {first}→{last})")
+
+    if extra:
+        report.add(f"{name}/calendar_extra", "WARN",
+                   f"{len(extra)} dates in cache that aren't {cal_label} "
+                   f"trading days: {extra[:5]}")
+
+    # End-staleness — the cache must include the previous trading day
+    today = datetime.today().date()
+    try:
+        import pandas_market_calendars as mcal
+        nyse = mcal.get_calendar("NYSE")
+        sched_recent = nyse.schedule(start_date=str(today - timedelta(days=10)),
+                                     end_date=str(today))
+        prior_days = [d.date() for d in sched_recent.index if d.date() < today]
+        expected_last = prior_days[-1] if prior_days else None
+    except ImportError:
+        # Fallback: nearest weekday strictly before today
+        d = today
+        while True:
+            d = d - timedelta(days=1)
+            if d.weekday() < 5:
+                expected_last = d
+                break
+
+    if expected_last is None:
+        report.add(f"{name}/end_staleness", "WARN", "could not determine expected last bar")
+    elif last < expected_last:
+        gap_days = (expected_last - last).days
+        report.add(f"{name}/end_staleness", "FAIL",
+                   f"cache ends {last}, expected last bar is {expected_last} "
+                   f"({gap_days} calendar days behind). Refresh required before "
+                   f"trading on stale data.")
+    elif last > expected_last:
+        # cache includes today — that's fine if a live bar was appended
+        report.add(f"{name}/end_staleness", "PASS",
+                   f"cache ends {last} (≥ expected {expected_last}; live bar present)")
+    else:
+        report.add(f"{name}/end_staleness", "PASS",
+                   f"cache ends on previous trading day {last}")
+
+
 def audit_lookahead_bias(report: CheckReport):
     """Check whether matrix forward-fills from period-end (lookahead!) vs filing-date (PIT)."""
     print(f"\n{'='*100}")
@@ -387,6 +475,7 @@ def main():
     report = CheckReport()
     for name, mdir in MATRICES_DIRS.items():
         audit_matrices_dir(name, mdir, report)
+        audit_calendar_continuity(name, mdir, report)
 
     audit_lookahead_bias(report)
 

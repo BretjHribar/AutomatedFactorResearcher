@@ -1,0 +1,50 @@
+{
+    "_doc": "KuCoin 4h factor-research universe. Built by tools/build_kucoin_universe.py. Config schema mirrors strategy.json / kucoin.json conventions.",
+    "exchange": "kucoin",
+    "interval": "4h",
+    "bars_per_day": 6,
+
+    "universe": {
+        "name": "KUCOIN_TOP30_4h",
+        "method": "top_n_by_adv",
+        "top_n": 30,
+        "_top_n_note": "Per H1 sweep — TOP30 best on TRAIN, TOP20 best on V+T. TOP30 chosen as default for thicker cross-section.",
+
+        "rebalance_days": 60,
+        "_rebalance_note": "Per H3+R1 sweep — 60d optimal at TOP30 (regime-commitment unlocks alpha; daily rebalance churns and breaks position continuity).",
+
+        "min_history_days": 365,
+        "_min_history_note": "Per H2 sweep — 365d sweet spot. <90d contaminates with post-listing pumps; >540d shrinks universe too small.",
+
+        "exclusion": {
+            "method": "vol_rank",
+            "_method_note": "Per R2 — vol-rank-95 exclusion (top 5% by historical Parkinson_60 vol over TRAIN window) beats name-pattern meme exclusion.",
+            "field": "parkinson_volatility_60",
+            "percentile_threshold": 95,
+            "scope": "train_window"
+        },
+
+        "weighting": {
+            "method": "equal",
+            "_weighting_note": "Per R3 — equal-weight beats ADV-weighted by 0.05-0.10 SR consistently across sizes."
+        }
+    },
+
+    "data": {
+        "matrices_dir": "data/kucoin_cache/matrices/4h",
+        "adv_field": "adv20",
+        "close_field": "close"
+    },
+
+    "splits": {
+        "train_start": "2023-09-01",
+        "train_end": "2025-09-01",
+        "val_end": "2026-01-01"
+    },
+
+    "output": {
+        "universe_dir": "data/kucoin_cache/universes",
+        "filename_template": "{name}.parquet",
+        "legacy_backup_suffix": ".legacy.parquet"
+    }
+}

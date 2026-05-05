@@ -145,7 +145,7 @@ def run_aipt_dual_stream(Z_prod_3d: np.ndarray, Z_trees_3d: np.ndarray,
         port_returns.append(float(w_norm @ r_t1))
         bar_dates.append(dates[oos_t])
         if prev_w is not None:
-            turnovers.append(np.abs(w_norm - prev_w).sum() / 2.0)
+            turnovers.append(np.abs(w_norm - prev_w).sum())
         else:
             turnovers.append(0.0)
         prev_w = w_norm.copy()

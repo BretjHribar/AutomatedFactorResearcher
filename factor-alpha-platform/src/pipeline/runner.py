@@ -40,6 +40,7 @@ from src.portfolio.combiners import (
 )
 from src.portfolio.risk_model import (
     build_diagonal, build_pca, build_style, build_style_pca, build_style_factors,
+    build_ipca, build_crypto_ipca_characteristics,
 )
 from src.portfolio.qp import run_walkforward
 from src.pipeline.fees import make_cost_fn
@@ -236,6 +237,33 @@ def _build_risk_model_fn(name, params, mats, dates, tickers):
                 return build_pca(R, n_pca)
             return build_style_pca(R, B[:, ok], n_pca)
         return fn
+    if name == "ipca":
+        # Bianchi-Babiak (2022): instrumented PCA with characteristics-driven
+        # time-varying loadings.  Z_stack is rebuilt with the crypto factor set.
+        k_ipca = int(params.get("n_factors", 3))
+        char_factors = build_crypto_ipca_characteristics(mats)
+        char_names = list(char_factors.keys())
+        if not char_names:
+            raise ValueError("ipca: no characteristics available — check matrices")
+        Zc_stack = np.full((n_dates, n_tickers, len(char_names)), np.nan, dtype=np.float32)
+        for k_, fname in enumerate(char_names):
+            df = char_factors[fname].reindex(index=dates, columns=tickers)
+            Zc_stack[:, :, k_] = df.values.astype(np.float32)
+
+        def fn(i, idx, vol_today, ret_mat, factor_window):
+            if i < factor_window + 1:
+                return build_diagonal(vol_today)
+            R = ret_mat[i - factor_window:i, idx]
+            R = np.where(np.isfinite(R), R, 0.0)
+            Z_win = Zc_stack[i - factor_window:i, idx, :]
+            Z_today = Zc_stack[i, idx, :]
+            # Drop characteristic columns that are entirely NaN over the window
+            ok = np.all(np.isfinite(Z_win).any(axis=0), axis=0) if False else \
+                 np.array([np.isfinite(Z_win[:, :, l]).any() for l in range(Z_win.shape[2])])
+            if ok.sum() < k_ipca:
+                return build_pca(R, k_ipca)
+            return build_ipca(R, Z_win[:, :, ok], Z_today[:, ok], k_ipca)
+        return fn
     raise ValueError(f"unknown risk_model {name!r}")
 
 
@@ -245,7 +273,7 @@ def _build_risk_model_fn(name, params, mats, dates, tickers):
 
 def _split_metrics(g, n, w, *, train_end, val_end, bars_per_year):
     ann = float(np.sqrt(bars_per_year))
-    to = w.diff().abs().sum(axis=1).mean() / 2
+    to = w.diff().abs().sum(axis=1).mean()
     out = {"_turnover_per_bar": float(to)}
     splits = [
         ("TRAIN",    slice(None, train_end)),

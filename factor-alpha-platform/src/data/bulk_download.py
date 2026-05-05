@@ -1259,6 +1259,12 @@ def main():
     # 9. Build matrices
     build_matrices(prices, classifications, CACHE_DIR)
 
+    # 10. Hole-detection — refuse to silently ship a cache with missing
+    # trading days. The trader reads close.parquet and any gap corrupts
+    # rolling-window operators (sma, ts_delta, momentum_60d, etc.) for
+    # several lookbacks after the gap.
+    validate_no_calendar_holes(CACHE_DIR / "matrices" / "close.parquet")
+
     elapsed = time.time() - t0
     logger.info(f"\n{'='*60}")
     logger.info(f"Done in {elapsed/60:.1f} minutes")
@@ -1268,6 +1274,51 @@ def main():
     logger.info(f"  SIC codes: {len(sic_codes) if sic_codes else 'skipped'}")
     logger.info(f"  Cache: {CACHE_DIR}")
     logger.info(f"{'='*60}")
+
+
+def validate_no_calendar_holes(close_parquet_path):
+    """Halt the build if close.parquet is missing any NYSE trading day
+    between the first and last date in its index. Required so the trader
+    cannot silently consume a cache where mid-window holes corrupt every
+    rolling operator.
+    """
+    import pandas as pd
+    df = pd.read_parquet(close_parquet_path)
+    if not isinstance(df.index, pd.DatetimeIndex):
+        df.index = pd.to_datetime(df.index)
+    cached_dates = set(df.index.date)
+    try:
+        import pandas_market_calendars as mcal
+        nyse = mcal.get_calendar("NYSE")
+        sched = nyse.schedule(start_date=str(df.index.min().date()),
+                              end_date=str(df.index.max().date()))
+        expected = set(d.date() for d in sched.index)
+    except ImportError:
+        # Fallback: weekday-only — known to false-positive on US holidays
+        # but better than no check.
+        rng = pd.bdate_range(df.index.min(), df.index.max())
+        expected = set(d.date() for d in rng)
+        logger.warning("  [hole-check] pandas_market_calendars missing — "
+                       "falling back to weekday calendar (will false-positive "
+                       "on US holidays)")
+    missing = sorted(expected - cached_dates)
+    extra   = sorted(cached_dates - expected)
+    logger.info(f"\n[hole-check] close.parquet covers "
+                f"{df.index.min().date()} → {df.index.max().date()} "
+                f"({len(cached_dates)} cached vs {len(expected)} expected)")
+    if extra:
+        logger.warning(f"[hole-check] {len(extra)} dates in cache that aren't "
+                       f"NYSE trading days: {extra[:5]}{'…' if len(extra)>5 else ''}")
+    if missing:
+        msg = (f"[hole-check] FAIL — {len(missing)} trading days missing: "
+               f"{missing[:10]}{'…' if len(missing)>10 else ''}")
+        logger.error(msg)
+        raise RuntimeError(
+            f"Calendar holes in close.parquet: {len(missing)} missing trading "
+            f"days. Refusing to ship a cache with gaps. First few: "
+            f"{missing[:5]}"
+        )
+    logger.info("[hole-check] OK — no missing trading days")
 
 
 if __name__ == "__main__":
