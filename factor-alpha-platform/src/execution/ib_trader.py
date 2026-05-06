@@ -22,6 +22,7 @@ Requirements:
 from __future__ import annotations
 
 import logging
+import os
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, time
@@ -38,9 +39,9 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 # IB connection defaults
-IB_HOST = "127.0.0.1"
-IB_PORT = 7497          # 7497 = TWS Paper, 7496 = TWS Live, 4002 = Gateway Paper, 4001 = Gateway Live
-IB_CLIENT_ID = 10
+IB_HOST = os.environ.get("IB_HOST", "127.0.0.1")
+IB_PORT = int(os.environ.get("IB_PORT", "7497"))  # 7497/7499 TWS Paper, 4002/4004 Gateway Paper
+IB_CLIENT_ID = int(os.environ.get("IB_CLIENT_ID", "10"))
 
 # Portfolio parameters matching implementation plan
 EQUITY = 110_000

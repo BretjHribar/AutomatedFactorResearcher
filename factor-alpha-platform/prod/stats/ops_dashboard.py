@@ -76,6 +76,17 @@ def _config_hash(path: Path) -> str | None:
     return hashlib.sha256(path.read_bytes()).hexdigest()[:12]
 
 
+def _exchange_enabled(exchange: str) -> tuple[bool, str | None]:
+    if exchange == "ib":
+        return True, None
+    config_path = PROJECT_ROOT / "prod" / "config" / f"{exchange}.json"
+    config = _read_json(config_path)
+    execution = config.get("execution") or {}
+    if execution.get("enabled") is False:
+        return False, execution.get("disabled_reason") or "disabled in exchange config"
+    return True, None
+
+
 def _latest_json(directory: Path, pattern: str = "trade_*.json",
                  *, exclude_suffix: str | None = None) -> Path | None:
     if not directory.exists():
@@ -254,6 +265,15 @@ def _dedupe_performance(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]
 
 
 def _performance_summary(exchange: str, path: Path | None) -> dict[str, Any]:
+    enabled, disabled_reason = _exchange_enabled(exchange)
+    if not enabled:
+        return {
+            "exchange": exchange,
+            "status": "disabled",
+            "message": disabled_reason,
+            "path": str(path) if path else None,
+            "curve": [],
+        }
     if path is None:
         return {"exchange": exchange, "status": "missing", "message": "no equity CSV", "curve": []}
     try:
@@ -391,8 +411,11 @@ def _sync_binance_strategy_state(state_db: Path) -> None:
         gross, net, n_positions = _portfolio_summary_stats(trade)
 
     last_data_bar = _last_parquet_index(matrices_path)
+    enabled, disabled_reason = _exchange_enabled("binance")
     status = "unknown"
-    if last_data_bar:
+    if not enabled:
+        status = "disabled"
+    elif last_data_bar:
         try:
             age_hours = (
                 pd.Timestamp.now("UTC").tz_localize(None) - pd.Timestamp(last_data_bar)
@@ -421,6 +444,8 @@ def _sync_binance_strategy_state(state_db: Path) -> None:
             "strategy": (config.get("strategy") or {}).get("name"),
             "latest_trade_log": str(trade_path) if trade_path else None,
             "target_gmv": (config.get("account") or {}).get("target_gmv"),
+            "enabled": enabled,
+            "disabled_reason": disabled_reason,
         },
     )
     upsert_strategy_state(state, state_db)
@@ -461,6 +486,7 @@ def _badge(status: str) -> str:
         "warning": "warn",
         "stale": "warn",
         "unknown": "warn",
+        "disabled": "neutral",
         "fail": "fail",
         "blocked": "fail",
         "critical": "fail",

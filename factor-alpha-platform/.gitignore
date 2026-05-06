@@ -49,6 +49,8 @@ logs/
 prod/logs/
 prod/state/
 prod/stats/output/
+.dagster_home/
+.tmp_dagster_home*/
 
 # Keep test fixtures
 !tests/fixtures/sample_data/

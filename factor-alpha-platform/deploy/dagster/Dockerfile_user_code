@@ -1,0 +1,16 @@
+FROM python:3.12-slim
+
+WORKDIR /opt/dagster/app
+
+COPY pyproject.toml README.md ./
+COPY definitions.py ./
+COPY src ./src
+COPY prod ./prod
+
+RUN pip install --no-cache-dir -e ".[orchestration,connectors,optimization,monitoring]"
+
+EXPOSE 4000
+HEALTHCHECK --timeout=10s --start-period=20s --interval=10s --retries=12 \
+    CMD ["dagster", "api", "grpc-health-check", "-h", "127.0.0.1", "-p", "4000"]
+
+CMD ["dagster", "code-server", "start", "-h", "0.0.0.0", "-p", "4000", "-f", "definitions.py"]

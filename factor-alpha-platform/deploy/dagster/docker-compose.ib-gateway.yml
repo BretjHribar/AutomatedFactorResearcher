@@ -1,0 +1,82 @@
+services:
+  ib-gateway:
+    image: ${IB_GATEWAY_IMAGE:-ghcr.io/gnzsnz/ib-gateway:stable}
+    container_name: factor_alpha_ib_gateway
+    restart: unless-stopped
+    environment:
+      TWS_USERID: ${TWS_USERID:-}
+      TWS_PASSWORD: ${TWS_PASSWORD:-}
+      TWS_PASSWORD_FILE: ${TWS_PASSWORD_FILE:-}
+      TWS_USERID_PAPER: ${TWS_USERID_PAPER:-}
+      TWS_PASSWORD_PAPER: ${TWS_PASSWORD_PAPER:-}
+      TWS_PASSWORD_PAPER_FILE: ${TWS_PASSWORD_PAPER_FILE:-}
+      TRADING_MODE: ${TRADING_MODE:-paper}
+      TWS_SETTINGS_PATH: ${TWS_SETTINGS_PATH:-/home/ibgateway/tws_settings}
+      TWS_ACCEPT_INCOMING: ${TWS_ACCEPT_INCOMING:-accept}
+      TWS_MASTER_CLIENT_ID: ${TWS_MASTER_CLIENT_ID:-}
+      READ_ONLY_API: ${READ_ONLY_API:-no}
+      VNC_SERVER_PASSWORD: ${VNC_SERVER_PASSWORD:-}
+      VNC_SERVER_PASSWORD_FILE: ${VNC_SERVER_PASSWORD_FILE:-}
+      TWOFA_TIMEOUT_ACTION: ${TWOFA_TIMEOUT_ACTION:-restart}
+      TWOFA_EXIT_INTERVAL: ${TWOFA_EXIT_INTERVAL:-180}
+      TWOFA_DEVICE: ${TWOFA_DEVICE:-}
+      RELOGIN_AFTER_TWOFA_TIMEOUT: ${RELOGIN_AFTER_TWOFA_TIMEOUT:-yes}
+      EXISTING_SESSION_DETECTED_ACTION: ${EXISTING_SESSION_DETECTED_ACTION:-primary}
+      BYPASS_WARNING: ${BYPASS_WARNING:-yes}
+      ALLOW_BLIND_TRADING: ${ALLOW_BLIND_TRADING:-yes}
+      AUTO_RESTART_TIME: ${AUTO_RESTART_TIME:-11:45 PM}
+      AUTO_LOGOFF_TIME: ${AUTO_LOGOFF_TIME:-}
+      TWS_COLD_RESTART: ${TWS_COLD_RESTART:-}
+      SAVE_TWS_SETTINGS: ${SAVE_TWS_SETTINGS:-}
+      TIME_ZONE: ${TIME_ZONE:-America/New_York}
+      TZ: ${TIME_ZONE:-America/New_York}
+      CUSTOM_CONFIG: ${CUSTOM_CONFIG:-NO}
+      JAVA_HEAP_SIZE: ${JAVA_HEAP_SIZE:-1024}
+      IB_GATEWAY_CONTAINER_API_PORT: ${IB_GATEWAY_CONTAINER_API_PORT:-4004}
+    healthcheck:
+      test: ["CMD-SHELL", "bash -lc 'exec 3<>/dev/tcp/127.0.0.1/${IB_GATEWAY_CONTAINER_API_PORT:-4004}'"]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 120s
+    ports:
+      - "${IB_GATEWAY_BIND_ADDRESS:-127.0.0.1}:${IB_GATEWAY_HOST_LIVE_PORT:-4001}:4003"
+      - "${IB_GATEWAY_BIND_ADDRESS:-127.0.0.1}:${IB_GATEWAY_HOST_PAPER_PORT:-4002}:4004"
+      - "${IB_GATEWAY_BIND_ADDRESS:-127.0.0.1}:${IB_GATEWAY_VNC_PORT:-5900}:5900"
+    volumes:
+      - ib_gateway_settings:/home/ibgateway/tws_settings
+    networks:
+      - dagster_network
+
+  dagster_user_code:
+    environment:
+      IB_HOST: ${IB_HOST:-ib-gateway}
+      IB_PORT: ${IB_PORT:-${IB_GATEWAY_CONTAINER_API_PORT:-4004}}
+      IB_GATEWAY_HEALTH_MODE: ${IB_GATEWAY_HEALTH_MODE:-ib_insync}
+      IB_GATEWAY_HEALTH_TIMEOUT_SEC: ${IB_GATEWAY_HEALTH_TIMEOUT_SEC:-8}
+    depends_on:
+      ib-gateway:
+        condition: service_started
+
+  dagster_webserver:
+    environment:
+      IB_HOST: ${IB_HOST:-ib-gateway}
+      IB_PORT: ${IB_PORT:-${IB_GATEWAY_CONTAINER_API_PORT:-4004}}
+      IB_GATEWAY_HEALTH_MODE: ${IB_GATEWAY_HEALTH_MODE:-ib_insync}
+      IB_GATEWAY_HEALTH_TIMEOUT_SEC: ${IB_GATEWAY_HEALTH_TIMEOUT_SEC:-8}
+    depends_on:
+      ib-gateway:
+        condition: service_started
+
+  dagster_daemon:
+    environment:
+      IB_HOST: ${IB_HOST:-ib-gateway}
+      IB_PORT: ${IB_PORT:-${IB_GATEWAY_CONTAINER_API_PORT:-4004}}
+      IB_GATEWAY_HEALTH_MODE: ${IB_GATEWAY_HEALTH_MODE:-ib_insync}
+      IB_GATEWAY_HEALTH_TIMEOUT_SEC: ${IB_GATEWAY_HEALTH_TIMEOUT_SEC:-8}
+    depends_on:
+      ib-gateway:
+        condition: service_started
+
+volumes:
+  ib_gateway_settings:

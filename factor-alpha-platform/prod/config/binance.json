@@ -16,6 +16,8 @@
         "max_drawdown_halt_pct": 15.0
     },
     "execution": {
+        "enabled": false,
+        "disabled_reason": "Disabled on this local UAT box while Binance Futures API returns HTTP 451 without VPN.",
         "order_type": "TWAP",
         "twap_slices": 30,
         "min_order_value": 50,

@@ -1,0 +1,139 @@
+services:
+  dagster_postgres:
+    image: postgres:16
+    container_name: factor_alpha_dagster_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DAGSTER_POSTGRES_USER:-dagster}
+      POSTGRES_PASSWORD: ${DAGSTER_POSTGRES_PASSWORD:-dagster}
+      POSTGRES_DB: ${DAGSTER_POSTGRES_DB:-dagster}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DAGSTER_POSTGRES_USER:-dagster} -d ${DAGSTER_POSTGRES_DB:-dagster}"]
+      interval: 10s
+      timeout: 8s
+      retries: 5
+    volumes:
+      - dagster_postgres:/var/lib/postgresql/data
+    networks:
+      - dagster_network
+
+  dagster_user_code:
+    build:
+      context: ../..
+      dockerfile: deploy/dagster/Dockerfile_user_code
+    image: ${FACTOR_ALPHA_USER_CODE_IMAGE:-factor_alpha_user_code:latest}
+    container_name: factor_alpha_dagster_user_code
+    restart: unless-stopped
+    environment:
+      DAGSTER_POSTGRES_USER: ${DAGSTER_POSTGRES_USER:-dagster}
+      DAGSTER_POSTGRES_PASSWORD: ${DAGSTER_POSTGRES_PASSWORD:-dagster}
+      DAGSTER_POSTGRES_DB: ${DAGSTER_POSTGRES_DB:-dagster}
+      DAGSTER_POSTGRES_HOST: dagster_postgres
+      DAGSTER_CURRENT_IMAGE: ${FACTOR_ALPHA_USER_CODE_IMAGE:-factor_alpha_user_code:latest}
+      FMP_API_KEY: ${FMP_API_KEY}
+      IB_HOST: ${IB_HOST:-host.docker.internal}
+      IB_PORT: ${IB_PORT:-4002}
+      IB_PASSWORD: ${IB_PASSWORD:-${IB_PAPER_PASSWORD:-}}
+      ENABLE_IB_LIVE_VWAP: ${ENABLE_IB_LIVE_VWAP:-0}
+      ALLOW_IB_PAPER_ORDERS: ${ALLOW_IB_PAPER_ORDERS:-0}
+      FORCE_IB_PAPER_MOC: ${FORCE_IB_PAPER_MOC:-0}
+      IB_PAPER_EXEC_TIMEOUT_SEC: ${IB_PAPER_EXEC_TIMEOUT_SEC:-1200}
+      CRYPTO_PAPER_EXEC_TIMEOUT_SEC: ${CRYPTO_PAPER_EXEC_TIMEOUT_SEC:-900}
+    volumes:
+      - ../../data:/opt/dagster/app/data
+      - ../../prod/logs:/opt/dagster/app/prod/logs
+    networks:
+      - dagster_network
+
+  dagster_webserver:
+    build:
+      context: ../..
+      dockerfile: deploy/dagster/Dockerfile_dagster
+    image: ${FACTOR_ALPHA_DAGSTER_IMAGE:-factor_alpha_dagster:latest}
+    container_name: factor_alpha_dagster_webserver
+    restart: unless-stopped
+    command: ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-w", "workspace.yaml"]
+    environment:
+      DAGSTER_POSTGRES_USER: ${DAGSTER_POSTGRES_USER:-dagster}
+      DAGSTER_POSTGRES_PASSWORD: ${DAGSTER_POSTGRES_PASSWORD:-dagster}
+      DAGSTER_POSTGRES_DB: ${DAGSTER_POSTGRES_DB:-dagster}
+      DAGSTER_POSTGRES_HOST: dagster_postgres
+      DAGSTER_CURRENT_IMAGE: ${FACTOR_ALPHA_USER_CODE_IMAGE:-factor_alpha_user_code:latest}
+      FMP_API_KEY: ${FMP_API_KEY}
+      IB_HOST: ${IB_HOST:-host.docker.internal}
+      IB_PORT: ${IB_PORT:-4002}
+      IB_PASSWORD: ${IB_PASSWORD:-${IB_PAPER_PASSWORD:-}}
+      ENABLE_IB_LIVE_VWAP: ${ENABLE_IB_LIVE_VWAP:-0}
+      ALLOW_IB_PAPER_ORDERS: ${ALLOW_IB_PAPER_ORDERS:-0}
+      FORCE_IB_PAPER_MOC: ${FORCE_IB_PAPER_MOC:-0}
+      IB_PAPER_EXEC_TIMEOUT_SEC: ${IB_PAPER_EXEC_TIMEOUT_SEC:-1200}
+      CRYPTO_PAPER_EXEC_TIMEOUT_SEC: ${CRYPTO_PAPER_EXEC_TIMEOUT_SEC:-900}
+    ports:
+      - "3000:3000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - factor_alpha_data:/opt/dagster/app/data
+      - factor_alpha_prod_logs:/opt/dagster/app/prod/logs
+    depends_on:
+      dagster_postgres:
+        condition: service_healthy
+      dagster_user_code:
+        condition: service_healthy
+    networks:
+      - dagster_network
+
+  dagster_daemon:
+    build:
+      context: ../..
+      dockerfile: deploy/dagster/Dockerfile_dagster
+    image: ${FACTOR_ALPHA_DAGSTER_IMAGE:-factor_alpha_dagster:latest}
+    container_name: factor_alpha_dagster_daemon
+    restart: unless-stopped
+    command: ["dagster-daemon", "run"]
+    environment:
+      DAGSTER_POSTGRES_USER: ${DAGSTER_POSTGRES_USER:-dagster}
+      DAGSTER_POSTGRES_PASSWORD: ${DAGSTER_POSTGRES_PASSWORD:-dagster}
+      DAGSTER_POSTGRES_DB: ${DAGSTER_POSTGRES_DB:-dagster}
+      DAGSTER_POSTGRES_HOST: dagster_postgres
+      DAGSTER_CURRENT_IMAGE: ${FACTOR_ALPHA_USER_CODE_IMAGE:-factor_alpha_user_code:latest}
+      FMP_API_KEY: ${FMP_API_KEY}
+      IB_HOST: ${IB_HOST:-host.docker.internal}
+      IB_PORT: ${IB_PORT:-4002}
+      IB_PASSWORD: ${IB_PASSWORD:-${IB_PAPER_PASSWORD:-}}
+      ENABLE_IB_LIVE_VWAP: ${ENABLE_IB_LIVE_VWAP:-0}
+      ALLOW_IB_PAPER_ORDERS: ${ALLOW_IB_PAPER_ORDERS:-0}
+      FORCE_IB_PAPER_MOC: ${FORCE_IB_PAPER_MOC:-0}
+      IB_PAPER_EXEC_TIMEOUT_SEC: ${IB_PAPER_EXEC_TIMEOUT_SEC:-1200}
+      CRYPTO_PAPER_EXEC_TIMEOUT_SEC: ${CRYPTO_PAPER_EXEC_TIMEOUT_SEC:-900}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - factor_alpha_data:/opt/dagster/app/data
+      - factor_alpha_prod_logs:/opt/dagster/app/prod/logs
+    depends_on:
+      dagster_postgres:
+        condition: service_healthy
+      dagster_user_code:
+        condition: service_started
+    networks:
+      - dagster_network
+
+volumes:
+  dagster_postgres:
+  factor_alpha_data:
+    name: factor_alpha_data
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${FACTOR_ALPHA_DATA_DIR:-/opt/factor-alpha-platform/data}
+  factor_alpha_prod_logs:
+    name: factor_alpha_prod_logs
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${FACTOR_ALPHA_PROD_LOGS_DIR:-/opt/factor-alpha-platform/prod/logs}
+
+networks:
+  dagster_network:
+    name: dagster_network

@@ -54,6 +54,37 @@ def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _utc_naive_timestamp(ts: pd.Timestamp | datetime | str | None = None) -> pd.Timestamp:
+    """Return a timezone-naive UTC timestamp for parquet/API comparisons."""
+    if ts is None:
+        return pd.Timestamp.now("UTC").tz_localize(None)
+    out = pd.Timestamp(ts)
+    if out.tzinfo is None:
+        return out
+    return out.tz_convert("UTC").tz_localize(None)
+
+
+def _latest_completed_4h_start(now_ts: pd.Timestamp | datetime | str | None = None) -> pd.Timestamp:
+    """Opening timestamp of the most recent fully closed 4h candle."""
+    now = _utc_naive_timestamp(now_ts)
+    return now.floor("4h") - pd.Timedelta(hours=4)
+
+
+def _drop_incomplete_4h_bars(
+    df: pd.DataFrame,
+    time_col: str,
+    *,
+    now_ts: pd.Timestamp | datetime | str | None = None,
+) -> pd.DataFrame:
+    """Drop exchange candles whose open time is not fully closed yet."""
+    if df.empty:
+        return df
+    latest_completed = _latest_completed_4h_start(now_ts)
+    out = df.copy()
+    out[time_col] = pd.to_datetime(out[time_col], errors="coerce")
+    return out[out[time_col] <= latest_completed].copy()
+
+
 # ═══════════════════════════════════════════════════════════════
 # 1. BINANCE
 # ═══════════════════════════════════════════════════════════════
@@ -96,6 +127,7 @@ def _binance_fetch_klines(symbol: str, limit: int = 6) -> pd.DataFrame | None:
     df = df[["datetime", "open", "high", "low", "close", "volume",
              "quote_volume", "trades_count", "taker_buy_volume",
              "taker_buy_quote_volume"]].copy()
+    df = _drop_incomplete_4h_bars(df, "datetime")
     return df
 
 
@@ -114,25 +146,27 @@ def _binance_update_klines() -> int:
         fpath = BINANCE_KLINES_DIR / f"{sym}.parquet"
         try:
             existing = pd.read_parquet(fpath)
-            last_ts = existing["datetime"].max()
+            existing["datetime"] = pd.to_datetime(existing["datetime"], errors="coerce")
+            existing = existing.sort_values("datetime").drop_duplicates("datetime", keep="last").reset_index(drop=True)
+            existing_completed = _drop_incomplete_4h_bars(existing, "datetime").reset_index(drop=True)
         except Exception:
             continue
 
-        # Skip if already up-to-date (last bar within 1 bar of now)
-        now_ts = pd.Timestamp.now('UTC').tz_localize(None)
-        if (now_ts - last_ts).total_seconds() < BAR_SECONDS_4H * 1.5:
-            continue
-
         new_df = _binance_fetch_klines(sym, limit=BARS_TO_FETCH)
+        if new_df is not None and not new_df.empty:
+            new_df = _drop_incomplete_4h_bars(new_df, "datetime").reset_index(drop=True)
         if new_df is None or new_df.empty:
+            if not existing_completed.equals(existing):
+                existing_completed.to_parquet(fpath, index=False)
+                updated += 1
             errors += 1
             continue
 
-        # Append and deduplicate
-        combined = pd.concat([existing, new_df], ignore_index=True)
-        combined = combined.drop_duplicates("datetime").sort_values("datetime").reset_index(drop=True)
+        # Refresh overlapping recent rows and deduplicate by candle open time.
+        combined = pd.concat([existing_completed, new_df], ignore_index=True)
+        combined = combined.drop_duplicates("datetime", keep="last").sort_values("datetime").reset_index(drop=True)
 
-        if len(combined) > len(existing):
+        if not combined.equals(existing_completed):
             combined.to_parquet(fpath, index=False)
             updated += 1
 
@@ -371,6 +405,7 @@ def _kucoin_fetch_klines(symbol: str, limit: int = 6) -> pd.DataFrame | None:
     for col in ["open", "high", "low", "close", "volume", "turnover"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
     df = df.sort_values("time").drop_duplicates("time").reset_index(drop=True)
+    df = _drop_incomplete_4h_bars(df, "time")
     return df
 
 
@@ -388,42 +423,34 @@ def _kucoin_update_klines() -> int:
         fpath = KUCOIN_KLINES_DIR / f"{sym}.parquet"
         try:
             existing = pd.read_parquet(fpath)
-            last_ts = existing.index.max() if "time" not in existing.columns else existing["time"].max()
-            if isinstance(last_ts, pd.Timestamp):
-                pass
-            else:
-                last_ts = pd.Timestamp(last_ts)
+            if "time" not in existing.columns and existing.index.name == "time":
+                existing = existing.reset_index()
+            existing["time"] = pd.to_datetime(existing["time"], errors="coerce")
+            existing = existing.sort_values("time").drop_duplicates("time", keep="last").reset_index(drop=True)
+            existing_completed = _drop_incomplete_4h_bars(existing, "time").reset_index(drop=True)
         except Exception:
             continue
 
-        # Skip only if we already have the most recent COMPLETED 4h bar.
-        # Old logic ("within 1.5 bars of now") incorrectly skipped symbols
-        # sitting at e.g. 16:00 UTC when the 20:00 bar was already available.
-        now_ts = pd.Timestamp.now('UTC').tz_localize(None)
-        latest_completed = now_ts.floor('4h')
-        if last_ts >= latest_completed:
-            continue
-
         new_df = _kucoin_fetch_klines(sym, limit=BARS_TO_FETCH)
+        if new_df is not None and not new_df.empty:
+            new_df = _drop_incomplete_4h_bars(new_df, "time").reset_index(drop=True)
         if new_df is None or new_df.empty:
+            if not existing_completed.equals(existing):
+                existing_completed = existing_completed.set_index("time").sort_index()
+                existing_completed = existing_completed[~existing_completed.index.duplicated(keep="last")]
+                existing_completed.to_parquet(fpath)
+                updated += 1
             errors += 1
             continue
-
-        # KuCoin klines might be stored with time as index
-        if "time" not in existing.columns and existing.index.name == "time":
-            existing = existing.reset_index()
 
         # Align columns: KuCoin uses "time", "turnover" where Binance uses "datetime", "quote_volume"
         new_df_aligned = new_df.copy()
 
-        # Merge and deduplicate
-        if "time" in existing.columns:
-            combined = pd.concat([existing, new_df_aligned], ignore_index=True)
-            combined = combined.drop_duplicates("time").sort_values("time").reset_index(drop=True)
-        else:
-            combined = new_df_aligned
+        # Refresh overlapping recent rows and deduplicate by candle open time.
+        combined = pd.concat([existing_completed, new_df_aligned], ignore_index=True)
+        combined = combined.drop_duplicates("time", keep="last").sort_values("time").reset_index(drop=True)
 
-        if len(combined) > len(existing):
+        if not combined.equals(existing_completed):
             # Save with time as index (matching original format)
             combined = combined.set_index("time").sort_index()
             combined = combined[~combined.index.duplicated(keep="last")]

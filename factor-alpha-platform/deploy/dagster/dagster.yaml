@@ -1,0 +1,54 @@
+storage:
+  postgres:
+    postgres_db:
+      username:
+        env: DAGSTER_POSTGRES_USER
+      password:
+        env: DAGSTER_POSTGRES_PASSWORD
+      hostname:
+        env: DAGSTER_POSTGRES_HOST
+      db_name:
+        env: DAGSTER_POSTGRES_DB
+      port: 5432
+
+run_coordinator:
+  module: dagster.core.run_coordinator
+  class: QueuedRunCoordinator
+
+run_launcher:
+  module: dagster_docker
+  class: DockerRunLauncher
+  config:
+    image:
+      env: DAGSTER_CURRENT_IMAGE
+    network: dagster_network
+    container_kwargs:
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+        - factor_alpha_data:/opt/dagster/app/data
+        - factor_alpha_prod_logs:/opt/dagster/app/prod/logs
+    env_vars:
+      - DAGSTER_POSTGRES_USER
+      - DAGSTER_POSTGRES_PASSWORD
+      - DAGSTER_POSTGRES_DB
+      - DAGSTER_POSTGRES_HOST
+      - FMP_API_KEY
+      - IB_HOST
+      - IB_PORT
+      - IB_PASSWORD
+      - ENABLE_IB_LIVE_VWAP
+      - ALLOW_IB_PAPER_ORDERS
+      - FORCE_IB_PAPER_MOC
+      - IB_PAPER_EXEC_TIMEOUT_SEC
+      - CRYPTO_PAPER_EXEC_TIMEOUT_SEC
+
+run_monitoring:
+  enabled: true
+
+schedules:
+  use_threads: true
+  num_workers: 4
+
+sensors:
+  use_threads: true
+  num_workers: 4

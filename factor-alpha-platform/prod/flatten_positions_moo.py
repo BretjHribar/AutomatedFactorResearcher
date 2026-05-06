@@ -23,16 +23,17 @@ Usage:
     python prod/flatten_positions_moo.py --live     # actually submit
 """
 from __future__ import annotations
-import argparse, datetime as dt, json, sys
+import argparse, datetime as dt, json, os, sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
 
-IB_HOST   = "127.0.0.1"
-IB_PORT   = 4002
-CLIENT_ID = 13
+CFG = json.loads((ROOT / "prod" / "config" / "strategy.json").read_text())
+IB_HOST   = os.environ.get("IB_HOST", CFG["ibkr"]["host"])
+IB_PORT   = int(os.environ.get("IB_PORT_PAPER", os.environ.get("IB_PORT", CFG["ibkr"]["port_paper"])))
+CLIENT_ID = int(os.environ.get("IB_CLIENT_ID_FLATTEN", "13"))
 
 
 def main():

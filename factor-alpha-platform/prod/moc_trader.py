@@ -84,13 +84,13 @@ ACCOUNT_EQUITY = CFG["account"]["equity_seed"]
 MAX_DD_HALT    = CFG["account"]["max_drawdown_halt_pct"]
 MIN_ORDER_VAL  = CFG["execution"].get("min_order_value", 0)  # $0 = no filter
 
-IB_HOST        = CFG["ibkr"]["host"]
-IB_PORT_PAPER  = CFG["ibkr"]["port_paper"]
-IB_PORT_LIVE   = CFG["ibkr"]["port_live"]
-IB_CLIENT_ID   = CFG["ibkr"]["client_id"]
-IB_CLIENT_ID_ORDER_ENTRY = int(CFG["ibkr"].get("client_id_order_entry", IB_CLIENT_ID))
-IB_CLIENT_ID_LIVE_BAR = int(CFG["ibkr"].get("client_id_live_bar", IB_CLIENT_ID + 1))
-IB_CLIENT_ID_POSITION_PROBE = int(CFG["ibkr"].get("client_id_position_probe", IB_CLIENT_ID + 2))
+IB_HOST        = os.environ.get("IB_HOST", CFG["ibkr"]["host"])
+IB_PORT_PAPER  = int(os.environ.get("IB_PORT_PAPER", os.environ.get("IB_PORT", CFG["ibkr"]["port_paper"])))
+IB_PORT_LIVE   = int(os.environ.get("IB_PORT_LIVE", CFG["ibkr"]["port_live"]))
+IB_CLIENT_ID   = int(os.environ.get("IB_CLIENT_ID", CFG["ibkr"]["client_id"]))
+IB_CLIENT_ID_ORDER_ENTRY = int(os.environ.get("IB_CLIENT_ID_ORDER_ENTRY", CFG["ibkr"].get("client_id_order_entry", IB_CLIENT_ID)))
+IB_CLIENT_ID_LIVE_BAR = int(os.environ.get("IB_CLIENT_ID_LIVE_BAR", CFG["ibkr"].get("client_id_live_bar", IB_CLIENT_ID + 1)))
+IB_CLIENT_ID_POSITION_PROBE = int(os.environ.get("IB_CLIENT_ID_POSITION_PROBE", CFG["ibkr"].get("client_id_position_probe", IB_CLIENT_ID + 2)))
 
 def validate_ib_client_ids() -> None:
     ids = {

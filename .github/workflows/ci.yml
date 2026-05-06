@@ -1,89 +1,13 @@
-name: CI — Alpha Trading Platform
+name: Legacy CI
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'factor-alpha-platform/prod/**'
-      - 'factor-alpha-platform/src/**'
-      - 'factor-alpha-platform/tests/**'
-      - 'factor-alpha-platform/tools/**'
-      - 'factor-alpha-platform/pyproject.toml'
-      - '.github/workflows/ci.yml'
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
-  test:
+  redirected:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: 'pip'
-          cache-dependency-path: factor-alpha-platform/pyproject.toml
-      
-      - name: Install dependencies
-        working-directory: factor-alpha-platform
+      - name: Use Factor Alpha CI/CD
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[dev,optimization,connectors,monitoring]"
-      
-      - name: Validate configs
-        working-directory: factor-alpha-platform
-        run: |
-          python -c "
-          import json
-          for cfg_file in ['prod/config/strategy.json', 'prod/config/binance.json', 'prod/config/kucoin.json']:
-              with open(cfg_file) as f:
-                  cfg = json.load(f)
-              print(f'{cfg_file}: OK ({len(cfg.get(\"alphas\", []))} alphas)')
-          "
-      
-      - name: Validate alpha expressions parse
-        working-directory: factor-alpha-platform
-        run: |
-          python -c "
-          import json, ast
-          for cfg_file in ['prod/config/binance.json', 'prod/config/kucoin.json']:
-              with open(cfg_file) as f:
-                  cfg = json.load(f)
-              for a in cfg.get('alphas', []):
-                  expr = a['expression']
-                  # Basic syntax check - ensure balanced parens
-                  assert expr.count('(') == expr.count(')'), f'{a[\"id\"]}: unbalanced parens'
-                  print(f'  {a[\"id\"]}: {len(expr)} chars, OK')
-          "
-      
-      - name: Check imports
-        working-directory: factor-alpha-platform
-        run: |
-          python -c "import pandas; import numpy; import requests; import cvxpy; import sklearn; print('Core imports OK')"
-
-      - name: Compile source
-        working-directory: factor-alpha-platform
-        run: python -m compileall -q src prod tools
-
-      - name: Run tests
-        working-directory: factor-alpha-platform
-        shell: bash
-        run: |
-          if [[ -f data/fmp_cache/matrices/close.parquet ]]; then
-            python -m pytest -q
-          else
-            echo "FMP data cache not present; running synthetic/unit-safe tests."
-            python -m pytest -q tests/unit tests/integration tests/test_ib_components.py
-          fi
-
-      - name: Run acceptance if data cache is present
-        working-directory: factor-alpha-platform
-        shell: bash
-        run: |
-          if [[ -f data/alpha_results.db && -f data/fmp_cache/matrices/close.parquet && -f data/kucoin_cache/matrices/4h/close.parquet ]]; then
-            python tools/test_pipeline_acceptance.py
-          else
-            echo "Data cache not present; skipping local-data acceptance gate."
-          fi
+          echo "The automated pipeline now lives in .github/workflows/factor-alpha-ci-cd.yml."
+          echo "Run this legacy workflow only for historical/manual debugging."

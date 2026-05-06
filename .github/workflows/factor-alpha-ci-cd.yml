@@ -1,0 +1,231 @@
+name: Factor Alpha CI/CD
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "factor-alpha-platform/**"
+      - ".github/workflows/factor-alpha-ci-cd.yml"
+  push:
+    branches: [main]
+    paths:
+      - "factor-alpha-platform/**"
+      - ".github/workflows/factor-alpha-ci-cd.yml"
+  workflow_dispatch:
+    inputs:
+      publish_images:
+        description: "Build and push Docker images to GHCR"
+        type: boolean
+        default: true
+      promote_environment:
+        description: "Retag an existing sha-* image for deployment"
+        type: choice
+        options: [none, uat, prod]
+        default: none
+      promote_sha:
+        description: "Existing git SHA or sha-* tag to promote. Defaults to this workflow commit."
+        type: string
+        required: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  PROJECT_DIR: factor-alpha-platform
+  PYTHON_VERSION: "3.12"
+
+concurrency:
+  group: factor-alpha-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Test and validate
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.PROJECT_DIR }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: ${{ env.PROJECT_DIR }}/pyproject.toml
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,orchestration,connectors,optimization,monitoring]"
+
+      - name: Lint advisory
+        continue-on-error: true
+        run: python -m ruff check .
+
+      - name: Compile critical runtime modules
+        run: |
+          python -m py_compile definitions.py
+          python -m py_compile src/execution/recorders.py
+          python -m py_compile src/orchestration/dagster_defs.py
+          python -m py_compile prod/live_bar.py
+          python -m py_compile prod/moc_trader.py
+
+      - name: Validate Dagster definitions
+        run: dagster definitions validate -f definitions.py
+
+      - name: Validate production configs
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          for cfg_file in [
+              "prod/config/strategy.json",
+              "prod/config/binance.json",
+              "prod/config/kucoin.json",
+              "prod/config/research_equity.json",
+              "prod/config/research_crypto.json",
+          ]:
+              path = Path(cfg_file)
+              with path.open("r", encoding="utf-8") as f:
+                  cfg = json.load(f)
+              print(f"{cfg_file}: OK ({len(cfg)} top-level keys)")
+
+          strategy = json.loads(Path("prod/config/strategy.json").read_text(encoding="utf-8"))
+          assert strategy["strategy"]["universe"] == "MCAP_100M_500M"
+          assert float(strategy["strategy"]["min_alpha_sharpe"]) >= 5.0
+          assert str(strategy["ibkr"]["paper_account"]).startswith("DU")
+          assert int(strategy["ibkr"]["port_paper"]) in {4002, 7497}
+          PY
+
+      - name: Run unit and orchestration tests
+        run: |
+          python -m pytest \
+            tests/unit \
+            tests/test_dagster_definitions.py \
+            tests/test_live_bar_vwap.py \
+            -q
+
+      - name: Run data-backed acceptance when caches are present
+        shell: bash
+        run: |
+          if [[ -f data/alpha_results.db && -f data/fmp_cache/matrices/close.parquet && -f data/kucoin_cache/matrices/4h/close.parquet ]]; then
+            python tools/test_pipeline_acceptance.py
+          else
+            echo "Local market-data caches are not present in CI; skipping data-backed acceptance gate."
+          fi
+
+      - name: Validate docker compose
+        run: |
+          docker compose -f deploy/dagster/docker-compose.yml config
+          docker compose \
+            --env-file deploy/dagster/.env.example \
+            --env-file deploy/dagster/.env.ib-gateway.example \
+            -f deploy/dagster/docker-compose.yml \
+            -f deploy/dagster/docker-compose.ib-gateway.yml \
+            config
+
+  docker:
+    name: Build and publish images
+    needs: ci
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_images)
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set image metadata
+        id: meta
+        shell: bash
+        run: |
+          owner="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          short_sha="${GITHUB_SHA::12}"
+          ref_name="$(echo "${GITHUB_REF_NAME}" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9_.-]+/-/g')"
+          echo "user_image=ghcr.io/${owner}/factor-alpha-user-code" >> "$GITHUB_OUTPUT"
+          echo "dagster_image=ghcr.io/${owner}/factor-alpha-dagster" >> "$GITHUB_OUTPUT"
+          echo "sha_tag=sha-${short_sha}" >> "$GITHUB_OUTPUT"
+          echo "branch_tag=branch-${ref_name}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build user-code image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.PROJECT_DIR }}
+          file: ${{ env.PROJECT_DIR }}/deploy/dagster/Dockerfile_user_code
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ steps.meta.outputs.user_image }}:${{ steps.meta.outputs.sha_tag }}
+            ${{ steps.meta.outputs.user_image }}:${{ steps.meta.outputs.branch_tag }}
+          cache-from: type=gha,scope=factor-alpha-user-code
+          cache-to: type=gha,mode=max,scope=factor-alpha-user-code
+
+      - name: Build Dagster image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.PROJECT_DIR }}
+          file: ${{ env.PROJECT_DIR }}/deploy/dagster/Dockerfile_dagster
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ steps.meta.outputs.dagster_image }}:${{ steps.meta.outputs.sha_tag }}
+            ${{ steps.meta.outputs.dagster_image }}:${{ steps.meta.outputs.branch_tag }}
+          cache-from: type=gha,scope=factor-alpha-dagster
+          cache-to: type=gha,mode=max,scope=factor-alpha-dagster
+
+  promote:
+    name: Promote image tag
+    needs: [ci]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && inputs.promote_environment != 'none'
+    environment: ${{ inputs.promote_environment }}
+
+    steps:
+      - name: Set image metadata
+        id: meta
+        shell: bash
+        run: |
+          owner="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          requested="${{ inputs.promote_sha }}"
+          if [[ -z "$requested" ]]; then
+            requested="${GITHUB_SHA::12}"
+          fi
+          requested="${requested#sha-}"
+          requested="${requested:0:12}"
+          echo "user_image=ghcr.io/${owner}/factor-alpha-user-code" >> "$GITHUB_OUTPUT"
+          echo "dagster_image=ghcr.io/${owner}/factor-alpha-dagster" >> "$GITHUB_OUTPUT"
+          echo "source_tag=sha-${requested}" >> "$GITHUB_OUTPUT"
+          echo "target_tag=${{ inputs.promote_environment }}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Retag user-code image
+        run: |
+          docker buildx imagetools create \
+            -t "${{ steps.meta.outputs.user_image }}:${{ steps.meta.outputs.target_tag }}" \
+            "${{ steps.meta.outputs.user_image }}:${{ steps.meta.outputs.source_tag }}"
+
+      - name: Retag Dagster image
+        run: |
+          docker buildx imagetools create \
+            -t "${{ steps.meta.outputs.dagster_image }}:${{ steps.meta.outputs.target_tag }}" \
+            "${{ steps.meta.outputs.dagster_image }}:${{ steps.meta.outputs.source_tag }}"

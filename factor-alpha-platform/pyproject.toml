@@ -51,6 +51,12 @@ connectors = [
 monitoring = [
     "prometheus-client>=0.20",
 ]
+orchestration = [
+    "dagster>=1.13,<2",
+    "dagster-webserver>=1.13,<2",
+    "dagster-postgres",
+    "dagster-docker",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
