@@ -243,6 +243,13 @@ def _run_subprocess(
     proc_env.update(env or {})
     proc_env.setdefault("PYTHONUTF8", "1")
     proc_env.setdefault("PYTHONIOENCODING", "utf-8")
+    pythonpath_head = [str(root), str(root / "prod")]
+    existing_pythonpath = [
+        path for path in proc_env.get("PYTHONPATH", "").split(os.pathsep) if path
+    ]
+    proc_env["PYTHONPATH"] = os.pathsep.join(
+        pythonpath_head + [path for path in existing_pythonpath if path not in pythonpath_head]
+    )
 
     proc: subprocess.Popen | None = None
     try:

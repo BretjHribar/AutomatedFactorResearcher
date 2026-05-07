@@ -45,6 +45,7 @@ services:
     volumes:
       - ../../data:/opt/dagster/app/data
       - ../../prod/logs:/opt/dagster/app/prod/logs
+      - ../../prod/stats/output:/opt/dagster/app/prod/stats/output
     networks:
       - dagster_network
 
@@ -80,6 +81,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - factor_alpha_data:/opt/dagster/app/data
       - factor_alpha_prod_logs:/opt/dagster/app/prod/logs
+      - factor_alpha_prod_stats_output:/opt/dagster/app/prod/stats/output
     depends_on:
       dagster_postgres:
         condition: service_healthy
@@ -118,6 +120,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - factor_alpha_data:/opt/dagster/app/data
       - factor_alpha_prod_logs:/opt/dagster/app/prod/logs
+      - factor_alpha_prod_stats_output:/opt/dagster/app/prod/stats/output
     depends_on:
       dagster_postgres:
         condition: service_healthy
@@ -142,6 +145,13 @@ volumes:
       type: none
       o: bind
       device: ${FACTOR_ALPHA_PROD_LOGS_DIR:-/opt/factor-alpha-platform/prod/logs}
+  factor_alpha_prod_stats_output:
+    name: factor_alpha_prod_stats_output
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${FACTOR_ALPHA_PROD_STATS_OUTPUT_DIR:-/opt/factor-alpha-platform/prod/stats/output}
 
 networks:
   dagster_network:

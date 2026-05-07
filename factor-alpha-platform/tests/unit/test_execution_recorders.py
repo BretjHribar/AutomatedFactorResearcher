@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 from unittest.mock import patch
@@ -215,6 +216,26 @@ def test_run_ib_paper_moc_invokes_cancel_all_on_timeout(tmp_path):
 
     assert result.status == "failed"
     assert any("cancel_all.py" in str(c) for c in cancel_calls), "cancel_all.py must run on IB timeout"
+
+
+def test_run_ib_paper_moc_subprocess_gets_project_pythonpath(tmp_path):
+    """Scheduled IB subprocesses must import both root modules and prod modules."""
+    _write_json(tmp_path / "prod/config/strategy.json", _strategy_config())
+    captured_env = {}
+
+    def on_run(command, cwd, stdout_fh, stderr_fh, env):
+        captured_env.update(env)
+        stdout_fh.write(b"moc trader imported successfully\n")
+
+    def popen_factory(*args, **kwargs):
+        return FakePopen(*args, on_run=on_run, returncode=0, **kwargs)
+
+    with patch("src.execution.recorders.subprocess.Popen", side_effect=popen_factory):
+        result = run_ib_paper_moc(root=tmp_path, allow_orders=True)
+
+    pythonpath = captured_env["PYTHONPATH"].split(os.pathsep)
+    assert pythonpath[:2] == [str(tmp_path), str(tmp_path / "prod")]
+    assert result.command[1] == "prod/moc_trader.py"
 
 
 def test_write_execution_summary_is_atomic(tmp_path):

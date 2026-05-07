@@ -70,6 +70,8 @@ jobs:
       - name: Compile critical runtime modules
         run: |
           python -m py_compile definitions.py
+          python -m py_compile eval_alpha_ib.py
+          python -m py_compile seed_alphas_ib.py
           python -m py_compile src/execution/recorders.py
           python -m py_compile src/orchestration/dagster_defs.py
           python -m py_compile prod/live_bar.py

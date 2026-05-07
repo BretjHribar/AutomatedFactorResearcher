@@ -59,8 +59,11 @@ MATRICES_DIR = PROJECT_ROOT / CFG["paths"]["matrices"]
 TICK_SIZES_PATH = PROJECT_ROOT / CFG["paths"]["tick_sizes"]
 TRADE_LOG_DIR = PROJECT_ROOT / CFG["paths"]["trade_logs"]
 PERF_LOG_DIR = PROJECT_ROOT / CFG["paths"]["performance_logs"]
+# Stdout / per-run trader logs go in a sibling `runlogs/` directory so
+# `trades/` only contains structured trade JSONs.
+RUNLOG_DIR = TRADE_LOG_DIR.parent / "runlogs"
 
-for d in [TRADE_LOG_DIR, PERF_LOG_DIR]:
+for d in [TRADE_LOG_DIR, PERF_LOG_DIR, RUNLOG_DIR]:
     d.mkdir(parents=True, exist_ok=True)
 
 # Strategy params
@@ -75,7 +78,7 @@ MIN_ORDER_VALUE = CFG["execution"]["min_order_value"]
 # ============================================================================
 
 def setup_logging():
-    log_file = TRADE_LOG_DIR / f"binance_{dt.datetime.utcnow().strftime('%Y%m%d_%H%M')}.log"
+    log_file = RUNLOG_DIR / f"binance_{dt.datetime.utcnow().strftime('%Y%m%d_%H%M')}.log"
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",

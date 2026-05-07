@@ -1,6 +1,6 @@
 # IB Closing Auction MOC Trading System — Operations Manual
 
-> **Version**: 1.2.1 | **Updated**: 2026-05-07 | **Account**: DUQ372830
+> **Version**: 1.2.3 | **Updated**: 2026-05-07 | **Account**: DUQ372830
 
 ---
 
@@ -74,14 +74,15 @@ graph TB
 | GUI | Full trading GUI | Minimal login-only window |
 | Resource usage | ~500MB RAM | ~200MB RAM |
 | Auto-restart | Manual | Built-in (IBC can manage) |
-| API port (paper) | 7497 | 7497 |
-| API port (live) | 7496 | 7496 |
+| API port (paper) | 7497 | 4002 |
+| API port (live) | 7496 | 4001 |
 | `ib_insync` code | **Identical** | **Identical** |
 | Best for | Initial debugging, manual overrides | Automated production systems |
 
 **Recommendation**: Start with TWS for paper trading (easier to see positions, orders, fills visually). Switch to Gateway + IBC (IB Controller) for unattended production.
 
-To switch: just change `port_paper` in `strategy.json` if Gateway uses a different port. Default is the same.
+To switch: set `port_paper` in `strategy.json` and the Docker/Dagster `.env`
+to the active API port. Current local UAT uses IB Gateway paper on port `4002`.
 
 ---
 
@@ -175,9 +176,43 @@ venv\Scripts\python.exe -m src.data.equity_refresh --recheck-recent --workers 5 
 Docker:
 
 ```powershell
-docker exec factor_alpha_dagster_webserver sh -lc "cd /opt/dagster/dagster_home && dagster schedule list -w workspace.yaml -l factor_alpha_platform"
+docker exec factor_alpha_dagster_webserver sh -lc "cd /opt/dagster/dagster_home && dagster schedule list -w workspace.yaml"
 docker exec factor_alpha_dagster_user_code python -c "import pandas as pd; c=pd.read_parquet('/opt/dagster/app/data/fmp_cache/matrices/close.parquet'); print(c.shape, c.index.min(), c.index.max(), c.index.is_monotonic_increasing)"
 ```
+
+IB Docker runtime smoke:
+
+```powershell
+docker exec factor_alpha_dagster_user_code sh -lc "echo PYTHONPATH=$PYTHONPATH"
+docker exec factor_alpha_dagster_user_code python -c "import eval_alpha_ib, seed_alphas_ib, live_bar, moc_trader; print(eval_alpha_ib.__file__, live_bar.__file__, moc_trader.__file__, sep='`n')"
+docker exec factor_alpha_dagster_user_code python prod/moc_trader.py --help
+```
+
+The user-code image must set `PYTHONPATH=/opt/dagster/app:/opt/dagster/app/prod`
+and the Docker build must fail if those IB imports do not load. The scheduled
+`ib_paper_moc_execution_job` also runs the `ib_runtime_dependencies` critical
+check before connecting to IB or submitting orders.
+
+### Schedule defaults — IB MOC
+
+`ib_paper_moc_execution_1538_et` ships with `default_status=RUNNING` so a
+fresh deployment auto-fires at 15:38 ET on weekdays. This is safe because the
+**recorder env-flag `ALLOW_IB_PAPER_ORDERS` is the binding gate**:
+
+- `ALLOW_IB_PAPER_ORDERS=0` (the default in `deploy/dagster/.env.example`)
+  → recorder returns `status="blocked"`, no orders submitted.
+- `ALLOW_IB_PAPER_ORDERS=1` → orders submitted to the configured paper
+  gateway only (the IB connection itself refuses non-DU accounts via the
+  hard guard in `prod/moc_trader.py:IBConnection.connect`).
+
+If you promote to a venue or environment where you do NOT want a fresh box
+to auto-fire even paper orders, flip `default_status` back to STOPPED in
+`src/orchestration/dagster_defs.py`.
+
+Alert resolution policy: `ib_paper_moc_execution:*` alerts auto-resolve only
+when the recorder returns `status="completed"`. A subsequent `blocked` or
+`skipped` run does NOT clear an existing alert, because those statuses do
+not represent the underlying problem being fixed.
 
 Integrity:
 
@@ -211,10 +246,16 @@ Disabled venues must show `disabled`, not stale or green.
 
 ### Schedules
 
-| Schedule | Cron | Timezone | Purpose |
-|----------|------|----------|---------|
-| `crypto_research_signal_4h` | `2 */4 * * *` | UTC | Refresh/evaluate crypto research signal after each 4h close |
-| `crypto_paper_execution_4h_utc` | `3 */4 * * *` | UTC | Run KuCoin paper recorder three minutes after each 4h close |
+| Schedule | Cron | Timezone | Default | Purpose |
+|----------|------|----------|---------|---------|
+| `crypto_research_signal_4h` | `2 */4 * * *` | UTC | RUNNING | Refresh/evaluate crypto research signal after each 4h close |
+| `crypto_paper_execution_4h_utc` | `3 */4 * * *` | UTC | **RUNNING** | Run KuCoin paper recorder three minutes after each 4h close |
+
+`crypto_paper_execution_4h_utc` defaults to RUNNING. KuCoin is paper-only
+(`prod/config/kucoin.json: execution.paper_mode=true`), so a scheduled run
+never reaches a real venue. If you ever flip the venue to live, also flip
+the `default_status` in `src/orchestration/dagster_defs.py` back to STOPPED
+so live execution requires an explicit operator action.
 
 ### KuCoin Production Data Contract
 
@@ -787,6 +828,19 @@ Recovery:
   3. Check "Enable API" in TWS settings
   4. Retry up to 3 times with 10s delay
   5. If still failing: alert and skip today
+```
+
+### Docker IB Runtime Import Failure
+
+```
+Trigger: ib_runtime_dependencies fails, or moc_trader.py exits with ModuleNotFoundError
+Impact:  No IB MOC orders are submitted
+Recovery:
+  1. Confirm Dockerfile_user_code copies eval_alpha_ib.py and seed_alphas_ib.py.
+  2. Confirm Docker PYTHONPATH includes /opt/dagster/app and /opt/dagster/app/prod.
+  3. Run the IB Docker runtime smoke commands above.
+  4. Rebuild and recreate dagster_user_code, dagster_webserver, and dagster_daemon.
+  5. Confirm the ops dashboard shows ib_moc_equity as execution_failed until the next clean execution resolves the alert.
 ```
 
 ### FMP Data Stale

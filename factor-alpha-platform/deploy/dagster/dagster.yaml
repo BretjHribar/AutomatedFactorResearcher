@@ -32,6 +32,7 @@ run_launcher:
         - /var/run/docker.sock:/var/run/docker.sock
         - factor_alpha_data:/opt/dagster/app/data
         - factor_alpha_prod_logs:/opt/dagster/app/prod/logs
+        - factor_alpha_prod_stats_output:/opt/dagster/app/prod/stats/output
     env_vars:
       - DAGSTER_POSTGRES_USER
       - DAGSTER_POSTGRES_PASSWORD

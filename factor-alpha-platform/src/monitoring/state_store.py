@@ -96,8 +96,72 @@ def connect(db_path: str | Path = DEFAULT_STATE_DB) -> sqlite3.Connection:
     return conn
 
 
-def upsert_strategy_state(state: StrategyState, db_path: str | Path = DEFAULT_STATE_DB) -> None:
+def upsert_strategy_state(state: StrategyState, db_path: str | Path = DEFAULT_STATE_DB,
+                          *, merge: bool = False) -> None:
+    """Insert or update a strategy_state row.
+
+    `merge=True` only updates columns whose new value is non-None, preserving
+    existing values otherwise. This lets two writers cooperate on one row
+    (one writes signal-side fields, the other writes execution/gateway
+    fields) without clobbering each other. `metrics_json` is shallow-merged
+    when merge=True so neither writer drops the other's keys.
+
+    `merge=False` (default) is a destructive overwrite — every column is set
+    from `state`. Use this only when the caller is the sole authoritative
+    writer of every field for that strategy_id.
+    """
+    new_metrics = state.metrics_json or {}
     with connect(db_path) as conn:
+        if merge:
+            existing = conn.execute(
+                "SELECT * FROM strategy_state WHERE strategy_id=?",
+                (state.strategy_id,),
+            ).fetchone()
+            if existing is not None:
+                merged_metrics = {}
+                try:
+                    merged_metrics = json.loads(existing["metrics_json"] or "{}")
+                except Exception:
+                    merged_metrics = {}
+                merged_metrics.update(new_metrics)
+                # Build the row using existing values for any field the new state left None.
+                def pick(field: str, fallback: Any) -> Any:
+                    new_val = getattr(state, field)
+                    return new_val if new_val is not None else fallback
+                row = (
+                    state.strategy_id,
+                    pick("market", existing["market"]),
+                    pick("mode", existing["mode"]),
+                    pick("status", existing["status"]),
+                    pick("last_data_bar", existing["last_data_bar"]),
+                    pick("last_signal_bar", existing["last_signal_bar"]),
+                    pick("last_trade_time", existing["last_trade_time"]),
+                    pick("config_hash", existing["config_hash"]),
+                    pick("git_sha", existing["git_sha"]),
+                    pick("gross_exposure", existing["gross_exposure"]),
+                    pick("net_exposure", existing["net_exposure"]),
+                    pick("n_positions", existing["n_positions"]),
+                    json.dumps(merged_metrics, sort_keys=True),
+                    utc_now(),
+                )
+            else:
+                row = (
+                    state.strategy_id, state.market, state.mode, state.status,
+                    state.last_data_bar, state.last_signal_bar, state.last_trade_time,
+                    state.config_hash, state.git_sha, state.gross_exposure,
+                    state.net_exposure, state.n_positions,
+                    json.dumps(new_metrics, sort_keys=True),
+                    utc_now(),
+                )
+        else:
+            row = (
+                state.strategy_id, state.market, state.mode, state.status,
+                state.last_data_bar, state.last_signal_bar, state.last_trade_time,
+                state.config_hash, state.git_sha, state.gross_exposure,
+                state.net_exposure, state.n_positions,
+                json.dumps(new_metrics, sort_keys=True),
+                utc_now(),
+            )
         conn.execute(
             """
             INSERT INTO strategy_state (
@@ -120,22 +184,7 @@ def upsert_strategy_state(state: StrategyState, db_path: str | Path = DEFAULT_ST
                 metrics_json=excluded.metrics_json,
                 updated_at=excluded.updated_at
             """,
-            (
-                state.strategy_id,
-                state.market,
-                state.mode,
-                state.status,
-                state.last_data_bar,
-                state.last_signal_bar,
-                state.last_trade_time,
-                state.config_hash,
-                state.git_sha,
-                state.gross_exposure,
-                state.net_exposure,
-                state.n_positions,
-                json.dumps(state.metrics_json or {}, sort_keys=True),
-                utc_now(),
-            ),
+            row,
         )
         conn.commit()
 

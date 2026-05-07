@@ -1,13 +1,18 @@
 FROM python:3.12-slim
 
 WORKDIR /opt/dagster/app
+ENV PYTHONPATH=/opt/dagster/app:/opt/dagster/app/prod
 
 COPY pyproject.toml README.md ./
 COPY definitions.py ./
+COPY eval_alpha_ib.py seed_alphas_ib.py ./
 COPY src ./src
 COPY prod ./prod
 
 RUN pip install --no-cache-dir -e ".[orchestration,connectors,optimization,monitoring]"
+
+RUN python -c \
+    "import eval_alpha_ib; import seed_alphas_ib; import live_bar; import moc_trader; print('IB runtime import smoke OK')"
 
 EXPOSE 4000
 HEALTHCHECK --timeout=10s --start-period=20s --interval=10s --retries=12 \

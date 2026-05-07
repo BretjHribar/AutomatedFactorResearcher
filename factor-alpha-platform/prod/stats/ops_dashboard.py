@@ -119,6 +119,18 @@ def _latest_json(directory: Path, pattern: str = "trade_*.json",
     return files[0] if files else None
 
 
+def _latest_execution_summary(venue: str) -> tuple[Path | None, dict[str, Any]]:
+    execution_dir = LOGS_ROOT / "execution"
+    if not execution_dir.exists():
+        return None, {}
+    files = sorted(execution_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+    for path in files:
+        payload = _read_json(path)
+        if payload.get("venue") == venue:
+            return path, payload
+    return None, {}
+
+
 def _last_parquet_index(path: Path) -> str | None:
     if not path.exists():
         return None
@@ -144,15 +156,14 @@ def _market_status(checks: list[dict[str, Any]], market: str) -> str:
 
 
 def _exchange_status(checks: list[dict[str, Any]], exchange: str) -> str:
-    """Status for one crypto venue, without contamination from other venues."""
+    """Status for one crypto venue, scoped strictly to its prefixed checks.
+
+    Only `<exchange>_*` rows count. The legacy retirement-stub rows
+    (status='pass', message='retired') are filtered out before status is
+    computed so they cannot mask a missing-venue case as 'ready'.
+    """
     prefix = f"{exchange}_"
     exchange_checks = [c for c in checks if str(c.get("check_name", "")).startswith(prefix)]
-    if not exchange_checks and exchange == "kucoin":
-        exchange_checks = [
-            c for c in checks
-            if c.get("market") == "crypto"
-            and not str(c.get("check_name", "")).startswith(("binance_", "kucoin_"))
-        ]
     if not exchange_checks:
         return "unknown"
     statuses = {str(c.get("status", "")).lower() for c in exchange_checks}
@@ -321,18 +332,119 @@ def _dedupe_performance(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]
     return clean, diagnostics
 
 
+def _infer_bars_per_year(clean_df: pd.DataFrame) -> float:
+    """Pick the annualization factor from the actual bar cadence.
+
+    Median gap between consecutive `bar_time` values → bars/year. Falls back
+    to 252 (daily equity) if cadence can't be inferred. This replaces the
+    previous `252 if exchange == "ib" else 6*365` hard-coded by exchange name,
+    which was wrong if any venue ever shipped at a different cadence.
+    """
+    if "bar_time" not in clean_df.columns:
+        return 252.0
+    times = pd.to_datetime(clean_df["bar_time"], errors="coerce").dropna()
+    if len(times) < 2:
+        return 252.0
+    diffs = times.diff().dropna()
+    if diffs.empty:
+        return 252.0
+    median_seconds = diffs.dt.total_seconds().median()
+    if median_seconds <= 0:
+        return 252.0
+    if median_seconds <= 60 * 60:           # <= 1h bars: assume 24/7 trading
+        return 365.0 * 24 * (3600.0 / median_seconds)
+    if median_seconds <= 24 * 60 * 60:      # 4h, 8h, 12h, 1d bars
+        bars_per_day = 86400.0 / median_seconds
+        # Crypto runs 24/7; equity 5/7 ≈ 252/365.
+        return 365.0 * bars_per_day if bars_per_day >= 1.5 else 252.0
+    return 252.0
+
+
+def _ib_execution_summary() -> dict[str, Any]:
+    """Synthesize the IB equity panel from `prod/logs/trades/trade_*.json`.
+
+    The IB MOC trader does not produce a per-bar equity CSV with PnL — it
+    writes one trade JSON per day with order intent (n_orders, shares, side
+    counts) but no realized fill prices or NLV. We surface what we have:
+    recent submissions, total order count, days since last live submission.
+    `curve` is intentionally empty so the renderer falls back to the
+    submissions list (see `_curve_panel` IB branch).
+    """
+    trade_dir = TRADE_LOG_DIRS["ib"]
+    if not trade_dir.exists():
+        return {
+            "exchange": "ib", "status": "missing", "panel_kind": "ib_executions",
+            "message": "IB trades directory missing", "submissions": [], "curve": [],
+        }
+    files = sorted(trade_dir.glob("trade_*.json"), key=lambda p: p.stat().st_mtime)
+    submissions: list[dict[str, Any]] = []
+    total_orders = 0
+    last_live_ts: str | None = None
+    for path in files:
+        data = _read_json(path)
+        if not data:
+            continue
+        mode = str(data.get("mode") or "").lower()
+        portfolio = data.get("portfolio_summary") or {}
+        n_orders = int(data.get("n_orders") or 0)
+        if mode == "live" and (data.get("timestamp") or data.get("date")):
+            last_live_ts = str(data.get("timestamp") or data.get("date"))
+        total_orders += n_orders
+        submissions.append({
+            "path": path.name,
+            "date": str(data.get("date") or ""),
+            "signal_date": str(data.get("signal_date") or ""),
+            "mode": mode,
+            "n_orders": n_orders,
+            "n_long": int(portfolio.get("n_long") or 0),
+            "n_short": int(portfolio.get("n_short") or 0),
+            "gross_shares": int(portfolio.get("gross_shares") or 0),
+            "net_shares": int(portfolio.get("net_shares") or 0),
+            "timestamp": str(data.get("timestamp") or ""),
+        })
+    submissions.sort(key=lambda r: r.get("timestamp"), reverse=True)
+    if not submissions:
+        return {
+            "exchange": "ib", "status": "missing", "panel_kind": "ib_executions",
+            "message": "no IB trade JSONs in prod/logs/trades/",
+            "submissions": [], "curve": [],
+        }
+    status = "ok" if last_live_ts else "warn"
+    last_run = submissions[0]
+    return {
+        "exchange": "ib",
+        "status": status,
+        "panel_kind": "ib_executions",
+        "n_submissions": len(submissions),
+        "n_live_submissions": sum(1 for s in submissions if s["mode"] == "live"),
+        "total_orders": total_orders,
+        "last_submission": last_run,
+        "last_live_timestamp": last_live_ts,
+        "submissions": submissions[:10],
+        "message": (
+            f"{len(submissions)} submissions ({sum(1 for s in submissions if s['mode']=='live')} live); "
+            f"last {last_run['mode']} @ {last_run['timestamp']}"
+        ),
+        "curve": [],
+    }
+
+
 def _performance_summary(exchange: str, path: Path | None) -> dict[str, Any]:
+    if exchange == "ib":
+        return _ib_execution_summary()
     enabled, disabled_reason = _exchange_enabled(exchange)
     if not enabled:
         return {
             "exchange": exchange,
             "status": "disabled",
+            "panel_kind": "disabled",
             "message": disabled_reason,
             "path": str(path) if path else None,
             "curve": [],
         }
     if path is None:
-        return {"exchange": exchange, "status": "missing", "message": "no equity CSV", "curve": []}
+        return {"exchange": exchange, "status": "missing", "panel_kind": "missing",
+                "message": "no equity CSV", "curve": []}
     try:
         df = pd.read_csv(path, parse_dates=["timestamp"])
     except Exception as exc:
@@ -345,7 +457,7 @@ def _performance_summary(exchange: str, path: Path | None) -> dict[str, Any]:
     pnl = clean_df.get("pnl_bar", pd.Series(dtype=float)).astype(float)
     cum = clean_df.get("cumulative_pnl", pnl.cumsum()).astype(float)
     raw_pnl = df.get("pnl_bar", pd.Series(dtype=float)).astype(float)
-    bars_per_year = 252 if exchange == "ib" else 6 * 365
+    bars_per_year = _infer_bars_per_year(clean_df)
     sharpe = float(pnl.mean() / pnl.std() * np.sqrt(bars_per_year)) if pnl.std() > 0 else 0.0
     gmv = clean_df.get("gmv", pd.Series(dtype=float))
     n_positions = clean_df.get("n_positions", pd.Series(dtype=float))
@@ -354,6 +466,7 @@ def _performance_summary(exchange: str, path: Path | None) -> dict[str, Any]:
     return {
         "exchange": exchange,
         "status": status,
+        "panel_kind": "crypto_curve",
         "path": str(path),
         "last_timestamp": str(df["timestamp"].iloc[-1]) if "timestamp" in df and len(df) else None,
         "last_bar_time": str(clean_df["bar_time"].iloc[-1]) if "bar_time" in clean_df and len(clean_df) else None,
@@ -368,6 +481,9 @@ def _performance_summary(exchange: str, path: Path | None) -> dict[str, Any]:
         "max_bar_gap_hours": diagnostics["max_bar_gap_hours"],
         "raw_total_pnl": float(raw_pnl.sum()) if len(raw_pnl) else 0.0,
         "total_pnl": float(cum.iloc[-1]) if len(cum) else 0.0,
+        "headline_pnl": float(raw_pnl.sum()) if len(raw_pnl) else 0.0,
+        "headline_pnl_label": "trader cumulative",
+        "dedup_pnl": float(cum.iloc[-1]) if len(cum) else 0.0,
         "sharpe": sharpe,
         "max_drawdown": float((cum - cum.cummax()).min()) if len(cum) else 0.0,
         "avg_gmv": float(gmv.mean()) if len(gmv) else None,
@@ -383,6 +499,7 @@ def _sync_ib_strategy_state(state_db: Path, checks: list[dict[str, Any]]) -> Non
     matrices_path = PROJECT_ROOT / "data" / "fmp_cache" / "matrices" / "close.parquet"
     trade_path = _latest_json(TRADE_LOG_DIRS["ib"], exclude_suffix="_dry_run.json")
     trade = _read_json(trade_path)
+    execution_path, execution = _latest_execution_summary("ib_equity")
     dashboard_client_id = int(os.environ.get("IB_CLIENT_ID_DASHBOARD_HEALTHCHECK", "29"))
     gateway_status = check_ib_gateway(config, client_id=dashboard_client_id).to_dict()
 
@@ -396,6 +513,18 @@ def _sync_ib_strategy_state(state_db: Path, checks: list[dict[str, Any]]) -> Non
         if trade_date == today:
             status = "orders_submitted" if int(trade.get("n_orders") or 0) else "no_orders"
 
+    execution_status = str(execution.get("status") or "").lower()
+    execution_message = str(execution.get("message") or "")
+    if execution:
+        if execution_status == "failed":
+            status = "execution_failed"
+        elif execution_status == "blocked":
+            status = "blocked"
+        elif execution_status == "skipped":
+            status = "skipped"
+        elif execution_status == "completed" and execution.get("trade_log_path"):
+            status = "orders_submitted"
+
     ibkr = config.get("ibkr", {})
     state = StrategyState(
         strategy_id="ib_moc_equity",
@@ -404,13 +533,13 @@ def _sync_ib_strategy_state(state_db: Path, checks: list[dict[str, Any]]) -> Non
         status=status,
         last_data_bar=_last_parquet_index(matrices_path),
         last_signal_bar=trade.get("signal_date"),
-        last_trade_time=trade.get("timestamp"),
+        last_trade_time=(execution.get("ended_at_utc") if execution else None) or trade.get("timestamp"),
         config_hash=_config_hash(config_path),
         gross_exposure=gross,
         net_exposure=net,
         n_positions=n_positions,
         metrics_json={
-            "source": "ops_dashboard_file_sync",
+            "source_dashboard": "ops_dashboard_file_sync",
             "strategy": (config.get("strategy") or {}).get("name"),
             "universe": (config.get("strategy") or {}).get("universe"),
             "min_alpha_sharpe": (config.get("strategy") or {}).get("min_alpha_sharpe"),
@@ -426,9 +555,18 @@ def _sync_ib_strategy_state(state_db: Path, checks: list[dict[str, Any]]) -> Non
             "ib_gateway_checked_at_utc": gateway_status.get("checked_at_utc"),
             "ib_gateway_error_type": gateway_status.get("error_type"),
             "ib_gateway_accounts_count": len(gateway_status.get("accounts") or []),
+            "latest_execution_summary": str(execution_path) if execution_path else None,
+            "latest_execution_status": execution.get("status"),
+            "latest_execution_message": execution_message or None,
+            "latest_execution_started_at_utc": execution.get("started_at_utc"),
+            "latest_execution_ended_at_utc": execution.get("ended_at_utc"),
+            "latest_execution_elapsed_sec": execution.get("elapsed_sec"),
+            "latest_execution_trade_log_path": execution.get("trade_log_path"),
         },
     )
-    upsert_strategy_state(state, state_db)
+    # merge=True so the Dagster signal-side writer's gross/net/n_positions/
+    # metrics fields are not clobbered when the dashboard re-syncs from files.
+    upsert_strategy_state(state, state_db, merge=True)
 
 
 def _sync_kucoin_strategy_state(state_db: Path, checks: list[dict[str, Any]]) -> None:
@@ -450,7 +588,7 @@ def _sync_kucoin_strategy_state(state_db: Path, checks: list[dict[str, Any]]) ->
         status = "traded" if signal_ts >= data_ts else "pending_trade"
 
     state = StrategyState(
-        strategy_id="crypto_4h",
+        strategy_id="kucoin_4h",
         market="crypto",
         mode=str(trade.get("mode") or ("paper" if (config.get("execution") or {}).get("paper_mode") else "live")).lower(),
         status=status,
@@ -469,7 +607,7 @@ def _sync_kucoin_strategy_state(state_db: Path, checks: list[dict[str, Any]]) ->
             "target_gmv": (config.get("account") or {}).get("target_gmv"),
         },
     )
-    upsert_strategy_state(state, state_db)
+    upsert_strategy_state(state, state_db, merge=True)
 
 
 def _sync_binance_strategy_state(state_db: Path) -> None:
@@ -510,7 +648,7 @@ def _sync_binance_strategy_state(state_db: Path) -> None:
         net_exposure=net,
         n_positions=n_positions,
         metrics_json={
-            "source": "ops_dashboard_file_sync",
+            "source_dashboard": "ops_dashboard_file_sync",
             "exchange": "binance",
             "strategy": (config.get("strategy") or {}).get("name"),
             "latest_trade_log": str(trade_path) if trade_path else None,
@@ -519,7 +657,7 @@ def _sync_binance_strategy_state(state_db: Path) -> None:
             "disabled_reason": disabled_reason,
         },
     )
-    upsert_strategy_state(state, state_db)
+    upsert_strategy_state(state, state_db, merge=True)
 
 
 def _sync_strategy_states_from_files(state_db: Path, checks: list[dict[str, Any]]) -> None:
@@ -538,21 +676,14 @@ def _ts_date(value: Any) -> pd.Timestamp | None:
 
 
 def _apply_state_health_overrides(states: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Make dashboard state honest even when a saved strategy row is stale."""
-    latest_equity_data = _ts_date(_last_parquet_index(
-        PROJECT_ROOT / "data" / "fmp_cache" / "matrices" / "close.parquet"
-    ))
-    adjusted: list[dict[str, Any]] = []
-    for row in states:
-        state = dict(row)
-        strategy_id = str(state.get("strategy_id", ""))
-        if strategy_id == "equity_1d" and latest_equity_data is not None:
-            state["last_data_bar"] = str(latest_equity_data)
-            last_signal = _ts_date(state.get("last_signal_bar"))
-            if last_signal is None or last_signal < latest_equity_data:
-                state["status"] = "stale_signal"
-        adjusted.append(state)
-    return adjusted
+    """Deprecated: kept as a no-op for backwards compatibility.
+
+    Staleness is now persisted at write time by the upstream writers — Dagster's
+    `equity_strategy_state_write` sets `status="stale_signal"` directly when
+    the signal_date lags the latest matrix bar. Renderer-side overrides made
+    the DB and the HTML disagree.
+    """
+    return [dict(row) for row in states]
 
 
 def _prefixed_checks(exchange: str, results: list[Any]) -> list[dict[str, Any]]:
@@ -693,31 +824,56 @@ def build_payload(state_db: Path, *, refresh_integrity: bool = False) -> dict[st
     }
 
 
+# Canonical status vocabulary. Every writer should normalize to one of these
+# six labels before storing. The free-text phase (e.g. "traded",
+# "orders_submitted", "stale_signal") moves into the row's `phase` field /
+# metrics_json, not `status`. The mapping below absorbs legacy values from
+# already-stored DB rows so they render correctly until rewritten.
+_CANONICAL_STATUSES = {"OK", "WARN", "FAIL", "BLOCKED", "DISABLED", "UNKNOWN"}
+
+_LEGACY_TO_CANONICAL = {
+    "pass": "OK", "ok": "OK", "ready": "OK", "signal_ready": "OK",
+    "traded": "OK", "orders_submitted": "OK", "no_orders": "OK",
+    "warn": "WARN", "warning": "WARN", "stale": "WARN", "stale_signal": "WARN",
+    "pending_trade": "WARN", "missing": "WARN", "empty": "WARN",
+    "fail": "FAIL", "critical": "FAIL", "error": "FAIL", "unreachable": "FAIL",
+    "execution_failed": "FAIL",
+    "blocked": "BLOCKED", "skipped": "BLOCKED",
+    "disabled": "DISABLED",
+    "unknown": "UNKNOWN",
+}
+
+
+def _canonical_status(status: Any) -> str:
+    s = str(status or "").strip().lower()
+    if not s:
+        return "UNKNOWN"
+    if s.upper() in _CANONICAL_STATUSES:
+        return s.upper()
+    return _LEGACY_TO_CANONICAL.get(s, "UNKNOWN")
+
+
+def _phase_label(status: Any) -> str:
+    """Surface the descriptive sub-state next to the canonical badge.
+
+    Strategy writers historically encoded both severity and lifecycle phase in
+    one column (e.g. "stale_signal", "pending_trade", "orders_submitted").
+    The badge collapses severity to OK/WARN/FAIL/BLOCKED/DISABLED/UNKNOWN; the
+    raw value still has informational value, so we render it alongside.
+    """
+    raw = str(status or "").strip().lower()
+    if not raw:
+        return ""
+    if raw.upper() in _CANONICAL_STATUSES:
+        return ""  # already covered by the badge
+    return raw.replace("_", " ")
+
+
 def _badge(status: str) -> str:
-    cls = {
-        "pass": "ok",
-        "ok": "ok",
-        "ready": "ok",
-        "signal_ready": "ok",
-        "traded": "ok",
-        "orders_submitted": "ok",
-        "no_orders": "ok",
-        "warn": "warn",
-        "warning": "warn",
-        "stale": "warn",
-        "stale_signal": "warn",
-        "pending_trade": "warn",
-        "unknown": "warn",
-        "disabled": "neutral",
-        "unreachable": "fail",
-        "fail": "fail",
-        "blocked": "fail",
-        "critical": "fail",
-        "missing": "warn",
-        "error": "fail",
-        "empty": "warn",
-    }.get(str(status).lower(), "neutral")
-    return f'<span class="badge {cls}">{html.escape(str(status).upper())}</span>'
+    canonical = _canonical_status(status)
+    css = {"OK": "ok", "WARN": "warn", "FAIL": "fail",
+           "BLOCKED": "fail", "DISABLED": "neutral", "UNKNOWN": "neutral"}[canonical]
+    return f'<span class="badge {css}">{canonical}</span>'
 
 
 def _fmt(value: Any) -> str:
@@ -786,18 +942,29 @@ def _svg_curve(curve: list[dict[str, Any]]) -> str:
 
 
 def _curve_panel(performance: dict[str, Any]) -> str:
+    kind = performance.get("panel_kind", "")
+    if kind == "ib_executions":
+        return _ib_submissions_panel(performance)
+    if kind == "disabled":
+        return _disabled_panel(performance)
+    if kind == "missing":
+        return _missing_panel(performance)
+
     path = performance.get("path")
     path_label = html.escape(Path(path).name if path else performance.get("message", ""))
-    meta = " | ".join(
-        part for part in [
-            f"Unique bars {_fmt(performance.get('unique_bars'))}" if performance.get("unique_bars") is not None else "",
-            f"Raw rows {_fmt(performance.get('raw_rows'))}" if performance.get("raw_rows") is not None else "",
-            f"Dup rows {_fmt(performance.get('duplicate_bar_rows'))}" if performance.get("duplicate_bar_rows") else "",
-            f"Recent gaps {_fmt(performance.get('recent_missing_4h_bars'))}" if performance.get("recent_missing_4h_bars") else "",
-            f"PnL {_money(performance.get('total_pnl'))}" if performance.get("total_pnl") is not None else "",
-            f"SR {_fmt(performance.get('sharpe'))}" if performance.get("sharpe") is not None else "",
-        ] if part
-    )
+    headline_label = performance.get("headline_pnl_label", "PnL")
+    headline_pnl = performance.get("headline_pnl", performance.get("total_pnl"))
+    dedup_pnl = performance.get("dedup_pnl", performance.get("total_pnl"))
+    meta_parts = [
+        f"Unique bars {_fmt(performance.get('unique_bars'))}" if performance.get("unique_bars") is not None else "",
+        f"Raw rows {_fmt(performance.get('raw_rows'))}" if performance.get("raw_rows") is not None else "",
+        f"Dup rows {_fmt(performance.get('duplicate_bar_rows'))}" if performance.get("duplicate_bar_rows") else "",
+        f"Recent gaps {_fmt(performance.get('recent_missing_4h_bars'))}" if performance.get("recent_missing_4h_bars") else "",
+        f"{headline_label} {_money(headline_pnl)}" if headline_pnl is not None else "",
+        f"Dedup {_money(dedup_pnl)}" if dedup_pnl is not None and dedup_pnl != headline_pnl else "",
+        f"SR (ann) {_fmt(performance.get('sharpe'))}" if performance.get("sharpe") is not None else "",
+    ]
+    meta = " | ".join(part for part in meta_parts if part)
     return f"""
       <article class="chart-panel">
         <div class="chart-head">
@@ -809,6 +976,70 @@ def _curve_panel(performance: dict[str, Any]) -> str:
         </div>
         {_svg_curve(performance.get('curve', []))}
         <div class="chart-meta">{html.escape(meta)}</div>
+      </article>
+    """
+
+
+def _disabled_panel(performance: dict[str, Any]) -> str:
+    reason = html.escape(performance.get("message") or "Disabled in exchange config.")
+    return f"""
+      <article class="chart-panel disabled-panel">
+        <div class="chart-head">
+          <div>
+            <div class="chart-title">{html.escape(performance['exchange'].upper())}</div>
+            <div class="chart-path">Disabled venue</div>
+          </div>
+          {_badge('disabled')}
+        </div>
+        <div class="empty-chart neutral-chart">{reason}</div>
+        <div class="chart-meta">No equity curve recorded; this is intentional.</div>
+      </article>
+    """
+
+
+def _missing_panel(performance: dict[str, Any]) -> str:
+    reason = html.escape(performance.get("message") or "No equity CSV on disk.")
+    return f"""
+      <article class="chart-panel missing-panel">
+        <div class="chart-head">
+          <div>
+            <div class="chart-title">{html.escape(performance['exchange'].upper())}</div>
+            <div class="chart-path">Missing performance log</div>
+          </div>
+          {_badge('warn')}
+        </div>
+        <div class="empty-chart warn-chart">{reason}</div>
+        <div class="chart-meta">Investigate: the trader may not be writing performance rows.</div>
+      </article>
+    """
+
+
+def _ib_submissions_panel(performance: dict[str, Any]) -> str:
+    n = performance.get("n_submissions") or 0
+    n_live = performance.get("n_live_submissions") or 0
+    last = performance.get("last_submission") or {}
+    rows = "\n".join(
+        f"<tr><td>{html.escape(s.get('date',''))}</td>"
+        f"<td>{html.escape(s.get('mode',''))}</td>"
+        f"<td>{_fmt(s.get('n_orders'))}</td>"
+        f"<td>{_fmt(s.get('n_long'))}/{_fmt(s.get('n_short'))}</td>"
+        f"<td>{_fmt(s.get('gross_shares'))}</td></tr>"
+        for s in (performance.get("submissions") or [])
+    ) or "<tr><td colspan='5'>No submissions yet.</td></tr>"
+    return f"""
+      <article class="chart-panel">
+        <div class="chart-head">
+          <div>
+            <div class="chart-title">IB MOC Equity</div>
+            <div class="chart-path">{n} submissions ({n_live} live); last {html.escape(str(last.get('mode','')))} @ {html.escape(str(last.get('timestamp',''))[:19])}</div>
+          </div>
+          {_badge(performance['status'])}
+        </div>
+        <table class="submissions-table">
+          <thead><tr><th>Date</th><th>Mode</th><th>Orders</th><th>L/S</th><th>Gross&nbsp;Shares</th></tr></thead>
+          <tbody>{rows}</tbody>
+        </table>
+        <div class="chart-meta">IB MOC trader does not record realized PnL — equity curve unavailable. Add NLV polling to surface dollar PnL here.</div>
       </article>
     """
 
@@ -828,11 +1059,15 @@ def render_html(payload: dict[str, Any]) -> str:
 
     state_rows = "\n".join(
         f"<tr><td>{html.escape(s['strategy_id'])}</td><td>{html.escape(s['market'])}</td>"
-        f"<td>{_fmt(s.get('mode'))}</td><td>{_badge(s['status'])}</td><td>{_fmt(s['last_data_bar'])}</td>"
-        f"<td>{_fmt(s['last_signal_bar'])}</td><td>{_fmt(s['gross_exposure'])}</td>"
-        f"<td>{_fmt(s['net_exposure'])}</td><td>{_fmt(s['n_positions'])}</td></tr>"
+        f"<td>{_fmt(s.get('mode'))}</td><td>{_badge(s['status'])}</td>"
+        f"<td>{html.escape(_phase_label(s['status']))}</td>"
+        f"<td>{_fmt(s['last_data_bar'])}</td>"
+        f"<td>{_fmt(s['last_signal_bar'])}</td>"
+        f"<td>{_money(s['gross_exposure'])}</td>"
+        f"<td>{_money(s['net_exposure'])}</td>"
+        f"<td>{_fmt(s['n_positions'])}</td></tr>"
         for s in states
-    ) or "<tr><td colspan='9'>No strategy state has been recorded yet.</td></tr>"
+    ) or "<tr><td colspan='10'>No strategy state has been recorded yet.</td></tr>"
 
     check_rows = "\n".join(
         f"<tr><td>{html.escape(c['market'])}</td><td>{html.escape(c['check_name'])}</td>"
@@ -848,10 +1083,12 @@ def render_html(payload: dict[str, Any]) -> str:
         f"<td>{_fmt(p.get('raw_rows'))}</td><td>{_fmt(p.get('unique_bars'))}</td>"
         f"<td>{_fmt(p.get('duplicate_bar_rows'))}</td><td>{_fmt(p.get('missing_4h_bars'))}</td>"
         f"<td>{_fmt(p.get('recent_missing_4h_bars'))}</td>"
-        f"<td>{_fmt(p.get('total_pnl'))}</td><td>{_fmt(p.get('raw_total_pnl'))}</td>"
-        f"<td>{_fmt(p.get('sharpe'))}</td><td>{_fmt(p.get('max_drawdown'))}</td>"
-        f"<td>{_fmt(p.get('avg_gmv'))}</td><td>{_fmt(p.get('avg_positions'))}</td></tr>"
+        f"<td>{_money(p.get('headline_pnl', p.get('raw_total_pnl')))}</td>"
+        f"<td>{_money(p.get('dedup_pnl', p.get('total_pnl')))}</td>"
+        f"<td>{_fmt(p.get('sharpe'))}</td><td>{_money(p.get('max_drawdown'))}</td>"
+        f"<td>{_money(p.get('avg_gmv'))}</td><td>{_fmt(p.get('avg_positions'))}</td></tr>"
         for p in performance
+        if p.get("panel_kind") != "ib_executions"
     )
 
     fail_count = sum(1 for c in checks if c["status"] == "fail")
@@ -887,7 +1124,11 @@ def render_html(payload: dict[str, Any]) -> str:
     .axis {{ stroke: #303940; stroke-width: 1; }}
     .zero-line {{ stroke: #52606a; stroke-dasharray: 3 4; stroke-width: 1; }}
     .curve-line {{ stroke: #6bbcff; stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; }}
-    .empty-chart {{ display: grid; place-items: center; min-height: 180px; color: #9aa7af; background: #11161a; border: 1px solid #263036; border-radius: 4px; font-size: 13px; }}
+    .empty-chart {{ display: grid; place-items: center; min-height: 180px; color: #9aa7af; background: #11161a; border: 1px solid #263036; border-radius: 4px; font-size: 13px; padding: 0 16px; text-align: center; }}
+    .neutral-chart {{ color: #cbd5dc; background: #15181c; border-color: #2b3338; }}
+    .warn-chart {{ color: #ffd36e; background: #21180a; border-color: #574316; }}
+    .submissions-table {{ font-size: 11px; }}
+    .submissions-table th, .submissions-table td {{ padding: 5px 6px; }}
     table {{ width: 100%; border-collapse: collapse; background: #15191d; border: 1px solid #2b3338; }}
     th, td {{ padding: 9px 10px; border-bottom: 1px solid #263036; text-align: left; font-size: 13px; vertical-align: top; }}
     th {{ color: #aeb8bf; font-weight: 600; background: #1b2025; }}
@@ -915,13 +1156,13 @@ def render_html(payload: dict[str, Any]) -> str:
   <h2>Equity Curves</h2>
   <section class="charts">{curve_panels}</section>
   <h2>Strategy State</h2>
-  <table><thead><tr><th>Strategy</th><th>Market</th><th>Mode</th><th>Status</th><th>Last Data</th><th>Last Signal</th><th>Gross</th><th>Net</th><th>Positions</th></tr></thead><tbody>{state_rows}</tbody></table>
+  <table><thead><tr><th>Strategy</th><th>Market</th><th>Mode</th><th>Status</th><th>Phase</th><th>Last Data</th><th>Last Signal</th><th>Gross&nbsp;($)</th><th>Net&nbsp;($)</th><th>Positions</th></tr></thead><tbody>{state_rows}</tbody></table>
   <h2>Open Alerts</h2>
   <table><thead><tr><th>Severity</th><th>Market</th><th>Message</th><th>Created</th></tr></thead><tbody>{alert_rows}</tbody></table>
   <h2>Data Integrity</h2>
   <table><thead><tr><th>Market</th><th>Check</th><th>Status</th><th>Message</th><th>Value</th><th>Threshold</th><th>Checked</th></tr></thead><tbody>{check_rows}</tbody></table>
   <h2>Performance Logs</h2>
-  <table><thead><tr><th>Exchange</th><th>Status</th><th>Last Run</th><th>Last Bar</th><th>Raw Rows</th><th>Unique Bars</th><th>Dup Rows</th><th>Missing 4h</th><th>Recent Missing</th><th>Dedup PnL</th><th>Raw PnL</th><th>Sharpe</th><th>Max DD</th><th>Avg GMV</th><th>Avg Positions</th></tr></thead><tbody>{perf_rows}</tbody></table>
+  <table><thead><tr><th>Exchange</th><th>Status</th><th>Last Run</th><th>Last Bar</th><th>Raw Rows</th><th>Unique Bars</th><th>Dup Rows</th><th>Missing&nbsp;4h</th><th>Recent Missing</th><th>Trader PnL&nbsp;($)</th><th>Dedup PnL&nbsp;($)</th><th>Sharpe&nbsp;(ann)</th><th>Max DD&nbsp;($)</th><th>Avg GMV&nbsp;($)</th><th>Avg Positions</th></tr></thead><tbody>{perf_rows}</tbody></table>
 </main>
 </body>
 </html>

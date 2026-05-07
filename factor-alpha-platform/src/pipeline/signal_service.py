@@ -61,14 +61,26 @@ from src.pipeline.runner import PipelineResult, merge_overrides, run
 
 @dataclass(frozen=True)
 class LatestSignalSnapshot:
+    """Latest target-weight row from the canonical pipeline.
+
+    Exposures are in *dollars* — `gross_exposure = book × Σ|wᵢ|`,
+    `net_exposure = book × Σ wᵢ`. The unitless L1 / net values are preserved
+    under `gross_weight_l1` / `net_weight_l1` so callers that need the raw
+    weight space can recover them. `book` is read from `config["book"]` and
+    falls back to 1.0 (which makes dollar = weight) if absent — but every
+    research config in this repo sets `book` explicitly.
+    """
     strategy: str
     market: str
     signal_date: str
     config_notes: list[str]
     alpha_signals_n: int
     universe_size: int
+    book: float
     gross_exposure: float
     net_exposure: float
+    gross_weight_l1: float
+    net_weight_l1: float
     n_positions: int
     weights: dict[str, float]
     metrics: dict[str, dict[str, float]]
@@ -121,6 +133,9 @@ def latest_signal_snapshot(
         or f"{market}_{res_cfg.get('interval', 'unknown')}"
     )
     effective_max_lookback = res_cfg.get("data", {}).get("max_lookback_bars")
+    book = float(res_cfg.get("book", 1.0))
+    gross_l1 = float(weights.abs().sum())
+    net_l1 = float(weights.sum())
     return LatestSignalSnapshot(
         strategy=strategy,
         market=market,
@@ -128,8 +143,11 @@ def latest_signal_snapshot(
         config_notes=list(result.notes),
         alpha_signals_n=result.alpha_signals_n,
         universe_size=result.universe_size,
-        gross_exposure=float(weights.abs().sum()),
-        net_exposure=float(weights.sum()),
+        book=book,
+        gross_exposure=book * gross_l1,
+        net_exposure=book * net_l1,
+        gross_weight_l1=gross_l1,
+        net_weight_l1=net_l1,
         n_positions=int((weights != 0).sum()),
         weights={str(k): float(v) for k, v in weights.items()},
         metrics=result.metrics,

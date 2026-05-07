@@ -217,6 +217,31 @@ Recovery if the cache is stale:
 5. Confirm both EOD schedules are `RUNNING`.
 6. Keep the legacy Windows `MOC_Trader_Daily` task disabled so Dagster is the single execution scheduler.
 
+## Schedule defaults (intentional)
+
+Two execution schedules ship with `default_status=RUNNING`:
+
+- `ib_paper_moc_execution_1538_et` (15:38 ET, Mon-Fri)
+- `crypto_paper_execution_4h_utc` (03 minutes after every 4h UTC boundary)
+
+A fresh Dagster deployment fires both immediately. The safety contract is
+that the **recorder env-flag is the binding gate**, not the schedule status:
+
+| Env var | Default | Effect when 0 | Effect when 1 |
+|---|---|---|---|
+| `ALLOW_IB_PAPER_ORDERS` | `0` | IB recorder returns `status="blocked"`, no orders submitted | IB recorder calls `prod/moc_trader.py --live --port <paper>`. The trader's `IBConnection.connect` further rejects any non-DU managed account. |
+
+KuCoin/Binance schedules call `prod/<venue>_trader.py`, which is paper-only
+by config (`execution.paper_mode=true`) — never reaches a live venue.
+
+If you promote to a venue or environment where you do NOT want a fresh box
+to auto-fire even paper executions, flip `default_status` back to `STOPPED`
+in `src/orchestration/dagster_defs.py` AND set `ALLOW_IB_PAPER_ORDERS=0`.
+
+`ib_paper_moc_execution:*` alerts auto-resolve only when the recorder
+returns `status="completed"`. A `blocked` or `skipped` run does NOT clear
+the alert — those statuses don't fix the underlying problem.
+
 ## Crypto 4h UAT Checks
 
 KuCoin paper execution is scheduled by Dagster at `3 */4 * * *` UTC, three
