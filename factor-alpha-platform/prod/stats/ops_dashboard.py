@@ -15,6 +15,7 @@ import argparse
 import hashlib
 import html
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -35,6 +36,7 @@ from src.monitoring.state_store import (
     sync_alerts_from_latest_checks,
     upsert_strategy_state,
 )
+from src.execution.ib_gateway_health import check_ib_gateway
 
 
 LOGS_ROOT = PROJECT_ROOT / "prod" / "logs"
@@ -323,10 +325,14 @@ def _sync_ib_strategy_state(state_db: Path, checks: list[dict[str, Any]]) -> Non
     matrices_path = PROJECT_ROOT / "data" / "fmp_cache" / "matrices" / "close.parquet"
     trade_path = _latest_json(TRADE_LOG_DIRS["ib"], exclude_suffix="_dry_run.json")
     trade = _read_json(trade_path)
+    dashboard_client_id = int(os.environ.get("IB_CLIENT_ID_DASHBOARD_HEALTHCHECK", "29"))
+    gateway_status = check_ib_gateway(config, client_id=dashboard_client_id).to_dict()
 
     gross, net, n_positions = _portfolio_summary_stats(trade)
     status = _market_status(checks, "equity")
-    if trade:
+    if not gateway_status.get("connected"):
+        status = "unreachable"
+    elif trade:
         trade_date = str(trade.get("date") or "")[:10]
         today = datetime.now().date().isoformat()
         if trade_date == today:
@@ -354,6 +360,14 @@ def _sync_ib_strategy_state(state_db: Path, checks: list[dict[str, Any]]) -> Non
             "ib_port_live": ibkr.get("port_live"),
             "latest_trade_log": str(trade_path) if trade_path else None,
             "target_gmv": (config.get("account") or {}).get("target_gmv"),
+            "ib_gateway_connected": bool(gateway_status.get("connected")),
+            "ib_gateway_host": gateway_status.get("host"),
+            "ib_gateway_port": gateway_status.get("port"),
+            "ib_gateway_mode": gateway_status.get("mode"),
+            "ib_gateway_message": gateway_status.get("message"),
+            "ib_gateway_checked_at_utc": gateway_status.get("checked_at_utc"),
+            "ib_gateway_error_type": gateway_status.get("error_type"),
+            "ib_gateway_accounts_count": len(gateway_status.get("accounts") or []),
         },
     )
     upsert_strategy_state(state, state_db)
@@ -487,6 +501,7 @@ def _badge(status: str) -> str:
         "stale": "warn",
         "unknown": "warn",
         "disabled": "neutral",
+        "unreachable": "fail",
         "fail": "fail",
         "blocked": "fail",
         "critical": "fail",

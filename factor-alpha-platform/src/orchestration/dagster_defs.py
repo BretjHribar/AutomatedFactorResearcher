@@ -17,6 +17,7 @@ import pandas as pd
 
 import dagster as dg
 
+from src.data.equity_refresh import refresh_equity_eod_cache
 from src.data.integrity import run_crypto_integrity, run_equity_integrity
 from src.execution.ib_gateway_health import check_ib_gateway, ib_gateway_status_to_check_payload
 from src.execution.recorders import run_crypto_paper_recorder, run_ib_paper_moc
@@ -126,6 +127,50 @@ def production_strategy_config(context, paths: PlatformPathsResource) -> dict[st
     return cfg | {"_config_hash": cfg_hash}
 
 
+@dg.asset(group_name="data")
+def equity_eod_data_refresh_result(
+    context,
+    paths: PlatformPathsResource,
+    production_strategy_config: dict[str, Any],
+) -> dict[str, Any]:
+    """Refresh the FMP EOD equity cache and verify the required NYSE bar.
+
+    Hourly EOD schedule runs recheck recent vendor bars to catch late fills and
+    revisions. Intraday preflight/signal/execution jobs only repair if the
+    historical cache is behind the required bar, keeping the MOC window lean
+    when the hourly refresh has done its job.
+    """
+    platform_paths = paths.platform_paths()
+    job_name = getattr(context, "job_name", "") or ""
+    recheck_recent = job_name == "equity_eod_data_refresh_job"
+    result = refresh_equity_eod_cache(
+        root=platform_paths.root,
+        universe_name=production_strategy_config["strategy"]["universe"],
+        recheck_recent=recheck_recent,
+        max_workers=int(os.environ.get("EQUITY_EOD_REFRESH_WORKERS", "5")),
+        overlap_days=int(os.environ.get("EQUITY_EOD_REFRESH_OVERLAP_DAYS", "7")),
+        min_active_coverage=float(os.environ.get("EQUITY_EOD_MIN_ACTIVE_COVERAGE", "0.99")),
+    )
+    coverage = result.get("active_coverage") or {}
+    context.add_output_metadata({
+        "status": result["status"],
+        "message": result["message"],
+        "expected_bar_date": result["expected_bar_date"],
+        "matrix_end_before": result.get("matrix_end_before") or "",
+        "matrix_end_after": result.get("matrix_end_after") or "",
+        "latest_price_date_seen": result.get("latest_price_date_seen") or "",
+        "symbols_checked": result.get("symbols_checked", 0),
+        "symbols_updated": result.get("symbols_updated", 0),
+        "symbols_failed": result.get("symbols_failed", 0),
+        "rebuilt": result.get("rebuilt", False),
+        "active_coverage": coverage.get("coverage", 0.0),
+        "active_missing_count": coverage.get("missing_count", 0),
+        "elapsed_sec": result.get("elapsed_sec", 0.0),
+        "recheck_recent": recheck_recent,
+    })
+    return result
+
+
 @dg.asset(group_name="integrity")
 def ib_gateway_connectivity_status(
     context,
@@ -150,6 +195,7 @@ def equity_integrity_results(
     context,
     paths: PlatformPathsResource,
     production_strategy_config: dict[str, Any],
+    equity_eod_data_refresh_result: dict[str, Any],
 ) -> list[dict[str, Any]]:
     platform_paths = paths.platform_paths()
     universe_name = production_strategy_config["strategy"]["universe"]
@@ -161,6 +207,8 @@ def equity_integrity_results(
         "checks": len(payloads),
         "failures": _failure_count(payloads),
         "warnings": _warning_count(payloads),
+        "eod_refresh_status": equity_eod_data_refresh_result.get("status", ""),
+        "eod_matrix_end_after": equity_eod_data_refresh_result.get("matrix_end_after") or "",
     })
     return payloads
 
@@ -331,7 +379,11 @@ def live_quote_tape_summary(
 
 
 @dg.asset(group_name="research")
-def research_equity_signal_snapshot(context, paths: PlatformPathsResource) -> dict[str, Any]:
+def research_equity_signal_snapshot(
+    context,
+    paths: PlatformPathsResource,
+    equity_eod_data_refresh_result: dict[str, Any],
+) -> dict[str, Any]:
     platform_paths = paths.platform_paths()
     snapshot = latest_signal_snapshot(platform_paths.research_equity_config, root=platform_paths.root)
     payload = asdict(snapshot)
@@ -342,6 +394,8 @@ def research_equity_signal_snapshot(context, paths: PlatformPathsResource) -> di
         "alpha_signals_n": payload["alpha_signals_n"],
         "n_positions": payload["n_positions"],
         "gross_exposure": payload["gross_exposure"],
+        "eod_refresh_status": equity_eod_data_refresh_result.get("status", ""),
+        "eod_matrix_end_after": equity_eod_data_refresh_result.get("matrix_end_after") or "",
     })
     return payload
 
@@ -567,6 +621,26 @@ def production_config_guard(production_strategy_config: dict[str, Any]) -> dg.As
     )
 
 
+@dg.asset_check(asset=equity_eod_data_refresh_result)
+def equity_eod_refresh_expected_bar_loaded(equity_eod_data_refresh_result: dict[str, Any]) -> dg.AssetCheckResult:
+    status = equity_eod_data_refresh_result.get("status")
+    coverage = equity_eod_data_refresh_result.get("active_coverage") or {}
+    return dg.AssetCheckResult(
+        passed=status in {"completed", "up_to_date"},
+        metadata={
+            "status": status,
+            "message": equity_eod_data_refresh_result.get("message", ""),
+            "expected_bar_date": equity_eod_data_refresh_result.get("expected_bar_date", ""),
+            "matrix_end_after": equity_eod_data_refresh_result.get("matrix_end_after") or "",
+            "active_coverage": coverage.get("coverage", 0.0),
+            "active_missing_count": coverage.get("missing_count", 0),
+            "symbols_updated": equity_eod_data_refresh_result.get("symbols_updated", 0),
+            "symbols_failed": equity_eod_data_refresh_result.get("symbols_failed", 0),
+        },
+        description="FMP EOD cache must load the expected NYSE bar with active-universe coverage.",
+    )
+
+
 @dg.asset_check(asset=equity_integrity_results)
 def equity_integrity_passes(equity_integrity_results: list[dict[str, Any]]) -> dg.AssetCheckResult:
     failures = _failure_count(equity_integrity_results)
@@ -686,6 +760,7 @@ equity_integrity_job = dg.define_asset_job(
     "equity_integrity_job",
     selection=dg.AssetSelection.assets(
         production_strategy_config,
+        equity_eod_data_refresh_result,
         ib_gateway_connectivity_status,
         equity_integrity_results,
         equity_integrity_state_write,
@@ -706,6 +781,7 @@ all_integrity_job = dg.define_asset_job(
     "all_integrity_job",
     selection=dg.AssetSelection.assets(
         production_strategy_config,
+        equity_eod_data_refresh_result,
         ib_gateway_connectivity_status,
         equity_integrity_results,
         kucoin_integrity_results,
@@ -731,6 +807,7 @@ research_signal_job = dg.define_asset_job(
     "research_signal_job",
     selection=dg.AssetSelection.assets(
         production_strategy_config,
+        equity_eod_data_refresh_result,
         research_equity_signal_snapshot,
         equity_strategy_state_write,
     ),
@@ -745,10 +822,20 @@ ib_paper_moc_execution_job = dg.define_asset_job(
     "ib_paper_moc_execution_job",
     selection=dg.AssetSelection.assets(
         production_strategy_config,
+        equity_eod_data_refresh_result,
         ib_gateway_connectivity_status,
         equity_integrity_results,
         ib_paper_moc_execution_result,
     ),
+)
+
+equity_eod_data_refresh_job = dg.define_asset_job(
+    "equity_eod_data_refresh_job",
+    selection=dg.AssetSelection.assets(
+        production_strategy_config,
+        equity_eod_data_refresh_result,
+    ),
+    tags={"factor_alpha/eod_refresh": "equity_eod"},
 )
 
 crypto_paper_execution_job = dg.define_asset_job(
@@ -779,6 +866,18 @@ binance_paper_execution_job = dg.define_asset_job(
 
 
 schedules = [
+    dg.ScheduleDefinition(
+        name="equity_eod_refresh_hourly_after_close_et",
+        job=equity_eod_data_refresh_job,
+        cron_schedule="30 16-23 * * 1-5",
+        execution_timezone="America/New_York",
+    ),
+    dg.ScheduleDefinition(
+        name="equity_eod_refresh_hourly_overnight_catchup_et",
+        job=equity_eod_data_refresh_job,
+        cron_schedule="30 0-8 * * 2-6",
+        execution_timezone="America/New_York",
+    ),
     dg.ScheduleDefinition(
         name="equity_preflight_1515_et",
         job=equity_integrity_job,
@@ -829,6 +928,7 @@ schedules = [
 defs = dg.Definitions(
     assets=[
         production_strategy_config,
+        equity_eod_data_refresh_result,
         ib_gateway_connectivity_status,
         equity_integrity_results,
         kucoin_integrity_results,
@@ -849,6 +949,7 @@ defs = dg.Definitions(
     ],
     asset_checks=[
         production_config_guard,
+        equity_eod_refresh_expected_bar_loaded,
         equity_integrity_passes,
         ib_gateway_connectivity_passes,
         kucoin_integrity_passes,
@@ -861,6 +962,7 @@ defs = dg.Definitions(
         binance_paper_execution_not_failed,
     ],
     jobs=[
+        equity_eod_data_refresh_job,
         equity_integrity_job,
         crypto_integrity_job,
         all_integrity_job,

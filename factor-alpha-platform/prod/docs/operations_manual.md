@@ -1,6 +1,6 @@
 # IB Closing Auction MOC Trading System — Operations Manual
 
-> **Version**: 1.1.0 | **Updated**: 2026-04-21 | **Account**: DUQ372830
+> **Version**: 1.2.0 | **Updated**: 2026-05-06 | **Account**: DUQ372830
 
 ---
 
@@ -9,11 +9,12 @@
 1. [System Architecture](#system-architecture)
 2. [TWS vs IB Gateway](#tws-vs-ib-gateway)
 3. [Daily Timeline](#daily-timeline)
-4. [Program Flow — All 9 Phases](#program-flow)
-5. [Data Integrity Checks](#data-integrity-checks)
-6. [Execution Tracking](#execution-tracking)
-7. [Failure Modes & Recovery](#failure-modes)
-8. [Scaling Plan](#scaling-plan)
+4. [Equity EOD Refresh](#equity-eod-refresh)
+5. [Program Flow — All 9 Phases](#program-flow)
+6. [Data Integrity Checks](#data-integrity-checks)
+7. [Execution Tracking](#execution-tracking)
+8. [Failure Modes & Recovery](#failure-modes)
+9. [Scaling Plan](#scaling-plan)
 
 ---
 
@@ -85,6 +86,16 @@ To switch: just change `port_paper` in `strategy.json` if Gateway uses a differe
 
 ## Daily Timeline
 
+Equity EOD historical data is refreshed after the close and then rechecked hourly before the next MOC cycle:
+
+```text
+4:30 PM ET  - Dagster equity EOD refresh starts after NYSE close
+5:30 PM ET  - Hourly EOD recheck for late vendor fills/revisions
+6:30 PM ET  - Hourly EOD recheck
+...
+8:30 AM ET  - Final scheduled overnight catch-up check
+```
+
 ```
  3:25 PM ET  ┌─ Scheduler triggers moc_trader.py
              │
@@ -119,6 +130,75 @@ To switch: just change `port_paper` in `strategy.json` if Gateway uses a differe
              │
  4:10 PM ET  └─ Daily report saved. Disconnect.
 ```
+
+---
+
+## Equity EOD Refresh
+
+Equity EOD data is owned by Dagster. The legacy Windows `MOC_Trader_Daily`
+task must remain disabled so Dagster is the single scheduler for IB paper MOC
+execution.
+
+### Schedules
+
+| Schedule | Cron | Timezone | Purpose |
+|----------|------|----------|---------|
+| `equity_eod_refresh_hourly_after_close_et` | `30 16-23 * * 1-5` | America/New_York | Start 30 minutes after close and retry hourly through late evening |
+| `equity_eod_refresh_hourly_overnight_catchup_et` | `30 0-8 * * 2-6` | America/New_York | Overnight and premarket catch-up checks |
+
+### Expected Behavior
+
+1. Determine the latest closed NYSE session. Before 16:30 ET, this is the prior trading day. At or after 16:30 ET, the current trading day is eligible.
+2. Fetch a recent overlap window from FMP for the production metadata ticker set.
+3. If the vendor bar is not available, return `waiting_for_vendor` and retry next hour.
+4. If recent bars changed, rebuild price-derived matrices, preserve existing fundamental matrix semantics, repair sector/industry/subindustry classification matrices, and rebuild MCAP universes.
+5. Verify the active production universe has complete open/high/low/close/volume coverage for the expected bar.
+6. Block equity signal generation and IB MOC execution if the required historical full bar is missing.
+
+Production invariants:
+
+- `data/fmp_cache/metadata.json` defines the production ticker set. Extra files in `data/fmp_cache/prices` must not expand live/research matrices.
+- `close.parquet` should be monotonic and currently shaped around `2600 x 2514` for the active production cache.
+- `MCAP_100M_500M.parquet` must end on the same date as `close.parquet` and have active members.
+- Classification hierarchy must remain granular: sector < industry < subindustry.
+- Dagster tag concurrency `factor_alpha/eod_refresh=equity_eod` is limited to 1 to prevent concurrent parquet writers.
+
+### Manual Checks
+
+Local:
+
+```powershell
+venv\Scripts\python.exe -m src.data.equity_refresh --recheck-recent --workers 5 --overlap-days 7 --min-active-coverage 0.99 --fail-if-incomplete
+```
+
+Docker:
+
+```powershell
+docker exec factor_alpha_dagster_webserver sh -lc "cd /opt/dagster/dagster_home && dagster schedule list -w workspace.yaml -l factor_alpha_platform"
+docker exec factor_alpha_dagster_user_code python -c "import pandas as pd; c=pd.read_parquet('/opt/dagster/app/data/fmp_cache/matrices/close.parquet'); print(c.shape, c.index.min(), c.index.max(), c.index.is_monotonic_increasing)"
+```
+
+Integrity:
+
+```powershell
+@'
+from pathlib import Path
+from src.data.integrity import run_equity_integrity
+for r in run_equity_integrity(Path("."), universe_name="MCAP_100M_500M", db_name="alpha_results.db"):
+    print(r.status, r.name, r.message, r.value, r.threshold)
+'@ | venv\Scripts\python.exe -
+```
+
+### Recovery
+
+If the cache is stale before MOC:
+
+1. Do not trade. The MOC job should halt on `equity_eod_data_refresh_result` or equity integrity failure.
+2. Confirm `FMP_API_KEY` is present in the local or Docker Dagster environment.
+3. Run the manual EOD refresh command.
+4. Run equity integrity and confirm `latest_bar_freshness`, calendar, OHLC, classification, and universe checks pass.
+5. Rebuild/restart Docker Dagster if code changed.
+6. Confirm both EOD schedules are `RUNNING`.
 
 ---
 

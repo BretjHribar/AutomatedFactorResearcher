@@ -1,0 +1,65 @@
+{
+  "market": "crypto",
+  "interval": "4h",
+  "annualization": { "bars_per_year": 2190 },
+
+  "data": {
+    "matrices_dir": "data/kucoin_cache/matrices/4h_btc",
+    "universe_path": "data/kucoin_cache/universes/KUCOIN_TOP100_BTC_4h.parquet",
+    "universe_filter": { "method": "coverage", "threshold": 0.3 },
+    "returns_source": "matrix:returns"
+  },
+
+  "alpha_source": {
+    "db_path": "data/alpha_results.db",
+    "table": "alphas_crypto",
+    "filter_sql": "archived=0 AND asset_class='crypto' AND interval='4h' AND universe='KUCOIN_TOP100'",
+    "train_sharpe_table": "evaluations_crypto",
+    "train_sharpe_column": "sharpe_is"
+  },
+
+  "preprocessing": {
+    "universe_mask": false,
+    "demean_method": "cross_section",
+    "normalize": "l1",
+    "clip_max_w": null
+  },
+
+  "combiner": {
+    "name": "topn_train",
+    "params": { "top_n": 50 }
+  },
+
+  "post_combiner": {
+    "renormalize_l1": false,
+    "clip_max_w": null
+  },
+
+  "risk_model": {
+    "name": "diagonal",
+    "params": { "factor_window": 360, "n_pca_factors": 5, "vol_window": 120 }
+  },
+
+  "qp": {
+    "enabled": false,
+    "lambda_risk": 5.0,
+    "kappa_tc": 30.0,
+    "max_w": 0.10,
+    "dollar_neutral": true,
+    "max_gross_leverage": 1.0,
+    "commission_per_share": 0.0,
+    "impact_bps": 3.5,
+    "adv_cap": null
+  },
+
+  "fees": {
+    "model": "bps_taker",
+    "params": {
+      "taker_bps": 2.5,
+      "slippage_bps": 1.0
+    }
+  },
+
+  "splits": { "train_end": "2025-09-01", "val_end": "2026-01-01" },
+  "book": 100000
+}

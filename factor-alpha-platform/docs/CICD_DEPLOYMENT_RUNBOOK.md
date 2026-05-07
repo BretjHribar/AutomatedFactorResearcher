@@ -158,6 +158,7 @@ docker compose --env-file deploy/dagster/.env -f deploy/dagster/docker-compose.y
 
 5. In Dagster, enable UAT schedules:
    - Integrity checks.
+   - Equity EOD refresh checks.
    - Live quote collector.
    - Equity research signal.
    - Crypto research signal.
@@ -171,6 +172,50 @@ docker compose --env-file deploy/dagster/.env -f deploy/dagster/docker-compose.y
    - At least one successful KuCoin and Binance paper recorder run.
    - Dashboard state includes current execution summaries.
    - Decision dataset config hash and git SHA match the deployed image.
+
+## Equity EOD Refresh Schedule
+
+The equity production cache is refreshed by Dagster, not Windows Task Scheduler.
+The refresh starts 30 minutes after the NYSE close and repeats hourly so late FMP
+bars, vendor fills, and revisions are detected before the next MOC trading day.
+
+Enabled schedules:
+
+```text
+equity_eod_refresh_hourly_after_close_et      30 16-23 * * 1-5  America/New_York
+equity_eod_refresh_hourly_overnight_catchup_et 30 0-8 * * 2-6   America/New_York
+```
+
+Operational contract:
+
+- At 16:30 ET and every hour afterward, fetch the recent FMP EOD overlap window.
+- If the target NYSE bar is missing, return `waiting_for_vendor` and try again next hour.
+- If any recent bar changed, rebuild only price-derived matrices, repair classification matrices, rebuild MCAP universes, and run active-universe coverage checks.
+- Keep the production universe pinned to `data/fmp_cache/metadata.json` tickers. Extra cached price files must not expand the live/research universe.
+- Keep `factor_alpha/eod_refresh=equity_eod` tag concurrency at limit 1 so hourly EOD runs cannot write the same parquet cache concurrently.
+- Equity integrity, research signal, and IB paper MOC jobs all depend on `equity_eod_data_refresh_result`; the MOC job must halt if the required full historical bar is missing.
+
+Manual local check:
+
+```powershell
+venv\Scripts\python.exe -m src.data.equity_refresh --recheck-recent --workers 5 --overlap-days 7 --min-active-coverage 0.99 --fail-if-incomplete
+```
+
+Manual Docker/Dagster checks:
+
+```powershell
+docker exec factor_alpha_dagster_webserver sh -lc "cd /opt/dagster/dagster_home && dagster schedule list -w workspace.yaml -l factor_alpha_platform"
+docker exec factor_alpha_dagster_user_code python -c "from pathlib import Path; import pandas as pd; c=pd.read_parquet('/opt/dagster/app/data/fmp_cache/matrices/close.parquet'); print(c.shape, c.index.min(), c.index.max(), c.index.is_monotonic_increasing)"
+```
+
+Recovery if the cache is stale:
+
+1. Verify `FMP_API_KEY` is set in the Dagster environment.
+2. Run the manual local EOD refresh command above.
+3. Run `run_equity_integrity` for `MCAP_100M_500M`.
+4. Rebuild and restart Docker Dagster services.
+5. Confirm both EOD schedules are `RUNNING`.
+6. Keep the legacy Windows `MOC_Trader_Daily` task disabled so Dagster is the single execution scheduler.
 
 ## PROD Deployment Procedure
 

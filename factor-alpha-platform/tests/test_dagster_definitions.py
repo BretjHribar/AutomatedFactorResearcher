@@ -16,6 +16,7 @@ def test_dagster_definitions_are_loadable():
 
     asset_keys = {key.to_user_string() for key in defs.resolve_all_asset_keys()}
     assert "production_strategy_config" in asset_keys
+    assert "equity_eod_data_refresh_result" in asset_keys
     assert "ib_gateway_connectivity_status" in asset_keys
     assert "equity_integrity_results" in asset_keys
     assert "kucoin_integrity_results" in asset_keys
@@ -34,6 +35,8 @@ def test_dagster_schedules_cover_intraday_preflight_and_postclose():
 
     assert {
         "equity_preflight_1515_et",
+        "equity_eod_refresh_hourly_after_close_et",
+        "equity_eod_refresh_hourly_overnight_catchup_et",
         "live_quote_collector_5m_regular_session",
         "equity_research_signal_1530_et",
         "post_close_integrity_1610_et",
@@ -43,6 +46,9 @@ def test_dagster_schedules_cover_intraday_preflight_and_postclose():
     }.issubset(names)
     assert schedules["crypto_research_signal_4h"].cron_schedule == "2 */4 * * *"
     assert schedules["crypto_paper_execution_4h_utc"].cron_schedule == "3 */4 * * *"
+    assert schedules["equity_eod_refresh_hourly_after_close_et"].cron_schedule == "30 16-23 * * 1-5"
+    assert schedules["equity_eod_refresh_hourly_overnight_catchup_et"].cron_schedule == "30 0-8 * * 2-6"
+    assert defs.resolve_job_def("equity_eod_data_refresh_job").tags["factor_alpha/eod_refresh"] == "equity_eod"
 
 
 def test_production_strategy_config_asset_materializes_from_config(tmp_path):
