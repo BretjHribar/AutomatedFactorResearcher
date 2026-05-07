@@ -1,6 +1,6 @@
 # IB Closing Auction MOC Trading System — Operations Manual
 
-> **Version**: 1.2.0 | **Updated**: 2026-05-06 | **Account**: DUQ372830
+> **Version**: 1.2.1 | **Updated**: 2026-05-07 | **Account**: DUQ372830
 
 ---
 
@@ -10,11 +10,12 @@
 2. [TWS vs IB Gateway](#tws-vs-ib-gateway)
 3. [Daily Timeline](#daily-timeline)
 4. [Equity EOD Refresh](#equity-eod-refresh)
-5. [Program Flow — All 9 Phases](#program-flow)
-6. [Data Integrity Checks](#data-integrity-checks)
-7. [Execution Tracking](#execution-tracking)
-8. [Failure Modes & Recovery](#failure-modes)
-9. [Scaling Plan](#scaling-plan)
+5. [Crypto 4h Data and Paper Execution](#crypto-4h-data-and-paper-execution)
+6. [Program Flow — All 9 Phases](#program-flow)
+7. [Data Integrity Checks](#data-integrity-checks)
+8. [Execution Tracking](#execution-tracking)
+9. [Failure Modes & Recovery](#failure-modes)
+10. [Scaling Plan](#scaling-plan)
 
 ---
 
@@ -199,6 +200,83 @@ If the cache is stale before MOC:
 4. Run equity integrity and confirm `latest_bar_freshness`, calendar, OHLC, classification, and universe checks pass.
 5. Rebuild/restart Docker Dagster if code changed.
 6. Confirm both EOD schedules are `RUNNING`.
+
+---
+
+## Crypto 4h Data and Paper Execution
+
+KuCoin 4h paper trading is owned by Dagster. Binance is intentionally disabled
+on this local UAT box while the Binance Futures API is unreachable without VPN.
+Disabled venues must show `disabled`, not stale or green.
+
+### Schedules
+
+| Schedule | Cron | Timezone | Purpose |
+|----------|------|----------|---------|
+| `crypto_research_signal_4h` | `2 */4 * * *` | UTC | Refresh/evaluate crypto research signal after each 4h close |
+| `crypto_paper_execution_4h_utc` | `3 */4 * * *` | UTC | Run KuCoin paper recorder three minutes after each 4h close |
+
+### KuCoin Production Data Contract
+
+1. `prod.data_refresh.refresh_kucoin()` fetches the latest completed KuCoin
+   Futures 4h bars, drops any still-open candle, deduplicates by candle open
+   timestamp, and rebuilds `data/kucoin_cache/matrices/4h/prod`.
+2. The matrix builder also writes a *live* per-bar TOP100 snapshot to
+   `data/kucoin_cache/universes/KUCOIN_LIVE_TOP100_4h.parquet`. This snapshot
+   uses the same rule the live trader applies in-memory (`adv20.rank() <= 100`)
+   and is the file Dagster integrity checks validate.
+   The curated research universe `KUCOIN_TOP100_4h.parquet` is built separately
+   by `tools/build_kucoin_universe_20d.py` (TOP100 by ADV with 1-year minimum
+   history, 20-day rebalance commitment, vol-rank-95 exclusion). It is the
+   source of truth for backtests and `prod/config/research_*.json` and is
+   never overwritten by the refresh loop.
+3. The dashboard and Dagster integrity checks validate the LIVE snapshot,
+   not the curated research universe.
+4. Required KuCoin checks:
+   - `kucoin_crypto_latest_bar_freshness`: latest cached bar is at or after the expected closed 4h candle.
+   - `kucoin_crypto_bar_index_continuity`: no duplicate timestamps and no recent 4h gaps.
+   - `kucoin_crypto_latest_coverage`: latest OHLCV coverage is at least 90%.
+   - `kucoin_ohlc_consistency`: open/close are inside high/low and low <= high.
+   - `kucoin_crypto_universe_current`: TOP100 universe ends on the same bar as `close.parquet`.
+   - `kucoin_crypto_universe_membership`: latest universe has at least 90 active aligned members.
+   - `kucoin_alpha_database_active_alphas`: active crypto alphas are present.
+
+### Manual KuCoin Checks
+
+```powershell
+@'
+from pathlib import Path
+from src.data.integrity import run_crypto_integrity
+for r in run_crypto_integrity(
+    Path("."),
+    matrices_rel="data/kucoin_cache/matrices/4h/prod",
+    universe_rel="data/kucoin_cache/universes/KUCOIN_LIVE_TOP100_4h.parquet",
+):
+    print(r.status, r.name, r.value, r.threshold, r.message)
+'@ | venv\Scripts\python.exe -
+```
+
+```powershell
+@'
+import pandas as pd
+from pathlib import Path
+root = Path(".")
+close = pd.read_parquet(root / "data/kucoin_cache/matrices/4h/prod/close.parquet")
+univ = pd.read_parquet(root / "data/kucoin_cache/universes/KUCOIN_LIVE_TOP100_4h.parquet")
+print(close.shape, close.index.min(), close.index.max(), close.index.is_monotonic_increasing, int(close.index.duplicated().sum()))
+print(univ.shape, univ.index.max(), int(univ.iloc[-1].sum()))
+'@ | venv\Scripts\python.exe -
+```
+
+### Recovery
+
+If KuCoin is stale or the universe lags the matrix:
+
+1. Do not trust the paper-trader status until integrity is green.
+2. Check for an active refresh lock at `data/kucoin_cache/matrices/4h/.kucoin_refresh.lock`.
+3. Run `venv\Scripts\python.exe prod\data_refresh.py kucoin`.
+4. Regenerate the dashboard: `venv\Scripts\python.exe prod\stats\ops_dashboard.py`.
+5. In Dagster, confirm the latest `kucoin_paper_execution_job` succeeded and that the trade log `bar_time` equals the latest KuCoin `close.parquet` index.
 
 ---
 

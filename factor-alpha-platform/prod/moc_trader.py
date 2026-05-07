@@ -384,9 +384,32 @@ class IBConnection:
             self.ib.connect(self.host, self.port, clientId=self.client_id)
             self.connected = True
             accts = self.ib.managedAccounts()
-            is_paper = "DU" in str(accts) or self.port == IB_PORT_PAPER
+            # PAPER-ONLY HARD GUARD. Live trading requires both an opt-in env var
+            # AND every managed account must be a non-DU (live) account. Any
+            # mismatch — paper port hitting a live account, or live mode hitting
+            # a paper account — disconnects immediately and refuses orders.
+            allow_live = os.environ.get("IB_ALLOW_LIVE_TRADING") == "1"
+            account_list = [str(a) for a in (accts or [])]
+            any_paper = any(a.startswith("DU") for a in account_list)
+            any_live = any(account_list) and not all(a.startswith("DU") for a in account_list)
+            if any_live and not allow_live:
+                self.ib.disconnect()
+                self.connected = False
+                raise RuntimeError(
+                    f"REFUSING IB connection: managed accounts {account_list} include a non-paper "
+                    f"account. Set IB_ALLOW_LIVE_TRADING=1 to trade live, otherwise this is a "
+                    f"misconfigured port/gateway."
+                )
+            if not any_paper and not allow_live:
+                self.ib.disconnect()
+                self.connected = False
+                raise RuntimeError(
+                    f"REFUSING IB connection: no paper (DU*) account on this gateway "
+                    f"(accounts={account_list}). Verify IB_PORT_PAPER and gateway login."
+                )
+            is_paper = any_paper and not any_live
             log.info(f"Connected to IB {self.host}:{self.port} (clientId={self.client_id})")
-            log.info(f"  Accounts: {accts} | Paper: {is_paper}")
+            log.info(f"  Accounts: {account_list} | Paper: {is_paper} | allow_live={allow_live}")
             return True
         except Exception as e:
             log.warning(f"IB connect failed (clientId={self.client_id}): {e}")

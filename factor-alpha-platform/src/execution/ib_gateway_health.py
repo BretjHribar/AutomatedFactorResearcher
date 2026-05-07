@@ -22,6 +22,8 @@ class IBGatewayStatus:
     accounts: list[str] = field(default_factory=list)
     message: str = ""
     error_type: str | None = None
+    paper_only: bool = False
+    has_live_account: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -78,13 +80,43 @@ def check_ib_gateway(
                 if ib.isConnected():
                     ib.disconnect()
         elapsed = round(time.monotonic() - started, 3)
-        detail = f"IB Gateway reachable at {host}:{port} using {probe_mode}"
-        if accounts:
-            detail += f"; accounts={', '.join(_mask_account(a) for a in accounts)}"
+
+        # Paper safety: tcp probes can't see accounts at all (false positive risk),
+        # and ib_insync probes must show only DU* paper accounts unless explicitly
+        # opted into live trading via env var.
+        allow_live = os.environ.get("IB_ALLOW_LIVE_TRADING") == "1"
+        masked_accounts = [_mask_account(a) for a in accounts]
+        has_live_account = bool(accounts) and not all(a.startswith("DU") for a in accounts)
+        paper_only = bool(accounts) and all(a.startswith("DU") for a in accounts)
+
+        if probe_mode == "tcp":
+            detail = (
+                f"IB Gateway TCP reachable at {host}:{port} (no account verification — "
+                f"do not use 'tcp' mode in production; set IB_GATEWAY_HEALTH_MODE=ib_insync)"
+            )
+            connected = True
+        elif has_live_account and not allow_live:
+            detail = (
+                f"IB Gateway at {host}:{port} exposed a non-paper account "
+                f"(accounts={masked_accounts}); refusing to mark as connected. "
+                f"Set IB_ALLOW_LIVE_TRADING=1 if this is intentional."
+            )
+            connected = False
+        elif not accounts:
+            detail = (
+                f"IB Gateway handshake at {host}:{port} returned no managed accounts; "
+                f"gateway login may be incomplete."
+            )
+            connected = False
+        else:
+            detail = f"IB Gateway reachable at {host}:{port} using {probe_mode}; "
+            detail += f"accounts={', '.join(masked_accounts)} (paper_only={paper_only})"
+            connected = True
+
         return IBGatewayStatus(
             host=host,
             port=port,
-            connected=True,
+            connected=connected,
             mode=probe_mode,
             checked_at_utc=utc_now_iso(),
             elapsed_sec=elapsed,
@@ -92,6 +124,8 @@ def check_ib_gateway(
             client_id=health_client_id if probe_mode != "tcp" else None,
             accounts=accounts,
             message=detail,
+            paper_only=paper_only,
+            has_live_account=has_live_account,
         )
     except Exception as exc:
         elapsed = round(time.monotonic() - started, 3)
@@ -124,6 +158,8 @@ def ib_gateway_status_to_check_payload(status: IBGatewayStatus | dict[str, Any])
             "mode": data.get("mode"),
             "client_id": data.get("client_id"),
             "accounts_count": len(data.get("accounts") or []),
+            "paper_only": data.get("paper_only", False),
+            "has_live_account": data.get("has_live_account", False),
             "error_type": data.get("error_type"),
             "checked_at_utc": data.get("checked_at_utc"),
         },

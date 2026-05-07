@@ -63,6 +63,33 @@ class ExecutionControlsResource(dg.ConfigurableResource):
     crypto_timeout_sec: int = int(os.environ.get("CRYPTO_PAPER_EXEC_TIMEOUT_SEC", "900"))
 
 
+class SignalServiceResource(dg.ConfigurableResource):
+    """Bounded-history controls for the per-tick signal recompute.
+
+    Schedules fire `research_*_signal_snapshot` every 4h (crypto) or daily
+    (equity). The runner does NOT need full history to produce the latest
+    target weights — it only needs enough bars to satisfy the longest
+    lookback used by any alpha, combiner, or risk model. Slicing the date
+    index here keeps the recompute bounded.
+
+    Defaults: 400 bars for daily equity (>252 = 1y; covers 240-bar ts_*
+    operators + 126 factor_window), 1500 bars for 4h crypto (covers
+    Decay_exp(α=0.02) tail to fp64 cleanliness + 360 factor_window).
+
+    Set the env var to 0 to disable bounding (full history) for that market —
+    useful for periodic byte-equivalence verification runs.
+    """
+
+    equity_max_lookback_bars: int = int(os.environ.get("EQUITY_SIGNAL_MAX_LOOKBACK_BARS", "400"))
+    crypto_max_lookback_bars: int = int(os.environ.get("CRYPTO_SIGNAL_MAX_LOOKBACK_BARS", "1500"))
+
+    def equity_lookback(self) -> int | None:
+        return self.equity_max_lookback_bars or None
+
+    def crypto_lookback(self) -> int | None:
+        return self.crypto_max_lookback_bars or None
+
+
 def _check_payloads(results: list[Any]) -> list[dict[str, Any]]:
     return [asdict(r) if hasattr(r, "__dataclass_fields__") else dict(r) for r in results]
 
@@ -85,8 +112,42 @@ def _live_bar_module(root: Path):
 
 
 def _crypto_universe_rel(exchange: str, cfg: dict[str, Any]) -> str:
+    """Path to the LIVE per-refresh universe snapshot used for integrity checks.
+
+    The curated research universe (e.g. KUCOIN_TOP100_4h.parquet) is built by
+    `tools/build_kucoin_universe_20d.py` and is the source of truth for
+    backtests. The integrity check validates the *live* snapshot written by
+    `prod/data_refresh.py:_write_top_universe`, which uses the LIVE_ prefix
+    to avoid overwriting the curated file.
+    """
     universe = cfg["strategy"]["universe"]
-    return f"data/{exchange}_cache/universes/{exchange.upper()}_{universe}_4h.parquet"
+    return f"data/{exchange}_cache/universes/{exchange.upper()}_LIVE_{universe}_4h.parquet"
+
+
+def _disabled_crypto_check_payloads(exchange: str, reason: str | None) -> list[dict[str, Any]]:
+    message = reason or f"{exchange} execution is disabled in config."
+    check_names = [
+        "crypto_latest_bar_freshness",
+        "crypto_bar_index_continuity",
+        "crypto_latest_coverage",
+        "ohlc_consistency",
+        "crypto_universe_exists",
+        "crypto_universe_current",
+        "crypto_universe_membership",
+        "alpha_database_active_alphas",
+    ]
+    return [
+        {
+            "name": name,
+            "status": "pass",
+            "severity": "info",
+            "message": f"{exchange} disabled; {message}",
+            "value": "disabled",
+            "threshold": None,
+            "metadata": {"exchange": exchange, "disabled": True, "disabled_reason": message},
+        }
+        for name in check_names
+    ]
 
 
 def _latest_execution_summaries(root: Path, limit: int = 20) -> list[dict[str, Any]]:
@@ -235,6 +296,18 @@ def kucoin_integrity_results(context, paths: PlatformPathsResource) -> list[dict
 def binance_integrity_results(context, paths: PlatformPathsResource) -> list[dict[str, Any]]:
     platform_paths = paths.platform_paths()
     cfg = load_json(platform_paths.root / "prod/config/binance.json")
+    execution_cfg = cfg.get("execution") or {}
+    if execution_cfg.get("enabled") is False:
+        payloads = _disabled_crypto_check_payloads("binance", execution_cfg.get("disabled_reason"))
+        context.add_output_metadata({
+            "exchange": "binance",
+            "checks": len(payloads),
+            "failures": 0,
+            "warnings": 0,
+            "status": "disabled",
+        })
+        return payloads
+
     payloads = _check_payloads(run_crypto_integrity(
         platform_paths.root,
         matrices_rel=cfg["paths"]["matrices"],
@@ -382,10 +455,15 @@ def live_quote_tape_summary(
 def research_equity_signal_snapshot(
     context,
     paths: PlatformPathsResource,
+    signal_service: SignalServiceResource,
     equity_eod_data_refresh_result: dict[str, Any],
 ) -> dict[str, Any]:
     platform_paths = paths.platform_paths()
-    snapshot = latest_signal_snapshot(platform_paths.research_equity_config, root=platform_paths.root)
+    snapshot = latest_signal_snapshot(
+        platform_paths.research_equity_config,
+        root=platform_paths.root,
+        max_lookback_bars=signal_service.equity_lookback(),
+    )
     payload = asdict(snapshot)
     context.add_output_metadata({
         "strategy": payload["strategy"],
@@ -394,6 +472,7 @@ def research_equity_signal_snapshot(
         "alpha_signals_n": payload["alpha_signals_n"],
         "n_positions": payload["n_positions"],
         "gross_exposure": payload["gross_exposure"],
+        "max_lookback_bars": payload.get("max_lookback_bars") or 0,
         "eod_refresh_status": equity_eod_data_refresh_result.get("status", ""),
         "eod_matrix_end_after": equity_eod_data_refresh_result.get("matrix_end_after") or "",
     })
@@ -401,9 +480,17 @@ def research_equity_signal_snapshot(
 
 
 @dg.asset(group_name="research")
-def research_crypto_signal_snapshot(context, paths: PlatformPathsResource) -> dict[str, Any]:
+def research_crypto_signal_snapshot(
+    context,
+    paths: PlatformPathsResource,
+    signal_service: SignalServiceResource,
+) -> dict[str, Any]:
     platform_paths = paths.platform_paths()
-    snapshot = latest_signal_snapshot(platform_paths.research_crypto_config, root=platform_paths.root)
+    snapshot = latest_signal_snapshot(
+        platform_paths.research_crypto_config,
+        root=platform_paths.root,
+        max_lookback_bars=signal_service.crypto_lookback(),
+    )
     payload = asdict(snapshot)
     context.add_output_metadata({
         "strategy": payload["strategy"],
@@ -412,6 +499,7 @@ def research_crypto_signal_snapshot(context, paths: PlatformPathsResource) -> di
         "alpha_signals_n": payload["alpha_signals_n"],
         "n_positions": payload["n_positions"],
         "gross_exposure": payload["gross_exposure"],
+        "max_lookback_bars": payload.get("max_lookback_bars") or 0,
     })
     return payload
 
@@ -472,6 +560,15 @@ def ib_paper_moc_execution_result(
             "Refusing IB paper execution because equity integrity checks failed.",
             metadata={"failures": failures},
         )
+    if ib_gateway_connectivity_status.get("has_live_account"):
+        raise dg.Failure(
+            "Refusing IB paper execution: gateway exposed a non-paper account.",
+            metadata={
+                "host": ib_gateway_connectivity_status.get("host"),
+                "port": ib_gateway_connectivity_status.get("port"),
+                "message": ib_gateway_connectivity_status.get("message"),
+            },
+        )
     if execution_controls.allow_ib_paper_orders and not ib_gateway_connectivity_status.get("connected"):
         raise dg.Failure(
             "Refusing IB paper execution because the configured IB Gateway is unreachable.",
@@ -481,11 +578,23 @@ def ib_paper_moc_execution_result(
                 "message": ib_gateway_connectivity_status.get("message"),
             },
         )
+    # `--force` bypasses NYSE trading-day, the "TOO EARLY" guard, AND the 15:50
+    # ET submit cutoff. Allow it ONLY for manual launchpad triggers; refuse for
+    # any scheduled run so a stuck schedule can't fire orders on a holiday.
+    run_tags = getattr(getattr(context, "run", None), "tags", {}) or {}
+    is_scheduled_run = bool(run_tags.get("dagster/schedule_name"))
+    effective_force = execution_controls.force_ib_after_deadline and not is_scheduled_run
+    if execution_controls.force_ib_after_deadline and is_scheduled_run:
+        context.log.warning(
+            "Ignoring FORCE_IB_PAPER_MOC=1 for a scheduled run "
+            f"(schedule={run_tags.get('dagster/schedule_name')}); "
+            "force is only honored from manual launchpad triggers."
+        )
     platform_paths = paths.platform_paths()
     result = run_ib_paper_moc(
         root=platform_paths.root,
         allow_orders=execution_controls.allow_ib_paper_orders,
-        force=execution_controls.force_ib_after_deadline,
+        force=effective_force,
         timeout_sec=execution_controls.ib_timeout_sec,
     )
     payload = result.to_dict()
@@ -496,6 +605,9 @@ def ib_paper_moc_execution_result(
         "summary_path": payload.get("summary_path") or "",
         "trade_log_path": payload.get("trade_log_path") or "",
         "allow_ib_paper_orders": execution_controls.allow_ib_paper_orders,
+        "force_requested": execution_controls.force_ib_after_deadline,
+        "force_effective": effective_force,
+        "is_scheduled_run": is_scheduled_run,
         "config_universe": production_strategy_config["strategy"]["universe"],
     })
     if payload["status"] == "failed":
@@ -652,16 +764,25 @@ def equity_integrity_passes(equity_integrity_results: list[dict[str, Any]]) -> d
 
 @dg.asset_check(asset=ib_gateway_connectivity_status)
 def ib_gateway_connectivity_passes(ib_gateway_connectivity_status: dict[str, Any]) -> dg.AssetCheckResult:
+    connected = bool(ib_gateway_connectivity_status.get("connected"))
+    has_live = bool(ib_gateway_connectivity_status.get("has_live_account"))
+    mode = ib_gateway_connectivity_status.get("mode")
+    # Refuse to pass if the probe used the unsafe tcp mode (no account check) or
+    # if a live account was seen without explicit IB_ALLOW_LIVE_TRADING opt-in.
+    passed = connected and not has_live and mode != "tcp"
     return dg.AssetCheckResult(
-        passed=bool(ib_gateway_connectivity_status.get("connected")),
+        passed=passed,
         metadata={
             "host": ib_gateway_connectivity_status.get("host"),
             "port": ib_gateway_connectivity_status.get("port"),
-            "mode": ib_gateway_connectivity_status.get("mode"),
+            "mode": mode,
+            "paper_only": ib_gateway_connectivity_status.get("paper_only"),
+            "has_live_account": has_live,
             "elapsed_sec": ib_gateway_connectivity_status.get("elapsed_sec"),
             "message": ib_gateway_connectivity_status.get("message"),
         },
-        description="IB Gateway must accept an API handshake before equity execution.",
+        description=("IB Gateway must accept an ib_insync handshake AND show only paper "
+                     "(DU*) managed accounts before equity execution."),
     )
 
 
@@ -978,5 +1099,6 @@ defs = dg.Definitions(
     resources={
         "paths": PlatformPathsResource(),
         "execution_controls": ExecutionControlsResource(),
+        "signal_service": SignalServiceResource(),
     },
 )

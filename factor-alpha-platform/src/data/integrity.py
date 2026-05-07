@@ -46,7 +46,33 @@ def _load_matrix(matrices_dir: Path, name: str) -> pd.DataFrame:
     df = pd.read_parquet(matrices_dir / f"{name}.parquet")
     if not isinstance(df.index, pd.DatetimeIndex):
         df.index = pd.to_datetime(df.index)
+    if getattr(df.index, "tz", None) is not None:
+        df.index = df.index.tz_convert("UTC").tz_localize(None)
     return df
+
+
+def _utc_naive_timestamp(ts: pd.Timestamp | datetime | str | None = None) -> pd.Timestamp:
+    if ts is None:
+        return pd.Timestamp.now("UTC").tz_localize(None)
+    out = pd.Timestamp(ts)
+    if out.tzinfo is None:
+        return out
+    return out.tz_convert("UTC").tz_localize(None)
+
+
+def _expected_completed_bar_start(
+    now_ts: pd.Timestamp | datetime | str | None = None,
+    *,
+    freq_hours: int = 4,
+    grace_minutes: int = 6,
+) -> pd.Timestamp:
+    """Return the candle-open timestamp the local cache should contain."""
+    now = _utc_naive_timestamp(now_ts)
+    current_boundary = now.floor(f"{freq_hours}h")
+    expected = current_boundary - pd.Timedelta(hours=freq_hours)
+    if now - current_boundary < pd.Timedelta(minutes=grace_minutes):
+        expected -= pd.Timedelta(hours=freq_hours)
+    return expected
 
 
 def expected_nyse_dates(first: date, last: date) -> set[date]:
@@ -213,6 +239,222 @@ def check_alpha_database(db_path: Path) -> list[CheckResult]:
     )]
 
 
+def check_crypto_latest_freshness(
+    close: pd.DataFrame,
+    *,
+    now_ts: pd.Timestamp | datetime | str | None = None,
+    freq_hours: int = 4,
+    grace_minutes: int = 6,
+) -> list[CheckResult]:
+    if close.empty:
+        return [_fail("crypto_latest_bar_freshness", "Crypto close matrix is empty.", value="empty")]
+    latest = pd.Timestamp(close.index.max())
+    now = _utc_naive_timestamp(now_ts)
+    expected = _expected_completed_bar_start(now, freq_hours=freq_hours, grace_minutes=grace_minutes)
+    stale_hours = (now - latest).total_seconds() / 3600
+    metadata = {
+        "latest_bar": str(latest),
+        "expected_bar": str(expected),
+        "stale_hours": round(stale_hours, 3),
+        "freq_hours": freq_hours,
+        "grace_minutes": grace_minutes,
+    }
+    if latest < expected:
+        return [_fail(
+            "crypto_latest_bar_freshness",
+            f"Latest crypto bar is {latest}; expected at least {expected}.",
+            value=str(latest),
+            threshold=str(expected),
+            metadata=metadata,
+        )]
+    return [_ok(
+        "crypto_latest_bar_freshness",
+        "Latest crypto bar is at or after the expected closed 4h bar.",
+        value=str(latest),
+        threshold=str(expected),
+        metadata=metadata,
+    )]
+
+
+def check_crypto_bar_index(
+    close: pd.DataFrame,
+    *,
+    freq_hours: int = 4,
+    recent_lookback_hours: int = 48,
+) -> list[CheckResult]:
+    if close.empty:
+        return [_fail("crypto_bar_index_continuity", "Crypto close matrix is empty.", value="empty")]
+
+    idx = pd.DatetimeIndex(close.index)
+    duplicate_count = int(idx.duplicated().sum())
+    if duplicate_count:
+        return [_fail(
+            "crypto_bar_index_continuity",
+            "Crypto close matrix contains duplicate bar timestamps.",
+            value=f"duplicates={duplicate_count}",
+            threshold="0",
+        )]
+    if not idx.is_monotonic_increasing:
+        return [_fail(
+            "crypto_bar_index_continuity",
+            "Crypto close matrix index is not monotonic increasing.",
+            value="not_monotonic",
+            threshold="monotonic",
+        )]
+
+    latest = pd.Timestamp(idx.max())
+    recent = idx[idx >= latest - pd.Timedelta(hours=recent_lookback_hours)]
+    recent_gaps: list[str] = []
+    if len(recent) >= 2:
+        diffs = pd.Series(recent).diff().dropna()
+        expected_delta = pd.Timedelta(hours=freq_hours)
+        gap_locs = diffs[diffs > expected_delta]
+        recent_gaps = [str(pd.Timestamp(recent[int(i)])) for i in gap_locs.index[:10]]
+
+    if recent_gaps:
+        return [_fail(
+            "crypto_bar_index_continuity",
+            f"{len(recent_gaps)} recent 4h bars are missing from the close matrix.",
+            value=f"recent_gaps={len(recent_gaps)}",
+            threshold="0 recent gaps",
+            metadata={"first_gap_ends": recent_gaps, "lookback_hours": recent_lookback_hours},
+        )]
+    return [_ok(
+        "crypto_bar_index_continuity",
+        "Crypto close matrix has no duplicate bars and no recent 4h gaps.",
+        value=f"duplicates=0; recent_gaps=0",
+        threshold="0",
+        metadata={"lookback_hours": recent_lookback_hours},
+    )]
+
+
+def check_crypto_latest_coverage(
+    matrices_dir: Path,
+    *,
+    latest: pd.Timestamp,
+    min_latest_coverage: float = 0.90,
+    fields: tuple[str, ...] = ("open", "high", "low", "close", "volume"),
+) -> list[CheckResult]:
+    coverage: dict[str, float] = {}
+    missing_fields: list[str] = []
+    for field_name in fields:
+        path = matrices_dir / f"{field_name}.parquet"
+        if not path.exists():
+            missing_fields.append(field_name)
+            continue
+        mat = _load_matrix(matrices_dir, field_name)
+        if latest not in mat.index or mat.shape[1] == 0:
+            coverage[field_name] = 0.0
+            continue
+        row = mat.loc[latest]
+        coverage[field_name] = float(row.notna().sum() / max(len(row), 1))
+
+    if missing_fields:
+        return [_fail(
+            "crypto_latest_coverage",
+            "Required crypto matrix fields are missing.",
+            value=",".join(missing_fields),
+            threshold="all required fields present",
+            metadata={"missing_fields": missing_fields},
+        )]
+
+    min_field = min(coverage, key=coverage.get)
+    min_value = coverage[min_field]
+    metadata = {"coverage_by_field": {k: round(v, 4) for k, v in coverage.items()}, "latest_bar": str(latest)}
+    if min_value < min_latest_coverage:
+        return [_fail(
+            "crypto_latest_coverage",
+            "Latest crypto bar has too many missing OHLCV values.",
+            value=f"{min_field}={min_value:.1%}",
+            threshold=f">={min_latest_coverage:.0%}",
+            metadata=metadata,
+        )]
+    return [_ok(
+        "crypto_latest_coverage",
+        "Latest crypto bar has sufficient OHLCV coverage.",
+        value=f"{min_field}={min_value:.1%}",
+        threshold=f">={min_latest_coverage:.0%}",
+        metadata=metadata,
+    )]
+
+
+def check_crypto_universe(
+    universe_path: Path,
+    *,
+    close: pd.DataFrame,
+    expected_members: int | None = 100,
+    min_member_fraction: float = 0.90,
+) -> list[CheckResult]:
+    if not universe_path.exists():
+        return [_fail("crypto_universe_exists", "Crypto universe parquet is missing.", value=str(universe_path))]
+
+    results: list[CheckResult] = []
+    df = pd.read_parquet(universe_path)
+    if not isinstance(df.index, pd.DatetimeIndex):
+        df.index = pd.to_datetime(df.index)
+    if getattr(df.index, "tz", None) is not None:
+        df.index = df.index.tz_convert("UTC").tz_localize(None)
+    if df.empty:
+        return [_fail("crypto_universe_exists", "Crypto universe parquet is empty.", value=str(universe_path))]
+
+    results.append(_ok("crypto_universe_exists", "Crypto universe parquet exists.", value=str(df.shape)))
+
+    close_latest = pd.Timestamp(close.index.max())
+    universe_latest = pd.Timestamp(df.index.max())
+    metadata = {"close_latest": str(close_latest), "universe_latest": str(universe_latest)}
+    if universe_latest < close_latest:
+        results.append(_fail(
+            "crypto_universe_current",
+            "Crypto universe is stale relative to the production close matrix.",
+            value=str(universe_latest),
+            threshold=str(close_latest),
+            metadata=metadata,
+        ))
+    else:
+        results.append(_ok(
+            "crypto_universe_current",
+            "Crypto universe is aligned with the production close matrix.",
+            value=str(universe_latest),
+            threshold=str(close_latest),
+            metadata=metadata,
+        ))
+
+    last_members = df.loc[universe_latest].fillna(False).astype(bool)
+    member_count = int(last_members.sum())
+    unknown_members = sorted(set(last_members[last_members].index) - set(close.columns))
+    min_members = int((expected_members or 1) * min_member_fraction) if expected_members else 1
+    member_metadata = {
+        "expected_members": expected_members,
+        "min_member_fraction": min_member_fraction,
+        "unknown_members": unknown_members[:10],
+    }
+    if unknown_members:
+        results.append(_fail(
+            "crypto_universe_membership",
+            "Crypto universe contains symbols missing from the close matrix.",
+            value=f"unknown_members={len(unknown_members)}",
+            threshold="0",
+            metadata=member_metadata,
+        ))
+    elif member_count < min_members:
+        results.append(_fail(
+            "crypto_universe_membership",
+            "Crypto universe has too few active members on the latest bar.",
+            value=str(member_count),
+            threshold=f">={min_members}",
+            metadata=member_metadata,
+        ))
+    else:
+        results.append(_ok(
+            "crypto_universe_membership",
+            "Crypto universe has active members aligned with the close matrix.",
+            value=str(member_count),
+            threshold=f">={min_members}",
+            metadata=member_metadata,
+        ))
+    return results
+
+
 def run_equity_integrity(root: Path = PROJECT_ROOT, *,
                          universe_name: str = "MCAP_100M_500M",
                          db_name: str = "alpha_results.db") -> list[CheckResult]:
@@ -231,23 +473,23 @@ def run_equity_integrity(root: Path = PROJECT_ROOT, *,
 def run_crypto_integrity(root: Path = PROJECT_ROOT, *,
                          matrices_rel: str = "data/kucoin_cache/matrices/4h",
                          universe_rel: str = "data/kucoin_cache/universes/KUCOIN_TOP100_4h.parquet",
-                         db_name: str = "alpha_results.db") -> list[CheckResult]:
+                         db_name: str = "alpha_results.db",
+                         expected_universe_size: int | None = 100,
+                         now_ts: pd.Timestamp | datetime | str | None = None,
+                         freq_hours: int = 4) -> list[CheckResult]:
     matrices_dir = root / matrices_rel
     results: list[CheckResult] = []
     close = _load_matrix(matrices_dir, "close")
-    latest = close.index.max()
-    stale_hours = (pd.Timestamp.utcnow().tz_localize(None) - pd.Timestamp(latest)).total_seconds() / 3600
-    if stale_hours > 24:
-        results.append(_warn("crypto_latest_bar_freshness", f"Latest crypto bar is {stale_hours:.1f} hours old.", value=f"{stale_hours:.1f}", threshold="<=24h"))
-    else:
-        results.append(_ok("crypto_latest_bar_freshness", "Latest crypto bar is fresh.", value=f"{stale_hours:.1f}", threshold="<=24h"))
+    latest = pd.Timestamp(close.index.max())
+    results.extend(check_crypto_latest_freshness(close, now_ts=now_ts, freq_hours=freq_hours))
+    results.extend(check_crypto_bar_index(close, freq_hours=freq_hours))
+    results.extend(check_crypto_latest_coverage(matrices_dir, latest=latest))
     results.extend(check_ohlc(matrices_dir))
-    universe_path = root / universe_rel
-    if universe_path.exists():
-        df = pd.read_parquet(universe_path)
-        results.append(_ok("crypto_universe_exists", "Crypto universe parquet exists.", value=str(df.shape)))
-    else:
-        results.append(_fail("crypto_universe_exists", "Crypto universe parquet is missing.", value=str(universe_path)))
+    results.extend(check_crypto_universe(
+        root / universe_rel,
+        close=close,
+        expected_members=expected_universe_size,
+    ))
     results.extend(check_alpha_database(root / "data" / db_name))
     return results
 

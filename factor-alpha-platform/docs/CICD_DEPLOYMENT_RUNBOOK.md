@@ -217,6 +217,28 @@ Recovery if the cache is stale:
 5. Confirm both EOD schedules are `RUNNING`.
 6. Keep the legacy Windows `MOC_Trader_Daily` task disabled so Dagster is the single execution scheduler.
 
+## Crypto 4h UAT Checks
+
+KuCoin paper execution is scheduled by Dagster at `3 */4 * * *` UTC, three
+minutes after each 4h candle close. Binance can be disabled per environment
+with `prod/config/binance.json -> execution.enabled=false`; disabled exchanges
+must report `disabled` and pass disabled guardrail rows rather than producing
+stale-data alerts.
+
+Before promoting a crypto image/config:
+
+- Confirm `kucoin_crypto_latest_bar_freshness`, `kucoin_crypto_bar_index_continuity`, `kucoin_crypto_latest_coverage`, `kucoin_ohlc_consistency`, `kucoin_crypto_universe_current`, and `kucoin_crypto_universe_membership` are passing.
+- Confirm `data/kucoin_cache/universes/KUCOIN_LIVE_TOP100_4h.parquet` is rebuilt by `prod/data_refresh.py` per refresh and ends on the same bar as `data/kucoin_cache/matrices/4h/prod/close.parquet`. The curated research universe `KUCOIN_TOP100_4h.parquet` (built by `tools/build_kucoin_universe_20d.py`) is intentionally NOT touched by the refresh loop.
+- Confirm the latest KuCoin trade log `bar_time` equals the latest KuCoin close-matrix index after the scheduled paper run.
+- Confirm recent performance logs have no duplicate bars or missing 4h bars over the last 48 hours.
+
+Manual local verification:
+
+```powershell
+venv\Scripts\python.exe prod\stats\ops_dashboard.py
+venv\Scripts\python.exe -m pytest tests\unit\test_crypto_integrity.py tests\unit\test_ops_dashboard.py -q
+```
+
 ## PROD Deployment Procedure
 
 PROD should promote the exact image SHA already validated in UAT.

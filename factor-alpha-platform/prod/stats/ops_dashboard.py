@@ -17,6 +17,7 @@ import html
 import json
 import os
 import sys
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -32,10 +33,12 @@ from src.monitoring.state_store import (
     StrategyState,
     latest_checks,
     open_alerts,
+    record_check_results,
     strategy_states,
     sync_alerts_from_latest_checks,
     upsert_strategy_state,
 )
+from src.data.integrity import run_crypto_integrity, run_equity_integrity
 from src.execution.ib_gateway_health import check_ib_gateway
 
 
@@ -53,6 +56,17 @@ TRADE_LOG_DIRS = {
     "ib": LOGS_ROOT / "trades",
     "binance": LOGS_ROOT / "binance" / "trades",
     "kucoin": LOGS_ROOT / "kucoin" / "trades",
+}
+
+LEGACY_CRYPTO_CHECKS = {
+    "crypto_latest_bar_freshness",
+    "crypto_bar_index_continuity",
+    "crypto_latest_coverage",
+    "ohlc_consistency",
+    "crypto_universe_exists",
+    "crypto_universe_current",
+    "crypto_universe_membership",
+    "alpha_database_active_alphas",
 }
 
 
@@ -89,6 +103,12 @@ def _exchange_enabled(exchange: str) -> tuple[bool, str | None]:
     return True, None
 
 
+def _crypto_universe_rel(exchange: str, cfg: dict[str, Any]) -> str:
+    """LIVE per-refresh universe snapshot — see dagster_defs._crypto_universe_rel."""
+    universe = (cfg.get("strategy") or {}).get("universe", "TOP100")
+    return f"data/{exchange}_cache/universes/{exchange.upper()}_LIVE_{universe}_4h.parquet"
+
+
 def _latest_json(directory: Path, pattern: str = "trade_*.json",
                  *, exclude_suffix: str | None = None) -> Path | None:
     if not directory.exists():
@@ -116,6 +136,26 @@ def _market_status(checks: list[dict[str, Any]], market: str) -> str:
     if not market_checks:
         return "unknown"
     statuses = {str(c.get("status", "")).lower() for c in market_checks}
+    if "fail" in statuses:
+        return "blocked"
+    if "warn" in statuses:
+        return "warning"
+    return "ready"
+
+
+def _exchange_status(checks: list[dict[str, Any]], exchange: str) -> str:
+    """Status for one crypto venue, without contamination from other venues."""
+    prefix = f"{exchange}_"
+    exchange_checks = [c for c in checks if str(c.get("check_name", "")).startswith(prefix)]
+    if not exchange_checks and exchange == "kucoin":
+        exchange_checks = [
+            c for c in checks
+            if c.get("market") == "crypto"
+            and not str(c.get("check_name", "")).startswith(("binance_", "kucoin_"))
+        ]
+    if not exchange_checks:
+        return "unknown"
+    statuses = {str(c.get("status", "")).lower() for c in exchange_checks}
     if "fail" in statuses:
         return "blocked"
     if "warn" in statuses:
@@ -235,6 +275,8 @@ def _dedupe_performance(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]
         "duplicate_bar_rows": 0,
         "duplicate_bar_times": 0,
         "missing_4h_bars": None,
+        "recent_duplicate_bar_rows": 0,
+        "recent_missing_4h_bars": None,
         "max_bar_gap_hours": None,
         "dedupe_rule": "none",
     }
@@ -248,9 +290,9 @@ def _dedupe_performance(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]
     diagnostics["duplicate_bar_times"] = int(
         valid_bar.loc[valid_bar.duplicated("bar_time", keep=False), "bar_time"].nunique()
     )
-    diagnostics["dedupe_rule"] = "first row per bar_time"
+    diagnostics["dedupe_rule"] = "latest row per bar_time"
 
-    clean = valid_bar.drop_duplicates("bar_time", keep="first").sort_values("bar_time").copy()
+    clean = valid_bar.drop_duplicates("bar_time", keep="last").sort_values("bar_time").copy()
     diagnostics["unique_bars"] = int(len(clean))
 
     if len(clean) >= 2:
@@ -260,6 +302,19 @@ def _dedupe_performance(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]
         end = clean["bar_time"].iloc[-1]
         expected = int(((end - start).total_seconds() // (4 * 3600)) + 1)
         diagnostics["missing_4h_bars"] = max(0, expected - len(clean))
+        recent_start = end - pd.Timedelta(hours=48)
+        recent_clean = clean[clean["bar_time"] >= recent_start]
+        recent_valid = valid_bar[valid_bar["bar_time"] >= recent_start]
+        diagnostics["recent_duplicate_bar_rows"] = int(
+            recent_valid.duplicated("bar_time", keep="first").sum()
+        )
+        if len(recent_clean) >= 2:
+            recent_expected = int(
+                ((recent_clean["bar_time"].iloc[-1] - recent_clean["bar_time"].iloc[0]).total_seconds() // (4 * 3600)) + 1
+            )
+            diagnostics["recent_missing_4h_bars"] = max(0, recent_expected - len(recent_clean))
+        else:
+            diagnostics["recent_missing_4h_bars"] = 0
 
     if "pnl_bar" in clean:
         clean["cumulative_pnl"] = pd.to_numeric(clean["pnl_bar"], errors="coerce").fillna(0.0).cumsum()
@@ -294,7 +349,8 @@ def _performance_summary(exchange: str, path: Path | None) -> dict[str, Any]:
     sharpe = float(pnl.mean() / pnl.std() * np.sqrt(bars_per_year)) if pnl.std() > 0 else 0.0
     gmv = clean_df.get("gmv", pd.Series(dtype=float))
     n_positions = clean_df.get("n_positions", pd.Series(dtype=float))
-    status = "warn" if diagnostics["duplicate_bar_rows"] or diagnostics["missing_4h_bars"] else "ok"
+    recent_issues = bool(diagnostics["recent_duplicate_bar_rows"] or diagnostics["recent_missing_4h_bars"])
+    status = "warn" if recent_issues else "ok"
     return {
         "exchange": exchange,
         "status": status,
@@ -307,6 +363,8 @@ def _performance_summary(exchange: str, path: Path | None) -> dict[str, Any]:
         "duplicate_bar_rows": diagnostics["duplicate_bar_rows"],
         "duplicate_bar_times": diagnostics["duplicate_bar_times"],
         "missing_4h_bars": diagnostics["missing_4h_bars"],
+        "recent_duplicate_bar_rows": diagnostics["recent_duplicate_bar_rows"],
+        "recent_missing_4h_bars": diagnostics["recent_missing_4h_bars"],
         "max_bar_gap_hours": diagnostics["max_bar_gap_hours"],
         "raw_total_pnl": float(raw_pnl.sum()) if len(raw_pnl) else 0.0,
         "total_pnl": float(cum.iloc[-1]) if len(cum) else 0.0,
@@ -385,9 +443,11 @@ def _sync_kucoin_strategy_state(state_db: Path, checks: list[dict[str, Any]]) ->
     if gross is None:
         gross, net, n_positions = _portfolio_summary_stats(trade)
 
-    status = _market_status(checks, "crypto")
-    if trade.get("timestamp"):
-        status = "traded" if status == "ready" else status
+    status = _exchange_status(checks, "kucoin")
+    data_ts = _ts_date(_last_parquet_index(matrices_path))
+    signal_ts = _ts_date(trade.get("bar_time") or trade.get("signal_date"))
+    if status == "ready" and signal_ts is not None and data_ts is not None:
+        status = "traded" if signal_ts >= data_ts else "pending_trade"
 
     state = StrategyState(
         strategy_id="crypto_4h",
@@ -426,19 +486,16 @@ def _sync_binance_strategy_state(state_db: Path) -> None:
 
     last_data_bar = _last_parquet_index(matrices_path)
     enabled, disabled_reason = _exchange_enabled("binance")
+    checks = latest_checks(db_path=state_db)
     status = "unknown"
     if not enabled:
         status = "disabled"
-    elif last_data_bar:
-        try:
-            age_hours = (
-                pd.Timestamp.now("UTC").tz_localize(None) - pd.Timestamp(last_data_bar)
-            ).total_seconds() / 3600
-            status = "stale" if age_hours > 12 else "ready"
-        except Exception:
-            status = "unknown"
-    if trade.get("bar_time") and trade.get("bar_time") == last_data_bar:
-        status = "traded" if status == "ready" else status
+    else:
+        status = _exchange_status(checks, "binance")
+    data_ts = _ts_date(last_data_bar)
+    signal_ts = _ts_date(trade.get("bar_time") or trade.get("signal_date"))
+    if status == "ready" and signal_ts is not None and data_ts is not None:
+        status = "traded" if signal_ts >= data_ts else "pending_trade"
 
     state = StrategyState(
         strategy_id="binance_4h",
@@ -471,14 +528,163 @@ def _sync_strategy_states_from_files(state_db: Path, checks: list[dict[str, Any]
     _sync_kucoin_strategy_state(state_db, checks)
 
 
-def build_payload(state_db: Path) -> dict[str, Any]:
-    sync_alerts_from_latest_checks(state_db)
+def _ts_date(value: Any) -> pd.Timestamp | None:
+    if not value:
+        return None
+    try:
+        return pd.Timestamp(value)
+    except Exception:
+        return None
+
+
+def _apply_state_health_overrides(states: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Make dashboard state honest even when a saved strategy row is stale."""
+    latest_equity_data = _ts_date(_last_parquet_index(
+        PROJECT_ROOT / "data" / "fmp_cache" / "matrices" / "close.parquet"
+    ))
+    adjusted: list[dict[str, Any]] = []
+    for row in states:
+        state = dict(row)
+        strategy_id = str(state.get("strategy_id", ""))
+        if strategy_id == "equity_1d" and latest_equity_data is not None:
+            state["last_data_bar"] = str(latest_equity_data)
+            last_signal = _ts_date(state.get("last_signal_bar"))
+            if last_signal is None or last_signal < latest_equity_data:
+                state["status"] = "stale_signal"
+        adjusted.append(state)
+    return adjusted
+
+
+def _prefixed_checks(exchange: str, results: list[Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for result in results:
+        data = dict(result) if isinstance(result, dict) else {
+            "name": result.name,
+            "status": result.status,
+            "severity": result.severity,
+            "message": result.message,
+            "value": result.value,
+            "threshold": result.threshold,
+            "metadata": result.metadata,
+        }
+        if not str(data["name"]).startswith(f"{exchange}_"):
+            data["name"] = f"{exchange}_{data['name']}"
+        metadata = dict(data.get("metadata") or {})
+        metadata["exchange"] = exchange
+        data["metadata"] = metadata
+        rows.append(data)
+    return rows
+
+
+def _disabled_exchange_checks(exchange: str, reason: str | None) -> list[dict[str, Any]]:
+    message = reason or f"{exchange} is disabled in exchange config."
+    names = [
+        "crypto_latest_bar_freshness",
+        "crypto_bar_index_continuity",
+        "crypto_latest_coverage",
+        "ohlc_consistency",
+        "crypto_universe_exists",
+        "crypto_universe_current",
+        "crypto_universe_membership",
+        "alpha_database_active_alphas",
+    ]
+    return [
+        {
+            "name": f"{exchange}_{name}",
+            "status": "pass",
+            "severity": "info",
+            "message": f"{exchange} disabled; {message}",
+            "value": "disabled",
+            "threshold": None,
+            "metadata": {"exchange": exchange, "disabled": True, "disabled_reason": message},
+        }
+        for name in names
+    ]
+
+
+def _legacy_crypto_retirement_checks() -> list[dict[str, Any]]:
+    return [
+        {
+            "name": name,
+            "status": "pass",
+            "severity": "info",
+            "message": "Legacy aggregate crypto check retired; per-exchange checks are active.",
+            "value": "retired",
+            "threshold": None,
+            "metadata": {"retired": True},
+        }
+        for name in sorted(LEGACY_CRYPTO_CHECKS)
+    ]
+
+
+def _visible_integrity_checks(checks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    has_exchange_scoped_crypto = any(
+        c.get("market") == "crypto"
+        and str(c.get("check_name", "")).startswith(("kucoin_", "binance_"))
+        for c in checks
+    )
+    if not has_exchange_scoped_crypto:
+        return checks
+    return [
+        c for c in checks
+        if not (
+            c.get("market") == "crypto"
+            and str(c.get("check_name", "")) in LEGACY_CRYPTO_CHECKS
+        )
+    ]
+
+
+def _refresh_integrity_state(state_db: Path) -> None:
+    run_id = f"dashboard-integrity-{uuid.uuid4().hex[:12]}"
+    strategy_cfg = _read_json(PROJECT_ROOT / "prod" / "config" / "strategy.json")
+    universe_name = (strategy_cfg.get("strategy") or {}).get("universe") or "MCAP_100M_500M"
+    db_name = Path((strategy_cfg.get("paths") or {}).get("db") or "alpha_results.db").name
+    record_check_results(
+        run_equity_integrity(PROJECT_ROOT, universe_name=universe_name, db_name=db_name),
+        run_id=run_id,
+        market="equity",
+        db_path=state_db,
+    )
+
+    crypto_rows: list[dict[str, Any]] = []
+    for exchange in ("kucoin", "binance"):
+        cfg = _read_json(PROJECT_ROOT / "prod" / "config" / f"{exchange}.json")
+        enabled, disabled_reason = _exchange_enabled(exchange)
+        if not enabled:
+            crypto_rows.extend(_disabled_exchange_checks(exchange, disabled_reason))
+            continue
+        crypto_rows.extend(_prefixed_checks(exchange, run_crypto_integrity(
+            PROJECT_ROOT,
+            matrices_rel=cfg["paths"]["matrices"],
+            universe_rel=_crypto_universe_rel(exchange, cfg),
+            db_name="alpha_results.db",
+        )))
+    crypto_rows.extend(_legacy_crypto_retirement_checks())
+    record_check_results(crypto_rows, run_id=run_id, market="crypto", db_path=state_db)
+
+
+def build_payload(state_db: Path, *, refresh_integrity: bool = False) -> dict[str, Any]:
+    """Build the dashboard payload from the state DB.
+
+    The dashboard is READ-ONLY by default. The Dagster integrity jobs are the
+    sole writer of `data_integrity_checks` and the sole driver of
+    `sync_alerts_from_latest_checks`. If the dashboard also writes (via
+    `refresh_integrity=True`) it can race with Dagster's writes — the most
+    recent writer wins for `MAX(checked_at) per (market, check_name)` and a
+    later passing dashboard run will silently auto-resolve a fail Dagster
+    just raised. Only enable refresh_integrity for ad-hoc local diagnosis on
+    a non-production state DB.
+    """
+    if refresh_integrity:
+        _refresh_integrity_state(state_db)
+        sync_alerts_from_latest_checks(state_db)
     checks = latest_checks(db_path=state_db)
     _sync_strategy_states_from_files(state_db, checks)
+    visible_checks = _visible_integrity_checks(checks)
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "strategy_states": strategy_states(state_db),
-        "integrity_checks": checks,
+        "strategy_states": _apply_state_health_overrides(strategy_states(state_db)),
+        "integrity_checks": visible_checks,
         "alerts": open_alerts(state_db),
         "performance": [
             _performance_summary(exchange, _latest_csv(directory))
@@ -499,6 +705,8 @@ def _badge(status: str) -> str:
         "warn": "warn",
         "warning": "warn",
         "stale": "warn",
+        "stale_signal": "warn",
+        "pending_trade": "warn",
         "unknown": "warn",
         "disabled": "neutral",
         "unreachable": "fail",
@@ -585,6 +793,7 @@ def _curve_panel(performance: dict[str, Any]) -> str:
             f"Unique bars {_fmt(performance.get('unique_bars'))}" if performance.get("unique_bars") is not None else "",
             f"Raw rows {_fmt(performance.get('raw_rows'))}" if performance.get("raw_rows") is not None else "",
             f"Dup rows {_fmt(performance.get('duplicate_bar_rows'))}" if performance.get("duplicate_bar_rows") else "",
+            f"Recent gaps {_fmt(performance.get('recent_missing_4h_bars'))}" if performance.get("recent_missing_4h_bars") else "",
             f"PnL {_money(performance.get('total_pnl'))}" if performance.get("total_pnl") is not None else "",
             f"SR {_fmt(performance.get('sharpe'))}" if performance.get("sharpe") is not None else "",
         ] if part
@@ -638,6 +847,7 @@ def render_html(payload: dict[str, Any]) -> str:
         f"<td>{_fmt(p.get('last_timestamp'))}</td><td>{_fmt(p.get('last_bar_time'))}</td>"
         f"<td>{_fmt(p.get('raw_rows'))}</td><td>{_fmt(p.get('unique_bars'))}</td>"
         f"<td>{_fmt(p.get('duplicate_bar_rows'))}</td><td>{_fmt(p.get('missing_4h_bars'))}</td>"
+        f"<td>{_fmt(p.get('recent_missing_4h_bars'))}</td>"
         f"<td>{_fmt(p.get('total_pnl'))}</td><td>{_fmt(p.get('raw_total_pnl'))}</td>"
         f"<td>{_fmt(p.get('sharpe'))}</td><td>{_fmt(p.get('max_drawdown'))}</td>"
         f"<td>{_fmt(p.get('avg_gmv'))}</td><td>{_fmt(p.get('avg_positions'))}</td></tr>"
@@ -711,7 +921,7 @@ def render_html(payload: dict[str, Any]) -> str:
   <h2>Data Integrity</h2>
   <table><thead><tr><th>Market</th><th>Check</th><th>Status</th><th>Message</th><th>Value</th><th>Threshold</th><th>Checked</th></tr></thead><tbody>{check_rows}</tbody></table>
   <h2>Performance Logs</h2>
-  <table><thead><tr><th>Exchange</th><th>Status</th><th>Last Run</th><th>Last Bar</th><th>Raw Rows</th><th>Unique Bars</th><th>Dup Rows</th><th>Missing 4h</th><th>Dedup PnL</th><th>Raw PnL</th><th>Sharpe</th><th>Max DD</th><th>Avg GMV</th><th>Avg Positions</th></tr></thead><tbody>{perf_rows}</tbody></table>
+  <table><thead><tr><th>Exchange</th><th>Status</th><th>Last Run</th><th>Last Bar</th><th>Raw Rows</th><th>Unique Bars</th><th>Dup Rows</th><th>Missing 4h</th><th>Recent Missing</th><th>Dedup PnL</th><th>Raw PnL</th><th>Sharpe</th><th>Max DD</th><th>Avg GMV</th><th>Avg Positions</th></tr></thead><tbody>{perf_rows}</tbody></table>
 </main>
 </body>
 </html>
@@ -723,9 +933,13 @@ def main() -> None:
     parser.add_argument("--state-db", type=Path, default=PROJECT_ROOT / "data" / "prod_state.db")
     parser.add_argument("--output", type=Path, default=OUT_DIR / "ops_dashboard.html")
     parser.add_argument("--json-output", type=Path, default=OUT_DIR / "ops_dashboard.json")
+    parser.add_argument("--refresh-integrity", action="store_true",
+                        help=("Re-run integrity checks before rendering and write rows into the state DB. "
+                              "Off by default — Dagster owns the integrity write path. Enabling this on "
+                              "a production state DB can silently auto-resolve alerts Dagster just raised."))
     args = parser.parse_args()
 
-    payload = build_payload(args.state_db)
+    payload = build_payload(args.state_db, refresh_integrity=args.refresh_integrity)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(render_html(payload), encoding="utf-8")
     args.json_output.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")

@@ -58,3 +58,44 @@ def test_ib_gateway_status_to_check_payload_fail():
     assert payload["status"] == "fail"
     assert payload["message"] == "timeout"
     assert payload["metadata"]["error_type"] == "TimeoutError"
+
+
+def test_ib_gateway_status_to_check_payload_includes_paper_flags():
+    status = IBGatewayStatus(
+        host="ib-gateway", port=4004, connected=True, mode="ib_insync",
+        checked_at_utc="2026-05-05T20:00:00+00:00", elapsed_sec=0.25, timeout_sec=8.0,
+        client_id=19, accounts=["DUQ372830"], message="ok",
+        paper_only=True, has_live_account=False,
+    )
+    payload = ib_gateway_status_to_check_payload(status)
+    assert payload["metadata"]["paper_only"] is True
+    assert payload["metadata"]["has_live_account"] is False
+
+
+def test_ib_gateway_check_refuses_to_pass_when_live_account_present(monkeypatch):
+    """A gateway that returns a live account must be reported as not connected,
+    even though the TCP/API handshake itself succeeded."""
+    from src.execution import ib_gateway_health
+
+    class FakeIB:
+        def __init__(self):
+            self._connected = False
+        def connect(self, host, port, clientId, timeout):
+            self._connected = True
+        def isConnected(self):
+            return self._connected
+        def disconnect(self):
+            self._connected = False
+        def managedAccounts(self):
+            return ["U1234567"]  # live account
+
+    fake_module = type("FakeModule", (), {"IB": FakeIB})
+    monkeypatch.setitem(__import__("sys").modules, "ib_insync", fake_module)
+    monkeypatch.delenv("IB_ALLOW_LIVE_TRADING", raising=False)
+    monkeypatch.delenv("IB_GATEWAY_HEALTH_MODE", raising=False)
+
+    status = ib_gateway_health.check_ib_gateway(_strategy_config())
+
+    assert status.connected is False
+    assert status.has_live_account is True
+    assert "non-paper" in status.message

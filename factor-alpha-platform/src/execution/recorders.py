@@ -10,10 +10,12 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import signal
 import subprocess
 import sys
 import time
 import traceback
+import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -51,7 +53,13 @@ def utc_now() -> dt.datetime:
 
 
 def utc_stamp() -> str:
-    return utc_now().strftime("%Y%m%dT%H%M%SZ")
+    """UTC timestamp with millisecond precision and a uuid suffix.
+
+    Both pieces matter: ms precision avoids collisions inside one second under
+    a normal workload; the uuid suffix makes collisions impossible even if two
+    triggers fire within the same millisecond (e.g. a Dagster retry storm).
+    """
+    return utc_now().strftime("%Y%m%dT%H%M%S_%fZ_") + uuid.uuid4().hex[:8]
 
 
 def load_json(path: str | Path) -> dict[str, Any]:
@@ -59,12 +67,20 @@ def load_json(path: str | Path) -> dict[str, Any]:
 
 
 def write_execution_summary(result: ExecutionResult, root: Path = PROJECT_ROOT) -> Path:
+    """Write the summary atomically: write to .tmp then os.replace into place.
+
+    Plain `path.write_text(...)` is non-atomic on Windows; a crash mid-write
+    leaves a truncated JSON file that downstream readers (the dashboard) will
+    treat as a real but corrupt summary.
+    """
     log_dir = root / EXECUTION_LOG_DIR
     log_dir.mkdir(parents=True, exist_ok=True)
     run_id = result.run_id or f"{result.venue}_{result.mode}_{utc_stamp()}"
     path = log_dir / f"{run_id}.json"
+    tmp = path.with_suffix(path.suffix + ".tmp")
     payload = result.to_dict() | {"summary_path": str(path)}
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    tmp.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    os.replace(tmp, path)
     return path
 
 
@@ -130,6 +146,71 @@ def summarize_trade_log(path: str | Path | None) -> dict[str, Any]:
     }
 
 
+_STDOUT_TAIL_BYTES = 64 * 1024  # last 64KB of stdout/stderr returned in-memory
+
+
+def _spawn_kwargs() -> dict[str, Any]:
+    """Spawn the child in its own process group / Windows job so we can kill
+    the whole tree on timeout instead of just the direct python.exe."""
+    if sys.platform == "win32":
+        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}  # type: ignore[attr-defined]
+    return {"start_new_session": True}
+
+
+def _kill_process_tree(proc: subprocess.Popen) -> None:
+    """Terminate the child plus any descendants. On Windows uses CTRL_BREAK
+    against the process group, then a hard taskkill /T /F. On POSIX uses
+    SIGTERM/SIGKILL on the process group."""
+    if proc.poll() is not None:
+        return
+    try:
+        if sys.platform == "win32":
+            try:
+                proc.send_signal(signal.CTRL_BREAK_EVENT)  # type: ignore[attr-defined]
+                proc.wait(timeout=5)
+            except Exception:
+                pass
+            if proc.poll() is None:
+                subprocess.run(
+                    ["taskkill", "/T", "/F", "/PID", str(proc.pid)],
+                    capture_output=True,
+                    timeout=10,
+                )
+        else:
+            try:
+                os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+                proc.wait(timeout=5)
+            except Exception:
+                pass
+            if proc.poll() is None:
+                try:
+                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                except Exception:
+                    pass
+    finally:
+        try:
+            proc.wait(timeout=5)
+        except Exception:
+            pass
+
+
+def _try_cancel_all_ib_orders(root: Path, env: dict[str, str]) -> dict[str, Any]:
+    """After an IB execution timeout, fire prod/cancel_all.py to drop any orders
+    the orphan child may have left in flight. Best-effort; never raises."""
+    cmd = [sys.executable, "prod/cancel_all.py"]
+    try:
+        completed = subprocess.run(
+            cmd, cwd=str(root), capture_output=True, text=True, timeout=60, env=env
+        )
+        return {
+            "cancel_all_returncode": completed.returncode,
+            "cancel_all_stdout_tail": (completed.stdout or "")[-2000:],
+            "cancel_all_stderr_tail": (completed.stderr or "")[-2000:],
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {"cancel_all_error": f"{type(exc).__name__}: {exc}"}
+
+
 def _run_subprocess(
     *,
     command: list[str],
@@ -140,8 +221,19 @@ def _run_subprocess(
     strategy_id: str,
     timeout_sec: int,
     env: dict[str, str] | None = None,
-    runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
+    on_timeout_cancel_ib: bool = False,
 ) -> tuple[ExecutionResult, str, str]:
+    """Run a subprocess and stream its output to disk.
+
+    Differences vs subprocess.run:
+    - Spawns the child in its own process group / Windows job, so a timeout
+      can kill the entire tree (not just the direct python.exe) — required
+      to avoid orphan IB connections holding the order-entry client_id.
+    - Streams stdout/stderr to file rather than buffering in-memory, so a
+      misbehaving child can't OOM the Dagster worker.
+    - On IB execution timeout, fires prod/cancel_all.py best-effort to
+      drop any orders the orphan may have left at the broker.
+    """
     started = utc_now()
     log_dir = root / EXECUTION_LOG_DIR
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -152,86 +244,86 @@ def _run_subprocess(
     proc_env.setdefault("PYTHONUTF8", "1")
     proc_env.setdefault("PYTHONIOENCODING", "utf-8")
 
+    proc: subprocess.Popen | None = None
     try:
-        completed = runner(
-            command,
-            cwd=str(root),
-            capture_output=True,
-            text=True,
-            timeout=timeout_sec,
-            env=proc_env,
-        )
-        stdout = completed.stdout or ""
-        stderr = completed.stderr or ""
-        stdout_path.write_text(stdout, encoding="utf-8", errors="replace")
-        stderr_path.write_text(stderr, encoding="utf-8", errors="replace")
+        with open(stdout_path, "wb") as out_f, open(stderr_path, "wb") as err_f:
+            proc = subprocess.Popen(
+                command,
+                cwd=str(root),
+                stdout=out_f,
+                stderr=err_f,
+                env=proc_env,
+                **_spawn_kwargs(),
+            )
+            try:
+                returncode = proc.wait(timeout=timeout_sec)
+            except subprocess.TimeoutExpired:
+                _kill_process_tree(proc)
+                ended = utc_now()
+                metadata: dict[str, Any] = {"exception": "TimeoutExpired"}
+                if on_timeout_cancel_ib:
+                    metadata.update(_try_cancel_all_ib_orders(root, proc_env))
+                # Re-read tails from disk so the caller sees what was streamed.
+                stdout_tail = _tail_bytes(stdout_path)
+                stderr_tail = _tail_bytes(stderr_path)
+                result = ExecutionResult(
+                    strategy_id=strategy_id, venue=venue, mode=mode, status="failed",
+                    started_at_utc=started.isoformat(), ended_at_utc=ended.isoformat(),
+                    elapsed_sec=round((ended - started).total_seconds(), 3),
+                    command=command, returncode=None, run_id=run_id,
+                    stdout_path=str(stdout_path), stderr_path=str(stderr_path),
+                    message=f"subprocess timed out after {timeout_sec}s; child tree killed",
+                    metadata=metadata,
+                )
+                return result, stdout_tail, stderr_tail
+
         ended = utc_now()
-        status = "completed" if completed.returncode == 0 else "failed"
-        message = "subprocess completed" if completed.returncode == 0 else f"subprocess failed with returncode {completed.returncode}"
+        stdout_tail = _tail_bytes(stdout_path)
+        stderr_tail = _tail_bytes(stderr_path)
+        status = "completed" if returncode == 0 else "failed"
+        message = (
+            "subprocess completed"
+            if returncode == 0
+            else f"subprocess failed with returncode {returncode}"
+        )
         result = ExecutionResult(
-            strategy_id=strategy_id,
-            venue=venue,
-            mode=mode,
-            status=status,
-            started_at_utc=started.isoformat(),
-            ended_at_utc=ended.isoformat(),
+            strategy_id=strategy_id, venue=venue, mode=mode, status=status,
+            started_at_utc=started.isoformat(), ended_at_utc=ended.isoformat(),
             elapsed_sec=round((ended - started).total_seconds(), 3),
-            command=command,
-            returncode=int(completed.returncode),
-            run_id=run_id,
-            stdout_path=str(stdout_path),
-            stderr_path=str(stderr_path),
+            command=command, returncode=int(returncode), run_id=run_id,
+            stdout_path=str(stdout_path), stderr_path=str(stderr_path),
             message=message,
         )
-        return result, stdout, stderr
-    except subprocess.TimeoutExpired as exc:
-        stdout = exc.stdout or ""
-        stderr = exc.stderr or ""
-        if isinstance(stdout, bytes):
-            stdout = stdout.decode("utf-8", errors="replace")
-        if isinstance(stderr, bytes):
-            stderr = stderr.decode("utf-8", errors="replace")
-        stdout_path.write_text(stdout, encoding="utf-8", errors="replace")
-        stderr_path.write_text(stderr, encoding="utf-8", errors="replace")
+        return result, stdout_tail, stderr_tail
+    except Exception as exc:  # noqa: BLE001
         ended = utc_now()
+        if proc is not None:
+            _kill_process_tree(proc)
+        stderr_msg = traceback.format_exc()
+        try:
+            stderr_path.write_text(stderr_msg, encoding="utf-8", errors="replace")
+        except Exception:
+            pass
         result = ExecutionResult(
-            strategy_id=strategy_id,
-            venue=venue,
-            mode=mode,
-            status="failed",
-            started_at_utc=started.isoformat(),
-            ended_at_utc=ended.isoformat(),
+            strategy_id=strategy_id, venue=venue, mode=mode, status="failed",
+            started_at_utc=started.isoformat(), ended_at_utc=ended.isoformat(),
             elapsed_sec=round((ended - started).total_seconds(), 3),
-            command=command,
-            returncode=None,
-            run_id=run_id,
-            stdout_path=str(stdout_path),
-            stderr_path=str(stderr_path),
-            message=f"subprocess timed out after {timeout_sec}s",
-            metadata={"exception": "TimeoutExpired"},
+            command=command, returncode=None, run_id=run_id,
+            stdout_path=str(stdout_path), stderr_path=str(stderr_path),
+            message=str(exc), metadata={"exception": type(exc).__name__},
         )
-        return result, stdout, stderr
-    except Exception as exc:
-        ended = utc_now()
-        stderr = traceback.format_exc()
-        stderr_path.write_text(stderr, encoding="utf-8", errors="replace")
-        result = ExecutionResult(
-            strategy_id=strategy_id,
-            venue=venue,
-            mode=mode,
-            status="failed",
-            started_at_utc=started.isoformat(),
-            ended_at_utc=ended.isoformat(),
-            elapsed_sec=round((ended - started).total_seconds(), 3),
-            command=command,
-            returncode=None,
-            run_id=run_id,
-            stdout_path=str(stdout_path),
-            stderr_path=str(stderr_path),
-            message=str(exc),
-            metadata={"exception": type(exc).__name__},
-        )
-        return result, "", stderr
+        return result, "", stderr_msg
+
+
+def _tail_bytes(path: Path, n_bytes: int = _STDOUT_TAIL_BYTES) -> str:
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return ""
+    with open(path, "rb") as fh:
+        if size > n_bytes:
+            fh.seek(-n_bytes, os.SEEK_END)
+        return fh.read().decode("utf-8", errors="replace")
 
 
 def validate_ib_paper_config(strategy_config: dict[str, Any]) -> dict[str, Any]:
@@ -264,7 +356,6 @@ def run_ib_paper_moc(
     allow_orders: bool = False,
     force: bool = False,
     timeout_sec: int = 900,
-    runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
 ) -> ExecutionResult:
     """Run the IB MOC trader against the configured paper gateway only."""
     root = Path(root)
@@ -309,7 +400,7 @@ def run_ib_paper_moc(
         mode="paper_live_gateway",
         strategy_id=cfg["strategy"]["name"],
         timeout_sec=timeout_sec,
-        runner=runner,
+        on_timeout_cancel_ib=True,
     )
     after_sig = file_signature(today_log)
     trade_log_path = str(today_log) if after_sig and after_sig != before_sig else None
@@ -357,7 +448,6 @@ def run_crypto_paper_recorder(
     *,
     root: str | Path = PROJECT_ROOT,
     timeout_sec: int = 900,
-    runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
 ) -> ExecutionResult:
     """Run the KuCoin/Binance paper recorder and summarize the produced log."""
     root = Path(root)
@@ -377,7 +467,6 @@ def run_crypto_paper_recorder(
         mode="paper_recorder",
         strategy_id=cfg["strategy"]["name"],
         timeout_sec=timeout_sec,
-        runner=runner,
     )
 
     after_latest = latest_json_log(trade_dir)

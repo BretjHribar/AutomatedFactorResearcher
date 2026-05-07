@@ -75,11 +75,30 @@ def _load_universe_and_matrices(cfg: dict, *, root: Path):
 
     uf = data["universe_filter"]
     if uf["method"] == "coverage":
+        # Coverage is computed BEFORE windowing — the universe membership rule
+        # is a property of the full history, not of the incremental slice.
         cov = uni.sum(axis=0) / len(uni)
         valid = sorted(cov[cov > float(uf["threshold"])].index.tolist())
     else:
         raise ValueError(f"unknown universe_filter method {uf['method']!r}")
     uni = uni[valid]
+
+    # Optional bounded-history mode for incremental signal compute. The slice
+    # is the *tail* of the date index. Stage 1 (alpha SQL) is unaffected;
+    # alphas evaluate on the bounded matrices and produce NaN for the leading
+    # bars whose lookback isn't satisfied. Only the tail bar is used by the
+    # signal service. See `verify_incremental_signal_match` in
+    # `src/pipeline/signal_service.py` for byte-exact verification.
+    max_lookback = data.get("max_lookback_bars")
+    if max_lookback is not None:
+        max_lookback = int(max_lookback)
+        if max_lookback <= 0:
+            raise ValueError(
+                f"data.max_lookback_bars must be a positive integer or null; got {max_lookback!r}"
+            )
+        if len(uni.index) > max_lookback:
+            uni = uni.iloc[-max_lookback:]
+
     dates = uni.index
     tickers = uni.columns.tolist()
 
@@ -350,6 +369,9 @@ def run(config: str | Path | dict, *, root: Optional[Path] = None,
     # Stage 0
     uni, dates, tickers, mats, close, ret, classifications, groups = \
         _load_universe_and_matrices(cfg, root=root)
+    max_lookback = cfg.get("data", {}).get("max_lookback_bars")
+    if max_lookback is not None:
+        notes.append(f"data.max_lookback_bars={int(max_lookback)} (incremental mode)")
     if verbose:
         print(f"[0] {len(tickers)} tickers, {len(dates)} bars  ({dates[0]} -> {dates[-1]})", flush=True)
 

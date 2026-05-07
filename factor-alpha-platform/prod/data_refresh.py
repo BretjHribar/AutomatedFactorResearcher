@@ -372,9 +372,37 @@ def refresh_binance() -> str:
 KUCOIN_BASE = "https://api-futures.kucoin.com"
 KUCOIN_KLINES_DIR = PROJECT_ROOT / "data/kucoin_cache/klines/4h"
 KUCOIN_MATRICES_DIR = PROJECT_ROOT / "data/kucoin_cache/matrices/4h/prod"
+KUCOIN_UNIVERSES_DIR = PROJECT_ROOT / "data/kucoin_cache/universes"
 KUCOIN_GRAN = 240  # 4h in minutes
 KUCOIN_LOCK_FILE = KUCOIN_MATRICES_DIR.parent / ".kucoin_refresh.lock"
 _LOCK_TIMEOUT_S = 600  # 10 min: max wait before treating lock as stale
+
+
+def _write_top_universe(adv: pd.DataFrame, output_path: Path, *, size: int = 100) -> None:
+    """Persist a per-bar rolling-ADV snapshot universe for live integrity checks.
+
+    NOTE: this writes a *live* snapshot (per-bar `rank(adv) <= size`). It must
+    NOT overwrite the curated research universe at `KUCOIN_TOP{N}_4h.parquet`,
+    which is built by `tools/build_kucoin_universe_20d.py` with min-history
+    seasoning, 20d rebalance commitment, and vol-rank-95 exclusion. Research
+    backtests and `prod/config/research_*.json` configs depend on the curated
+    file's stability across refreshes.
+
+    Use a refresh-specific filename like `KUCOIN_LIVE_TOP{N}_4h.parquet`.
+    """
+    name = output_path.name
+    if "LIVE" not in name.upper():
+        raise ValueError(
+            f"_write_top_universe refusing to write to {name}: filename must contain "
+            "'LIVE' to avoid clobbering the curated research universe."
+        )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    rank = adv.rank(axis=1, ascending=False)
+    universe = (rank <= size).fillna(False).astype(bool)
+    universe.index.name = "date"
+    universe.to_parquet(output_path)
+    latest_members = int(universe.iloc[-1].sum()) if len(universe) else 0
+    logger.info(f"    Live universe snapshot rebuilt: {name}, latest_members={latest_members}")
 
 
 def _kucoin_fetch_klines(symbol: str, limit: int = 6) -> pd.DataFrame | None:
@@ -500,10 +528,12 @@ def _build_kucoin_matrices():
 
     # Base OHLCV
     for field in ["open", "close", "high", "low", "volume", "turnover"]:
-        mat = pd.DataFrame(index=common_idx)
-        for sym, df in all_data.items():
-            if field in df.columns:
-                mat[sym] = df[field]
+        series_dict = {
+            sym: df[field]
+            for sym, df in all_data.items()
+            if field in df.columns
+        }
+        mat = pd.DataFrame(series_dict, index=common_idx)
         mat.to_parquet(KUCOIN_MATRICES_DIR / f"{field}.parquet")
 
     close = pd.DataFrame({s: d["close"] for s, d in all_data.items()}, index=common_idx)
@@ -562,6 +592,12 @@ def _build_kucoin_matrices():
 
     for name, mat in derived.items():
         mat.to_parquet(KUCOIN_MATRICES_DIR / f"{name}.parquet")
+
+    _write_top_universe(
+        derived["adv20"],
+        KUCOIN_UNIVERSES_DIR / "KUCOIN_LIVE_TOP100_4h.parquet",
+        size=100,
+    )
 
     logger.info(f"    Matrices rebuilt: {close.shape[0]} bars x {close.shape[1]} tickers, "
                 f"latest={close.index[-1]}")
