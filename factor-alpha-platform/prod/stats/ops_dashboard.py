@@ -910,10 +910,17 @@ def _svg_curve(curve: list[dict[str, Any]]) -> str:
     x_span = width - 2 * pad_x
     y_span = height - 2 * pad_y
     points = []
+    data_points: list[dict[str, Any]] = []
     for i, value in enumerate(values):
         x = pad_x + (i / max(len(values) - 1, 1)) * x_span
         y = height - pad_y - ((value - y_min) / (y_max - y_min)) * y_span
         points.append(f"{x:.1f},{y:.1f}")
+        data_points.append({
+            "x": round(x, 2),
+            "y": round(y, 2),
+            "ts": str(curve[i].get("timestamp", "")),
+            "pnl": float(value),
+        })
 
     zero_line = ""
     if y_min < 0 < y_max:
@@ -925,9 +932,15 @@ def _svg_curve(curve: list[dict[str, Any]]) -> str:
     last = _money(values[-1])
     top = _money(y_max)
     bottom = _money(y_min)
+    plot_w = width - 2 * pad_x
+    plot_h = height - 2 * pad_y
+    # Data points are serialized as a JSON attribute and consumed by the
+    # hover-tooltip script in render_html. quote=True escapes embedded `"`
+    # so the JSON survives as an attribute value.
+    points_attr = html.escape(json.dumps(data_points, separators=(",", ":")), quote=True)
 
     return f"""
-      <svg class="curve" viewBox="0 0 {width} {height}" role="img" aria-label="Equity curve">
+      <svg class="curve" viewBox="0 0 {width} {height}" role="img" aria-label="Equity curve" data-points="{points_attr}">
         <line class="axis" x1="{pad_x}" y1="{height - pad_y}" x2="{width - pad_x}" y2="{height - pad_y}" />
         <line class="axis" x1="{pad_x}" y1="{pad_y}" x2="{pad_x}" y2="{height - pad_y}" />
         {zero_line}
@@ -937,6 +950,14 @@ def _svg_curve(curve: list[dict[str, Any]]) -> str:
         <text x="{width - pad_x}" y="14" text-anchor="end">{last}</text>
         <text x="{pad_x}" y="{height - 4}" class="date-label">{start}</text>
         <text x="{width - pad_x}" y="{height - 4}" text-anchor="end" class="date-label">{end}</text>
+        <line class="crosshair-line" x1="0" y1="{pad_y}" x2="0" y2="{height - pad_y}" style="display:none"/>
+        <circle class="focus-dot" r="3.5" style="display:none" pointer-events="none"/>
+        <g class="curve-tooltip" style="display:none" pointer-events="none">
+          <rect class="tooltip-bg" rx="3" ry="3" width="120" height="30"/>
+          <text class="tooltip-date" x="0" y="0"></text>
+          <text class="tooltip-val" x="0" y="0"></text>
+        </g>
+        <rect class="hover-target" x="{pad_x}" y="{pad_y}" width="{plot_w}" height="{plot_h}" fill="transparent"/>
       </svg>
     """
 
@@ -1129,6 +1150,12 @@ def render_html(payload: dict[str, Any]) -> str:
     .warn-chart {{ color: #ffd36e; background: #21180a; border-color: #574316; }}
     .submissions-table {{ font-size: 11px; }}
     .submissions-table th, .submissions-table td {{ padding: 5px 6px; }}
+    .crosshair-line {{ stroke: #6bbcff; stroke-width: 1; stroke-dasharray: 2 2; opacity: 0.55; pointer-events: none; }}
+    .focus-dot {{ fill: #11161a; stroke: #6bbcff; stroke-width: 2; }}
+    .curve-tooltip .tooltip-bg {{ fill: #1f262c; stroke: #2d3439; stroke-width: 1; opacity: 0.96; }}
+    .curve-tooltip .tooltip-date {{ fill: #aeb8bf; font-size: 10px; }}
+    .curve-tooltip .tooltip-val {{ fill: #e7ecef; font-size: 11px; font-weight: 700; }}
+    .hover-target {{ cursor: crosshair; }}
     table {{ width: 100%; border-collapse: collapse; background: #15191d; border: 1px solid #2b3338; }}
     th, td {{ padding: 9px 10px; border-bottom: 1px solid #263036; text-align: left; font-size: 13px; vertical-align: top; }}
     th {{ color: #aeb8bf; font-weight: 600; background: #1b2025; }}
@@ -1164,6 +1191,94 @@ def render_html(payload: dict[str, Any]) -> str:
   <h2>Performance Logs</h2>
   <table><thead><tr><th>Exchange</th><th>Status</th><th>Last Run</th><th>Last Bar</th><th>Raw Rows</th><th>Unique Bars</th><th>Dup Rows</th><th>Missing&nbsp;4h</th><th>Recent Missing</th><th>Trader PnL&nbsp;($)</th><th>Dedup PnL&nbsp;($)</th><th>Sharpe&nbsp;(ann)</th><th>Max DD&nbsp;($)</th><th>Avg GMV&nbsp;($)</th><th>Avg Positions</th></tr></thead><tbody>{perf_rows}</tbody></table>
 </main>
+<script>
+(function () {{
+  function fmtMoney(v) {{
+    if (v == null || !isFinite(v)) return '';
+    var sign = v < 0 ? '-' : '';
+    return sign + '$' + Math.abs(Math.round(v)).toLocaleString();
+  }}
+  function init(svg) {{
+    var raw = svg.getAttribute('data-points');
+    if (!raw) return;
+    var pts;
+    try {{ pts = JSON.parse(raw); }} catch (err) {{ return; }}
+    if (!pts || !pts.length) return;
+
+    var crosshair  = svg.querySelector('.crosshair-line');
+    var focus      = svg.querySelector('.focus-dot');
+    var tooltip    = svg.querySelector('.curve-tooltip');
+    var ttBg       = svg.querySelector('.tooltip-bg');
+    var ttDate     = svg.querySelector('.tooltip-date');
+    var ttVal      = svg.querySelector('.tooltip-val');
+    var target     = svg.querySelector('.hover-target');
+    if (!target || !crosshair || !focus || !tooltip) return;
+
+    var vb     = svg.viewBox.baseVal;
+    var ttW    = 120;
+    var ttH    = 30;
+    var ttPad  = 6;
+
+    function hide() {{
+      crosshair.style.display = 'none';
+      focus.style.display     = 'none';
+      tooltip.style.display   = 'none';
+    }}
+    function show() {{
+      crosshair.style.display = '';
+      focus.style.display     = '';
+      tooltip.style.display   = '';
+    }}
+    hide();
+
+    function move(event) {{
+      var rect  = svg.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      var ratio = vb.width / rect.width;
+      var sx    = (event.clientX - rect.left) * ratio;
+
+      // Binary search for nearest x; data points are emitted in order.
+      var lo = 0, hi = pts.length - 1;
+      while (lo < hi) {{
+        var mid = (lo + hi) >> 1;
+        if (pts[mid].x < sx) lo = mid + 1; else hi = mid;
+      }}
+      var idx = lo;
+      if (idx > 0 && Math.abs(pts[idx - 1].x - sx) < Math.abs(pts[idx].x - sx)) {{
+        idx = idx - 1;
+      }}
+      var p = pts[idx];
+
+      crosshair.setAttribute('x1', p.x);
+      crosshair.setAttribute('x2', p.x);
+      focus.setAttribute('cx', p.x);
+      focus.setAttribute('cy', p.y);
+
+      ttDate.textContent = String(p.ts || '').slice(0, 16);
+      ttVal.textContent  = fmtMoney(p.pnl);
+
+      // Place tooltip to the right; flip left near the right edge.
+      var ttX = p.x + 10;
+      if (ttX + ttW > vb.width - 4) ttX = p.x - ttW - 10;
+      var ttY = p.y - ttH - 6;
+      if (ttY < 4) ttY = p.y + 8;
+
+      ttBg.setAttribute('x', ttX);
+      ttBg.setAttribute('y', ttY);
+      ttDate.setAttribute('x', ttX + ttPad);
+      ttDate.setAttribute('y', ttY + 12);
+      ttVal.setAttribute('x', ttX + ttPad);
+      ttVal.setAttribute('y', ttY + 24);
+
+      show();
+    }}
+
+    target.addEventListener('mousemove', move);
+    target.addEventListener('mouseleave', hide);
+  }}
+  document.querySelectorAll('svg.curve[data-points]').forEach(init);
+}})();
+</script>
 </body>
 </html>
 """
