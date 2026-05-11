@@ -9,6 +9,7 @@ from src.monitoring.state_store import strategy_states
 from prod.stats import ops_dashboard as dash
 from prod.stats.ops_dashboard import (
     _disabled_exchange_checks,
+    _ib_live_curves_split,
     _visible_integrity_checks,
     build_payload,
 )
@@ -177,3 +178,93 @@ def test_ib_dashboard_state_prefers_latest_execution_failure(tmp_path, monkeypat
     assert ib_state["status"] == "execution_failed"
     metrics = json.loads(ib_state["metrics_json"])
     assert metrics["latest_execution_status"] == "failed"
+
+
+def test_ib_live_curves_split_reconciled_diverges_from_provisional(tmp_path, monkeypatch):
+    """When the recon JSON shows fewer filled shares than the intent, the
+    reconciled curve should track real fills × Δclose minus commission, while
+    the provisional curve stays on the intent assumption. Days marked
+    `stale_unavailable` collapse onto the provisional path on the recon
+    curve too (we don't have the truth)."""
+    # Build a tiny synthetic close matrix: D1, D2, D3 for two tickers.
+    close = pd.DataFrame(
+        {"AAA": [100.0, 102.0, 105.0], "BBB": [50.0, 49.0, 48.0]},
+        index=pd.to_datetime(["2026-05-01", "2026-05-04", "2026-05-05"]),
+    )
+
+    trade_dir = tmp_path / "prod/logs/trades"
+    recon_dir = tmp_path / "prod/logs/reconciliation"
+    trade_dir.mkdir(parents=True)
+    recon_dir.mkdir(parents=True)
+
+    # Live trade on D1 (5/1): intent = 100 AAA long, 200 BBB short.
+    (trade_dir / "trade_2026-05-01.json").write_text(json.dumps({
+        "date": "2026-05-01", "mode": "live",
+        "target_portfolio": {"AAA": 100, "BBB": -200},
+        "order_records": [{"perm_id": 1, "status": "Filled", "symbol": "AAA",
+                           "action": "BUY", "quantity": 100},
+                          {"perm_id": 2, "status": "Filled", "symbol": "BBB",
+                           "action": "SELL", "quantity": 200}],
+    }))
+    # Recon on D1: only AAA filled (50 shares of 100), BBB didn't fill.
+    # Plus $5 commission.
+    (recon_dir / "equity_2026-05-01.json").write_text(json.dumps({
+        "date": "2026-05-01", "status": "reconciled",
+        "fills": [{"symbol": "AAA", "filled_qty": 50}],
+        "total_commission": 5.0,
+    }))
+
+    monkeypatch.setattr(dash, "TRADE_LOG_DIRS", {"ib": trade_dir})
+    monkeypatch.setattr(dash, "RECON_DIR", recon_dir)
+
+    recon_curve, prov_curve = _ib_live_curves_split(close)
+
+    # Both curves anchor at 0 on D1 and have a point at each subsequent bar.
+    assert len(recon_curve) == len(prov_curve) == 3
+    assert recon_curve[0]["pnl"] == 0.0
+    assert prov_curve[0]["pnl"] == 0.0
+
+    # D1 -> D2 (5/1 -> 5/4):
+    # delta AAA = +2, BBB = -1
+    # Provisional: 100*2 + (-200)*-1 = 200 + 200 = 400
+    # Reconciled: 50*2 = 100, minus $5 commission charged on D1 = 95
+    assert prov_curve[1]["pnl"] == 400.0
+    assert recon_curve[1]["pnl"] == 95.0
+
+    # D2 -> D3 (5/4 -> 5/5):
+    # delta AAA = +3, BBB = -1
+    # Provisional: 100*3 + (-200)*-1 = 300 + 200 = 500   (cum 900)
+    # Reconciled: 50*3 = 150 (cum 245)
+    assert prov_curve[2]["pnl"] == 900.0
+    assert recon_curve[2]["pnl"] == 245.0
+
+
+def test_ib_live_curves_split_stale_uses_intent_for_both(tmp_path, monkeypatch):
+    """A `stale_unavailable` recon (IB lost execution history) must NOT zero
+    the reconciled curve — both curves should fall back to intent-shares."""
+    close = pd.DataFrame(
+        {"AAA": [100.0, 110.0]},
+        index=pd.to_datetime(["2026-04-01", "2026-04-02"]),
+    )
+    trade_dir = tmp_path / "prod/logs/trades"
+    recon_dir = tmp_path / "prod/logs/reconciliation"
+    trade_dir.mkdir(parents=True)
+    recon_dir.mkdir(parents=True)
+    (trade_dir / "trade_2026-04-01.json").write_text(json.dumps({
+        "date": "2026-04-01", "mode": "live",
+        "target_portfolio": {"AAA": 10},
+        "order_records": [{"perm_id": 7, "status": "Filled", "symbol": "AAA",
+                           "action": "BUY", "quantity": 10}],
+    }))
+    (recon_dir / "equity_2026-04-01.json").write_text(json.dumps({
+        "date": "2026-04-01", "status": "stale_unavailable",
+        "fills": [],
+    }))
+
+    monkeypatch.setattr(dash, "TRADE_LOG_DIRS", {"ib": trade_dir})
+    monkeypatch.setattr(dash, "RECON_DIR", recon_dir)
+
+    recon, prov = _ib_live_curves_split(close)
+    # Δclose = 10. 10 shares × 10 = $100 on both.
+    assert prov[1]["pnl"] == 100.0
+    assert recon[1]["pnl"] == 100.0

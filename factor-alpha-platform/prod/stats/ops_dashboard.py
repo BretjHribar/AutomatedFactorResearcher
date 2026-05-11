@@ -360,6 +360,230 @@ def _infer_bars_per_year(clean_df: pd.DataFrame) -> float:
     return 252.0
 
 
+SHADOW_SIGNAL_DIR = LOGS_ROOT / "shadow_signals"
+RECON_DIR = LOGS_ROOT / "reconciliation"
+
+
+def _close_matrix() -> pd.DataFrame | None:
+    path = PROJECT_ROOT / "data" / "fmp_cache" / "matrices" / "close.parquet"
+    if not path.exists():
+        return None
+    try:
+        return pd.read_parquet(path)
+    except Exception:
+        return None
+
+
+def _ib_shadow_curve(close_df: pd.DataFrame | None,
+                     book_default: float = 500_000.0) -> list[dict[str, Any]]:
+    """Cumulative dollar PnL of the deterministic shadow signal.
+
+    For each shadow_signals/equity_<D>.parquet, the next-bar PnL is
+        pnl(D->D+1) = sum_i weights[i] * (close[D+1]/close[D] - 1) * book
+    The shadow record is what the system *would* have wanted to hold going into
+    D's close; D+1's bar return marks it to market. PnL is realized AT D+1's
+    close, so each shadow row contributes a single point at D+1.
+    """
+    if not SHADOW_SIGNAL_DIR.exists() or close_df is None or close_df.empty:
+        return []
+    rows: list[tuple[pd.Timestamp, dict[str, float], float]] = []
+    for parquet_path in sorted(SHADOW_SIGNAL_DIR.glob("equity_*.parquet")):
+        try:
+            df = pd.read_parquet(parquet_path)
+        except Exception:
+            continue
+        if df.empty:
+            continue
+        date_str = parquet_path.stem.replace("equity_", "")
+        try:
+            d = pd.Timestamp(date_str)
+        except Exception:
+            continue
+        json_path = parquet_path.with_suffix(".json")
+        book = book_default
+        if json_path.exists():
+            try:
+                book = float(json.loads(json_path.read_text(encoding="utf-8")).get("book", book_default))
+            except Exception:
+                pass
+        weights = dict(zip(df["ticker"].astype(str), df["weight"].astype(float)))
+        rows.append((d, weights, book))
+    if not rows:
+        return []
+    rows.sort(key=lambda t: t[0])
+    cum = 0.0
+    curve: list[dict[str, Any]] = []
+    # Anchor at zero on the first signal date for visual baseline.
+    curve.append({"timestamp": str(rows[0][0].date()), "pnl": 0.0})
+    for d, weights, book in rows:
+        if d not in close_df.index:
+            continue
+        idx = close_df.index.get_loc(d)
+        if idx >= len(close_df.index) - 1:
+            continue
+        d_next = close_df.index[idx + 1]
+        rets = (close_df.loc[d_next] / close_df.loc[d] - 1.0).fillna(0.0)
+        pnl = 0.0
+        for sym, w in weights.items():
+            r = rets.get(sym)
+            if r is None or pd.isna(r):
+                continue
+            pnl += float(w) * float(r) * book
+        cum += pnl
+        curve.append({"timestamp": str(d_next.date()), "pnl": cum})
+    return curve
+
+
+def _ib_live_days(only_live_mode: bool = True) -> list[dict[str, Any]]:
+    """Read every LIVE IB trade JSON; return per-day records sorted by date.
+
+    Each record carries:
+      - date (Timestamp)
+      - intent_shares: dict[symbol, signed_int_shares] from target_portfolio
+      - recon_status: "reconciled" / "stale_unavailable" / "skipped" / "missing"
+      - recon_shares: signed shares per symbol from realized fills (only when
+        recon_status == "reconciled"; empty otherwise)
+      - recon_commission: total $ commission (0.0 when not reconciled)
+    """
+    out: list[dict[str, Any]] = []
+    trade_dir = TRADE_LOG_DIRS["ib"]
+    if not trade_dir.exists():
+        return out
+    for path in sorted(trade_dir.glob("trade_*.json")):
+        if path.name.endswith("_dry_run.json"):
+            continue
+        data = _read_json(path)
+        if not data:
+            continue
+        if only_live_mode and str(data.get("mode") or "").lower() != "live":
+            continue
+        date_str = str(data.get("date") or "")
+        try:
+            d = pd.Timestamp(date_str)
+        except Exception:
+            continue
+        target = data.get("target_portfolio") or {}
+        try:
+            intent_shares = {str(k): int(v) for k, v in target.items()}
+        except Exception:
+            intent_shares = {}
+        recon_path = RECON_DIR / f"equity_{date_str}.json"
+        recon_status = "missing"
+        recon_shares: dict[str, int] = {}
+        recon_commission = 0.0
+        if recon_path.exists():
+            recon = _read_json(recon_path) or {}
+            recon_status = str(recon.get("status") or "missing")
+            if recon_status == "reconciled":
+                # filled_qty in the recon JSON is already signed (negative for SELL).
+                for fill in recon.get("fills") or []:
+                    sym = str(fill.get("symbol") or "")
+                    qty = int(fill.get("filled_qty") or 0)
+                    if sym and qty:
+                        recon_shares[sym] = recon_shares.get(sym, 0) + qty
+                recon_commission = float(recon.get("total_commission") or 0.0)
+        out.append({
+            "date": d,
+            "intent_shares": intent_shares,
+            "recon_status": recon_status,
+            "recon_shares": recon_shares,
+            "recon_commission": recon_commission,
+        })
+    out.sort(key=lambda r: r["date"])
+    return out
+
+
+def _ib_live_curves_split(close_df: pd.DataFrame | None
+                          ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Return (reconciled_curve, provisional_curve) from the live trade log.
+
+    Reconciled curve: bars where the held portfolio was set by a `recon_status
+    == "reconciled"` day use REAL filled qty × Δclose, minus that day's
+    commission on the rebal day.
+
+    Provisional curve: shares the same x-axis with the reconciled curve.
+    Until the first reconciled day appears, the provisional line is the only
+    truth (target_portfolio × Δclose). After a reconciled day, the
+    provisional curve continues as the "what we'd have shown if recon hadn't
+    landed" reference — useful for spotting recon vs intent discrepancies.
+
+    Both curves anchor at $0 on the first live submission's date so they
+    share a baseline.
+    """
+    if close_df is None or close_df.empty:
+        return [], []
+    live_days = _ib_live_days()
+    if not live_days:
+        return [], []
+
+    start = live_days[0]["date"]
+    if start not in close_df.index:
+        idx_after = close_df.index[close_df.index >= start]
+        if not len(idx_after):
+            return [], []
+        start = idx_after[0]
+    bars = close_df.loc[start:]
+    if len(bars) < 1:
+        return [], []
+
+    recon_curve: list[dict[str, Any]] = [{"timestamp": str(bars.index[0].date()), "pnl": 0.0}]
+    prov_curve: list[dict[str, Any]] = [{"timestamp": str(bars.index[0].date()), "pnl": 0.0}]
+
+    if len(bars) < 2:
+        return recon_curve, prov_curve
+
+    cum_recon = 0.0
+    cum_prov = 0.0
+    held_idx = 0
+    held_recon_shares: dict[str, int] = {}
+    held_prov_shares: dict[str, int] = {}
+
+    for j in range(len(bars.index) - 1):
+        d_t = bars.index[j]
+        # Advance held_*_shares each time a new live trade landed at or before d_t.
+        # On a `reconciled` day the realized fills are the truth; on stale/missing
+        # days both curves take the intent shares.
+        while held_idx < len(live_days) and live_days[held_idx]["date"] <= d_t:
+            ld = live_days[held_idx]
+            held_prov_shares = ld["intent_shares"]
+            if ld["recon_status"] == "reconciled" and ld["recon_shares"]:
+                held_recon_shares = ld["recon_shares"]
+                # Charge commission as a one-time hit on the rebal day.
+                cum_recon -= float(ld.get("recon_commission") or 0.0)
+            else:
+                held_recon_shares = ld["intent_shares"]
+            held_idx += 1
+
+        d_next = bars.index[j + 1]
+        delta = (bars.loc[d_next] - bars.loc[d_t]).fillna(0.0)
+
+        if held_recon_shares:
+            pnl_recon = sum(
+                float(sh) * float(delta.get(sym, 0.0) or 0.0)
+                for sym, sh in held_recon_shares.items()
+                if not pd.isna(delta.get(sym, 0.0))
+            )
+            cum_recon += pnl_recon
+        if held_prov_shares:
+            pnl_prov = sum(
+                float(sh) * float(delta.get(sym, 0.0) or 0.0)
+                for sym, sh in held_prov_shares.items()
+                if not pd.isna(delta.get(sym, 0.0))
+            )
+            cum_prov += pnl_prov
+
+        recon_curve.append({"timestamp": str(d_next.date()), "pnl": cum_recon})
+        prov_curve.append({"timestamp": str(d_next.date()), "pnl": cum_prov})
+
+    return recon_curve, prov_curve
+
+
+def _ib_live_curve(close_df: pd.DataFrame | None) -> list[dict[str, Any]]:
+    """Backwards-compatible single-curve view: provisional (intent-based)."""
+    _, prov = _ib_live_curves_split(close_df)
+    return prov
+
+
 def _ib_execution_summary() -> dict[str, Any]:
     """Synthesize the IB equity panel from `prod/logs/trades/trade_*.json`.
 
@@ -408,9 +632,15 @@ def _ib_execution_summary() -> dict[str, Any]:
             "exchange": "ib", "status": "missing", "panel_kind": "ib_executions",
             "message": "no IB trade JSONs in prod/logs/trades/",
             "submissions": [], "curve": [],
+            "shadow_curve": [], "live_curve": [],
         }
     status = "ok" if last_live_ts else "warn"
     last_run = submissions[0]
+    close_df = _close_matrix()
+    shadow_curve = _ib_shadow_curve(close_df)
+    recon_curve, provisional_curve = _ib_live_curves_split(close_df)
+    n_recon_days = sum(1 for ld in _ib_live_days() if ld["recon_status"] == "reconciled")
+    n_stale_days = sum(1 for ld in _ib_live_days() if ld["recon_status"] == "stale_unavailable")
     return {
         "exchange": "ib",
         "status": status,
@@ -426,6 +656,17 @@ def _ib_execution_summary() -> dict[str, Any]:
             f"last {last_run['mode']} @ {last_run['timestamp']}"
         ),
         "curve": [],
+        "shadow_curve": shadow_curve,
+        "live_recon_curve": recon_curve,
+        "live_provisional_curve": provisional_curve,
+        "shadow_total_pnl": float(shadow_curve[-1]["pnl"]) if shadow_curve else 0.0,
+        "live_recon_total_pnl": float(recon_curve[-1]["pnl"]) if recon_curve else 0.0,
+        "live_provisional_total_pnl": float(provisional_curve[-1]["pnl"]) if provisional_curve else 0.0,
+        "n_recon_days": n_recon_days,
+        "n_stale_days": n_stale_days,
+        # Backwards-compat keys for any unit tests reading the old shape.
+        "live_curve": provisional_curve,
+        "live_total_pnl": float(provisional_curve[-1]["pnl"]) if provisional_curve else 0.0,
     }
 
 
@@ -962,6 +1203,166 @@ def _svg_curve(curve: list[dict[str, Any]]) -> str:
     """
 
 
+def _svg_dual_curve(shadow: list[dict[str, Any]],
+                    live: list[dict[str, Any]],
+                    live_provisional: list[dict[str, Any]] | None = None) -> str:
+    """Three-series PnL chart sharing x/y axes.
+
+    - Shadow (gold dashed) = deterministic counterfactual.
+    - Live reconciled (blue solid) = realized fills × Δclose - commission.
+    - Live provisional (blue dashed) = intent × Δclose for days without recon
+      yet, OR an "if-we-trusted-the-intent" reference past the reconciled days
+      (useful for spotting recon vs intent slippage). Pass None to omit.
+    """
+    if not shadow and not live and not live_provisional:
+        return '<div class="empty-chart">No shadow or live PnL recorded yet.</div>'
+
+    width = 520
+    height = 200
+    pad_x = 36
+    pad_y = 26
+    x_span = width - 2 * pad_x
+    y_span = height - 2 * pad_y
+
+    all_ts: list[str] = []
+    seen: set[str] = set()
+    for series in (shadow or [], live or [], live_provisional or []):
+        for p in series:
+            ts = str(p["timestamp"])
+            if ts not in seen:
+                seen.add(ts)
+                all_ts.append(ts)
+    all_ts.sort()
+    if not all_ts:
+        return '<div class="empty-chart">No PnL points to plot.</div>'
+
+    ts_to_x = {ts: pad_x + (i / max(len(all_ts) - 1, 1)) * x_span
+               for i, ts in enumerate(all_ts)}
+
+    all_vals = [float(p["pnl"]) for p in (shadow or [])] + \
+               [float(p["pnl"]) for p in (live or [])] + \
+               [float(p["pnl"]) for p in (live_provisional or [])]
+    if not all_vals:
+        return '<div class="empty-chart">No PnL points to plot.</div>'
+    y_min = min(all_vals)
+    y_max = max(all_vals)
+    if y_min == y_max:
+        spread = max(abs(y_min) * 0.05, 1.0)
+        y_min -= spread
+        y_max += spread
+
+    def _series_points(series: list[dict[str, Any]]) -> str:
+        pts = []
+        for p in series:
+            x = ts_to_x.get(str(p["timestamp"]))
+            if x is None:
+                continue
+            y = height - pad_y - ((float(p["pnl"]) - y_min) / (y_max - y_min)) * y_span
+            pts.append(f"{x:.1f},{y:.1f}")
+        return " ".join(pts)
+
+    shadow_points = _series_points(shadow or [])
+    live_points = _series_points(live or [])
+    prov_points = _series_points(live_provisional or [])
+
+    # Build per-x data points with forward-filled values for all three series,
+    # so the hover tooltip can show shadow + live (recon) + provisional PnL at
+    # any cursor position. A series value is None for any x earlier than its
+    # first data point.
+    shadow_by_ts = {str(p["timestamp"]): float(p["pnl"]) for p in (shadow or [])}
+    live_by_ts = {str(p["timestamp"]): float(p["pnl"]) for p in (live or [])}
+    prov_by_ts = {str(p["timestamp"]): float(p["pnl"]) for p in (live_provisional or [])}
+    data_points: list[dict[str, Any]] = []
+    last_shadow_val: float | None = None
+    last_live_val: float | None = None
+    last_prov_val: float | None = None
+    for ts in all_ts:
+        if ts in shadow_by_ts:
+            last_shadow_val = shadow_by_ts[ts]
+        if ts in live_by_ts:
+            last_live_val = live_by_ts[ts]
+        if ts in prov_by_ts:
+            last_prov_val = prov_by_ts[ts]
+        x = ts_to_x[ts]
+        def _y(v: float | None) -> float | None:
+            return None if v is None else round(
+                height - pad_y - ((v - y_min) / (y_max - y_min)) * y_span, 2)
+        data_points.append({
+            "x": round(x, 2),
+            "ts": ts,
+            "sp": (None if last_shadow_val is None else float(last_shadow_val)),
+            "sy": _y(last_shadow_val),
+            "lp": (None if last_live_val is None else float(last_live_val)),
+            "ly": _y(last_live_val),
+            "pp": (None if last_prov_val is None else float(last_prov_val)),
+            "py": _y(last_prov_val),
+        })
+    points_attr = html.escape(json.dumps(data_points, separators=(",", ":")), quote=True)
+
+    zero_line = ""
+    if y_min < 0 < y_max:
+        y_zero = height - pad_y - ((0 - y_min) / (y_max - y_min)) * y_span
+        zero_line = (f'<line class="zero-line" x1="{pad_x}" y1="{y_zero:.1f}" '
+                     f'x2="{width - pad_x}" y2="{y_zero:.1f}" />')
+
+    last_shadow = shadow[-1]["pnl"] if shadow else 0.0
+    last_live = live[-1]["pnl"] if live else 0.0
+    last_prov = live_provisional[-1]["pnl"] if live_provisional else 0.0
+    start_label = html.escape(all_ts[0])
+    end_label = html.escape(all_ts[-1])
+    top = _money(y_max)
+    bottom = _money(y_min)
+
+    legend = (
+        f'<g class="legend" transform="translate({pad_x + 4},{pad_y - 8})">'
+        f'<rect class="legend-swatch shadow-swatch" width="10" height="10" />'
+        f'<text x="14" y="9">Shadow {_money(last_shadow)}</text>'
+        f'<rect class="legend-swatch live-swatch" x="120" width="10" height="10" />'
+        f'<text x="134" y="9">Live (recon) {_money(last_live)}</text>'
+        f'<rect class="legend-swatch prov-swatch" x="260" width="10" height="10" />'
+        f'<text x="274" y="9">Live (prov.) {_money(last_prov)}</text>'
+        f'</g>'
+    )
+
+    shadow_polyline = (f'<polyline class="curve-line shadow-line" fill="none" '
+                       f'points="{shadow_points}" />') if shadow_points else ""
+    live_polyline = (f'<polyline class="curve-line live-line" fill="none" '
+                     f'points="{live_points}" />') if live_points else ""
+    prov_polyline = (f'<polyline class="curve-line prov-line" fill="none" '
+                     f'points="{prov_points}" />') if prov_points else ""
+
+    plot_w = width - 2 * pad_x
+    plot_h = height - 2 * pad_y
+
+    return f"""
+      <svg class="curve dual-curve" viewBox="0 0 {width} {height}" role="img" aria-label="Shadow vs Live IB MOC equity" data-points="{points_attr}">
+        <line class="axis" x1="{pad_x}" y1="{height - pad_y}" x2="{width - pad_x}" y2="{height - pad_y}" />
+        <line class="axis" x1="{pad_x}" y1="{pad_y}" x2="{pad_x}" y2="{height - pad_y}" />
+        {zero_line}
+        {shadow_polyline}
+        {prov_polyline}
+        {live_polyline}
+        <text x="{pad_x}" y="14">{top}</text>
+        <text x="{pad_x}" y="{height - pad_y - 5}">{bottom}</text>
+        <text x="{pad_x}" y="{height - 4}" class="date-label">{start_label}</text>
+        <text x="{width - pad_x}" y="{height - 4}" text-anchor="end" class="date-label">{end_label}</text>
+        {legend}
+        <line class="crosshair-line" x1="0" y1="{pad_y}" x2="0" y2="{height - pad_y}" style="display:none"/>
+        <circle class="focus-dot shadow-focus" r="3.5" style="display:none" pointer-events="none"/>
+        <circle class="focus-dot live-focus" r="3.5" style="display:none" pointer-events="none"/>
+        <circle class="focus-dot prov-focus" r="3.5" style="display:none" pointer-events="none"/>
+        <g class="curve-tooltip" style="display:none" pointer-events="none">
+          <rect class="tooltip-bg" rx="3" ry="3" width="170" height="58"/>
+          <text class="tooltip-date" x="0" y="0"></text>
+          <text class="tooltip-shadow" x="0" y="0"></text>
+          <text class="tooltip-live" x="0" y="0"></text>
+          <text class="tooltip-prov" x="0" y="0"></text>
+        </g>
+        <rect class="hover-target" x="{pad_x}" y="{pad_y}" width="{plot_w}" height="{plot_h}" fill="transparent"/>
+      </svg>
+    """
+
+
 def _curve_panel(performance: dict[str, Any]) -> str:
     kind = performance.get("panel_kind", "")
     if kind == "ib_executions":
@@ -1047,6 +1448,38 @@ def _ib_submissions_panel(performance: dict[str, Any]) -> str:
         f"<td>{_fmt(s.get('gross_shares'))}</td></tr>"
         for s in (performance.get("submissions") or [])
     ) or "<tr><td colspan='5'>No submissions yet.</td></tr>"
+    shadow_curve = performance.get("shadow_curve") or []
+    live_recon_curve = performance.get("live_recon_curve") or []
+    live_prov_curve = performance.get("live_provisional_curve") or []
+    shadow_pnl = performance.get("shadow_total_pnl") or 0.0
+    live_recon_pnl = performance.get("live_recon_total_pnl") or 0.0
+    live_prov_pnl = performance.get("live_provisional_total_pnl") or 0.0
+    n_recon_days = performance.get("n_recon_days") or 0
+    n_stale_days = performance.get("n_stale_days") or 0
+
+    # Pick the "live truth" curve for the apples-to-apples gap: prefer recon,
+    # fall back to provisional when no day has been reconciled yet.
+    truth_curve = live_recon_curve or live_prov_curve
+    truth_pnl = live_recon_pnl if live_recon_curve else live_prov_pnl
+    if shadow_curve and truth_curve:
+        live_start = truth_curve[0]["timestamp"]
+        shadow_in_window = [p for p in shadow_curve if p["timestamp"] >= live_start]
+        if len(shadow_in_window) >= 2:
+            shadow_window_pnl = float(shadow_in_window[-1]["pnl"]) - float(shadow_in_window[0]["pnl"])
+        elif shadow_in_window:
+            shadow_window_pnl = float(shadow_in_window[-1]["pnl"])
+        else:
+            shadow_window_pnl = 0.0
+    else:
+        shadow_window_pnl = shadow_pnl
+    gap_in_window = shadow_window_pnl - truth_pnl
+    chart_meta = (
+        f"Full shadow {_money(shadow_pnl)} ({len(shadow_curve)} days) | "
+        f"Live recon {_money(live_recon_pnl)} ({n_recon_days} day{'s' if n_recon_days != 1 else ''} reconciled, "
+        f"{n_stale_days} stale) | "
+        f"Live provisional {_money(live_prov_pnl)} (intent-based, dashed) | "
+        f"In shared window: shadow {_money(shadow_window_pnl)} - live {_money(truth_pnl)} = gap {_money(gap_in_window)}."
+    )
     return f"""
       <article class="chart-panel">
         <div class="chart-head">
@@ -1056,11 +1489,13 @@ def _ib_submissions_panel(performance: dict[str, Any]) -> str:
           </div>
           {_badge(performance['status'])}
         </div>
+        {_svg_dual_curve(shadow_curve, live_recon_curve, live_prov_curve)}
+        <div class="chart-meta">{html.escape(chart_meta)}</div>
         <table class="submissions-table">
           <thead><tr><th>Date</th><th>Mode</th><th>Orders</th><th>L/S</th><th>Gross&nbsp;Shares</th></tr></thead>
           <tbody>{rows}</tbody>
         </table>
-        <div class="chart-meta">IB MOC trader does not record realized PnL — equity curve unavailable. Add NLV polling to surface dollar PnL here.</div>
+        <div class="chart-meta">Shadow (gold dashed) = deterministic signal × forward-bar return × book. Live recon (blue solid) = realized fills × Δclose minus commissions, only on days where the post-close recon job landed real fill data. Live provisional (blue dashed) = intent (target_portfolio) × Δclose for days without a recon yet (or where IB dropped the executions out of its retention window). Recon job runs at 16:30 ET; until it lands today's point is provisional.</div>
       </article>
     """
 
@@ -1145,6 +1580,13 @@ def render_html(payload: dict[str, Any]) -> str:
     .axis {{ stroke: #303940; stroke-width: 1; }}
     .zero-line {{ stroke: #52606a; stroke-dasharray: 3 4; stroke-width: 1; }}
     .curve-line {{ stroke: #6bbcff; stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; }}
+    .shadow-line {{ stroke: #ffd36e; stroke-width: 2.2; stroke-dasharray: 5 3; }}
+    .live-line {{ stroke: #6bbcff; stroke-width: 2.4; }}
+    .prov-line {{ stroke: #6bbcff; stroke-width: 1.8; stroke-dasharray: 3 3; opacity: 0.6; }}
+    .legend text {{ fill: #cbd5dc; font-size: 11px; font-weight: 600; }}
+    .legend .shadow-swatch {{ fill: #ffd36e; }}
+    .legend .live-swatch {{ fill: #6bbcff; }}
+    .legend .prov-swatch {{ fill: #6bbcff; opacity: 0.55; }}
     .empty-chart {{ display: grid; place-items: center; min-height: 180px; color: #9aa7af; background: #11161a; border: 1px solid #263036; border-radius: 4px; font-size: 13px; padding: 0 16px; text-align: center; }}
     .neutral-chart {{ color: #cbd5dc; background: #15181c; border-color: #2b3338; }}
     .warn-chart {{ color: #ffd36e; background: #21180a; border-color: #574316; }}
@@ -1152,9 +1594,15 @@ def render_html(payload: dict[str, Any]) -> str:
     .submissions-table th, .submissions-table td {{ padding: 5px 6px; }}
     .crosshair-line {{ stroke: #6bbcff; stroke-width: 1; stroke-dasharray: 2 2; opacity: 0.55; pointer-events: none; }}
     .focus-dot {{ fill: #11161a; stroke: #6bbcff; stroke-width: 2; }}
+    .shadow-focus {{ stroke: #ffd36e; }}
+    .live-focus {{ stroke: #6bbcff; }}
+    .prov-focus {{ stroke: #6bbcff; stroke-dasharray: 1 1; opacity: 0.7; }}
     .curve-tooltip .tooltip-bg {{ fill: #1f262c; stroke: #2d3439; stroke-width: 1; opacity: 0.96; }}
     .curve-tooltip .tooltip-date {{ fill: #aeb8bf; font-size: 10px; }}
     .curve-tooltip .tooltip-val {{ fill: #e7ecef; font-size: 11px; font-weight: 700; }}
+    .curve-tooltip .tooltip-shadow {{ fill: #ffd36e; font-size: 11px; font-weight: 700; }}
+    .curve-tooltip .tooltip-live {{ fill: #6bbcff; font-size: 11px; font-weight: 700; }}
+    .curve-tooltip .tooltip-prov {{ fill: #6bbcff; font-size: 11px; font-weight: 600; opacity: 0.75; }}
     .hover-target {{ cursor: crosshair; }}
     table {{ width: 100%; border-collapse: collapse; background: #15191d; border: 1px solid #2b3338; }}
     th, td {{ padding: 9px 10px; border-bottom: 1px solid #263036; text-align: left; font-size: 13px; vertical-align: top; }}
@@ -1205,28 +1653,52 @@ def render_html(payload: dict[str, Any]) -> str:
     try {{ pts = JSON.parse(raw); }} catch (err) {{ return; }}
     if (!pts || !pts.length) return;
 
-    var crosshair  = svg.querySelector('.crosshair-line');
-    var focus      = svg.querySelector('.focus-dot');
-    var tooltip    = svg.querySelector('.curve-tooltip');
-    var ttBg       = svg.querySelector('.tooltip-bg');
-    var ttDate     = svg.querySelector('.tooltip-date');
-    var ttVal      = svg.querySelector('.tooltip-val');
-    var target     = svg.querySelector('.hover-target');
-    if (!target || !crosshair || !focus || !tooltip) return;
+    // Multi-series mode: points carry sp/sy (shadow), lp/ly (live recon),
+    // pp/py (live provisional). Single-series points have pnl/y.
+    var dual = ('sp' in pts[0]) || ('lp' in pts[0]) || ('pp' in pts[0]);
+    var hasProv = dual && ('pp' in pts[0]);
+
+    var crosshair   = svg.querySelector('.crosshair-line');
+    var tooltip     = svg.querySelector('.curve-tooltip');
+    var ttBg        = svg.querySelector('.tooltip-bg');
+    var ttDate      = svg.querySelector('.tooltip-date');
+    var target      = svg.querySelector('.hover-target');
+    if (!target || !crosshair || !tooltip) return;
+
+    var focus, ttVal, focusShadow, focusLive, focusProv, ttShadow, ttLive, ttProv;
+    if (dual) {{
+      focusShadow = svg.querySelector('.shadow-focus');
+      focusLive   = svg.querySelector('.live-focus');
+      focusProv   = hasProv ? svg.querySelector('.prov-focus') : null;
+      ttShadow    = svg.querySelector('.tooltip-shadow');
+      ttLive      = svg.querySelector('.tooltip-live');
+      ttProv      = hasProv ? svg.querySelector('.tooltip-prov') : null;
+      if (!focusShadow || !focusLive || !ttShadow || !ttLive) return;
+      if (hasProv && (!focusProv || !ttProv)) return;
+    }} else {{
+      focus = svg.querySelector('.focus-dot');
+      ttVal = svg.querySelector('.tooltip-val');
+      if (!focus || !ttVal) return;
+    }}
 
     var vb     = svg.viewBox.baseVal;
-    var ttW    = 120;
-    var ttH    = 30;
+    var ttW    = dual ? (hasProv ? 170 : 150) : 120;
+    var ttH    = dual ? (hasProv ? 58 : 44) : 30;
     var ttPad  = 6;
 
     function hide() {{
       crosshair.style.display = 'none';
-      focus.style.display     = 'none';
       tooltip.style.display   = 'none';
+      if (dual) {{
+        focusShadow.style.display = 'none';
+        focusLive.style.display   = 'none';
+        if (focusProv) focusProv.style.display = 'none';
+      }} else {{
+        focus.style.display = 'none';
+      }}
     }}
     function show() {{
       crosshair.style.display = '';
-      focus.style.display     = '';
       tooltip.style.display   = '';
     }}
     hide();
@@ -1251,24 +1723,77 @@ def render_html(payload: dict[str, Any]) -> str:
 
       crosshair.setAttribute('x1', p.x);
       crosshair.setAttribute('x2', p.x);
-      focus.setAttribute('cx', p.x);
-      focus.setAttribute('cy', p.y);
-
       ttDate.textContent = String(p.ts || '').slice(0, 16);
-      ttVal.textContent  = fmtMoney(p.pnl);
+
+      // Anchor tooltip near the most relevant focus point.
+      var anchorY;
+      if (dual) {{
+        if (p.sy != null) {{
+          focusShadow.setAttribute('cx', p.x);
+          focusShadow.setAttribute('cy', p.sy);
+          focusShadow.style.display = '';
+        }} else {{
+          focusShadow.style.display = 'none';
+        }}
+        if (p.ly != null) {{
+          focusLive.setAttribute('cx', p.x);
+          focusLive.setAttribute('cy', p.ly);
+          focusLive.style.display = '';
+        }} else {{
+          focusLive.style.display = 'none';
+        }}
+        if (focusProv) {{
+          if (p.py != null) {{
+            focusProv.setAttribute('cx', p.x);
+            focusProv.setAttribute('cy', p.py);
+            focusProv.style.display = '';
+          }} else {{
+            focusProv.style.display = 'none';
+          }}
+        }}
+        ttShadow.textContent = (p.sp == null) ? 'Shadow —'      : 'Shadow ' + fmtMoney(p.sp);
+        ttLive.textContent   = (p.lp == null) ? 'Live (recon) —' : 'Live (recon) ' + fmtMoney(p.lp);
+        if (ttProv) {{
+          ttProv.textContent = (p.pp == null) ? 'Live (prov.) —' : 'Live (prov.) ' + fmtMoney(p.pp);
+        }}
+        var ys = (p.sy == null) ? null : p.sy;
+        var yl = (p.ly == null) ? null : p.ly;
+        var yp = (p.py == null) ? null : p.py;
+        var ys_arr = [ys, yl, yp].filter(function(v){{ return v != null; }});
+        anchorY = ys_arr.length ? Math.min.apply(null, ys_arr) : (vb.height / 2);
+      }} else {{
+        focus.setAttribute('cx', p.x);
+        focus.setAttribute('cy', p.y);
+        focus.style.display = '';
+        ttVal.textContent = fmtMoney(p.pnl);
+        anchorY = p.y;
+      }}
 
       // Place tooltip to the right; flip left near the right edge.
       var ttX = p.x + 10;
       if (ttX + ttW > vb.width - 4) ttX = p.x - ttW - 10;
-      var ttY = p.y - ttH - 6;
-      if (ttY < 4) ttY = p.y + 8;
+      var ttY = anchorY - ttH - 6;
+      if (ttY < 4) ttY = anchorY + 8;
 
       ttBg.setAttribute('x', ttX);
       ttBg.setAttribute('y', ttY);
+      ttBg.setAttribute('width', ttW);
+      ttBg.setAttribute('height', ttH);
       ttDate.setAttribute('x', ttX + ttPad);
       ttDate.setAttribute('y', ttY + 12);
-      ttVal.setAttribute('x', ttX + ttPad);
-      ttVal.setAttribute('y', ttY + 24);
+      if (dual) {{
+        ttShadow.setAttribute('x', ttX + ttPad);
+        ttShadow.setAttribute('y', ttY + 26);
+        ttLive.setAttribute('x', ttX + ttPad);
+        ttLive.setAttribute('y', ttY + 39);
+        if (ttProv) {{
+          ttProv.setAttribute('x', ttX + ttPad);
+          ttProv.setAttribute('y', ttY + 52);
+        }}
+      }} else {{
+        ttVal.setAttribute('x', ttX + ttPad);
+        ttVal.setAttribute('y', ttY + 24);
+      }}
 
       show();
     }}

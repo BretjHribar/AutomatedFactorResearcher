@@ -26,6 +26,7 @@ def test_dagster_definitions_are_loadable():
     assert "binance_integrity_results" in asset_keys
     assert "live_equity_quote_snapshot" in asset_keys
     assert "research_equity_signal_snapshot" in asset_keys
+    assert "equity_signal_shadow_record" in asset_keys
     assert "ib_paper_moc_execution_result" in asset_keys
     assert "kucoin_paper_execution_record" in asset_keys
     assert "binance_paper_execution_record" in asset_keys
@@ -147,6 +148,88 @@ def test_upsert_ib_execution_state_preserves_signal_side_gross(tmp_path):
     assert state["last_signal_bar"] == "2026-05-07"
     # n_positions wasn't in the trade summary, so signal-side count is preserved
     assert state["n_positions"] == 200
+
+
+def test_equity_signal_shadow_record_writes_per_ticker_artifact(tmp_path):
+    """The shadow record asset must write a parquet of per-ticker target weights
+    + share counts + a JSON summary, atomically, so a moc_trader Phase-1 crash
+    can never wipe out our record of what would have been traded."""
+    from src.orchestration.dagster_defs import equity_signal_shadow_record
+
+    # Build a fake matrices/close.parquet so share-count estimation works.
+    close_dir = tmp_path / "data/fmp_cache/matrices"
+    close_dir.mkdir(parents=True)
+    import pandas as pd
+    close_df = pd.DataFrame(
+        {"AAPL": [180.0, 185.0], "MSFT": [400.0, 410.0], "TSLA": [200.0, 210.0]},
+        index=pd.to_datetime(["2026-05-06", "2026-05-07"]),
+    )
+    close_df.to_parquet(close_dir / "close.parquet")
+
+    snapshot = {
+        "signal_date": "2026-05-07 00:00:00",
+        "strategy": "equity_1d",
+        "weights": {"AAPL": 0.10, "MSFT": -0.10, "TSLA": 0.0},
+        "book": 500_000.0,
+        "alpha_signals_n": 45,
+        "universe_size": 220,
+        "max_lookback_bars": 400,
+    }
+    cfg = {"_config_hash": "abc123"}
+
+    result = dg.materialize(
+        [equity_signal_shadow_record],
+        resources={"paths": PlatformPathsResource(root=str(tmp_path))},
+        partition_key=None,
+        run_config={},
+        instance=dg.DagsterInstance.ephemeral(),
+        # Hand the upstreams in directly via a stub — but easier: pass via mock.
+        # Actually @dg.asset takes inputs by AssetKey resolution, so we use load_asset_value
+        # — simpler to call the underlying fn directly:
+        selection=None,
+    ) if False else None  # noqa: E501 — placeholder; we call op fn directly below
+
+    # Calling the asset's op function directly avoids needing to materialize upstreams.
+    op_fn = equity_signal_shadow_record.op.compute_fn.decorated_fn
+    paths_resource = PlatformPathsResource(root=str(tmp_path))
+
+    class _Ctx:
+        class log:
+            @staticmethod
+            def warning(msg):
+                pass
+        @staticmethod
+        def add_output_metadata(*args, **kwargs):
+            pass
+
+    summary = op_fn(
+        _Ctx,
+        paths=paths_resource,
+        research_equity_signal_snapshot=snapshot,
+        production_strategy_config=cfg,
+    )
+
+    assert summary["n_positions"] == 2  # AAPL long + MSFT short, TSLA filtered out
+    assert summary["n_long"] == 1
+    assert summary["n_short"] == 1
+    assert summary["gross_dollar"] == 100_000.0
+    assert summary["config_hash"] == "abc123"
+
+    parquet_path = tmp_path / "prod/logs/shadow_signals/equity_2026-05-07.parquet"
+    json_path = tmp_path / "prod/logs/shadow_signals/equity_2026-05-07.json"
+    assert parquet_path.exists()
+    assert json_path.exists()
+
+    df = pd.read_parquet(parquet_path)
+    assert set(df["ticker"]) == {"AAPL", "MSFT"}
+    aapl = df[df["ticker"] == "AAPL"].iloc[0]
+    assert aapl["dollar"] == 50_000.0
+    # 50_000 / 185 = 270.27 -> 270 shares
+    assert aapl["shares_est"] == 270
+    msft = df[df["ticker"] == "MSFT"].iloc[0]
+    assert msft["dollar"] == -50_000.0
+    # -50_000 / 410 = -121.95 -> -122 shares
+    assert msft["shares_est"] == -122
 
 
 def test_ib_alert_resolve_only_fires_on_completed_status():

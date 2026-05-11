@@ -12,7 +12,8 @@ References:
   - Boudt, Croux, Laurent (2011): Robust estimation of intraday volatility
 
 Usage:
-    python dq_dashboard.py [--universe TOP100] [--port 8050]
+    python dq_dashboard.py [--universe TOP100] [--port 8051]
+    (default port is 8051 — 8050 is reserved for the static ops_dashboard server)
 """
 
 import argparse
@@ -887,7 +888,9 @@ def create_app(universe="TOP100"):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Data Quality Dashboard")
     parser.add_argument("--universe", default="TOP100", choices=["TOP100", "TOP50", "TOP20"])
-    parser.add_argument("--port", type=int, default=8050)
+    parser.add_argument("--port", type=int, default=8051,
+                        help="Default 8051; 8050 is reserved for the static ops_dashboard "
+                             "(`python -m http.server 8050 --directory prod/stats/output`).")
     parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
 

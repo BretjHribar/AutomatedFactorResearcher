@@ -43,6 +43,11 @@ data/*.db-shm
 data/*.db-wal
 data/*.npz
 data/*.npy
+data/*.csv
+
+# Experiment artifacts — keep the scripts, drop the outputs
+experiments/results/
+experiments/**/*.csv
 
 # Logs (research + prod)
 logs/

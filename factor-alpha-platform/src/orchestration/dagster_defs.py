@@ -11,6 +11,7 @@ import sys
 import uuid
 import importlib
 import json
+import datetime as dt
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -743,6 +744,212 @@ def equity_strategy_state_write(
 
 
 @dg.asset(group_name="monitoring")
+def equity_signal_shadow_record(
+    context,
+    paths: PlatformPathsResource,
+    research_equity_signal_snapshot: dict[str, Any],
+    production_strategy_config: dict[str, Any],
+) -> dict[str, Any]:
+    """Persist the day's would-have-been signal regardless of moc_trader fate.
+
+    The signal asset already runs at 15:30 ET (8 min before the IB execution
+    asset). This asset writes a stable, on-disk record of the per-ticker target
+    weights + share counts so that even if moc_trader.py crashes in Phase 1
+    (e.g. import bug, bad data), we still have a deterministic shadow record
+    of what would have been traded that day.
+
+    Outputs (atomic, both at signal_date granularity):
+      prod/logs/shadow_signals/equity_<YYYY-MM-DD>.parquet  (per-ticker)
+      prod/logs/shadow_signals/equity_<YYYY-MM-DD>.json     (summary)
+    """
+    platform_paths = paths.platform_paths()
+    signal_date = str(research_equity_signal_snapshot["signal_date"])
+    weights_dict = dict(research_equity_signal_snapshot.get("weights") or {})
+    book = float(research_equity_signal_snapshot.get("book") or 1.0)
+
+    out_dir = platform_paths.root / "prod/logs/shadow_signals"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    date_label = signal_date.split(" ")[0]
+    parquet_path = out_dir / f"equity_{date_label}.parquet"
+    json_path = out_dir / f"equity_{date_label}.json"
+
+    close_path = platform_paths.root / "data/fmp_cache/matrices/close.parquet"
+    last_close = pd.Series(dtype="float64")
+    if close_path.exists():
+        try:
+            close_df = pd.read_parquet(close_path)
+            last_close = close_df.iloc[-1]
+        except Exception as exc:
+            context.log.warning(f"shadow_record: could not read close.parquet ({exc})")
+
+    rows = []
+    for sym, w in weights_dict.items():
+        w_val = float(w)
+        if abs(w_val) < 1e-12:
+            continue
+        dollar = book * w_val
+        price = float(last_close.get(sym, float("nan")))
+        if price > 0 and not pd.isna(price):
+            shares_est = int(round(dollar / price))
+        else:
+            shares_est = 0
+        rows.append({
+            "ticker": sym,
+            "weight": w_val,
+            "dollar": dollar,
+            "last_close": price if not pd.isna(price) else None,
+            "shares_est": shares_est,
+            "side": "long" if w_val > 0 else "short",
+        })
+    df = pd.DataFrame(rows).sort_values("dollar", key=lambda s: s.abs(), ascending=False)
+
+    tmp_parquet = parquet_path.with_suffix(parquet_path.suffix + ".tmp")
+    df.to_parquet(tmp_parquet, index=False)
+    os.replace(tmp_parquet, parquet_path)
+
+    summary = {
+        "signal_date": signal_date,
+        "strategy": research_equity_signal_snapshot.get("strategy"),
+        "config_hash": production_strategy_config.get("_config_hash"),
+        "book": book,
+        "n_positions": int(len(df)),
+        "n_long": int((df["weight"] > 0).sum()) if not df.empty else 0,
+        "n_short": int((df["weight"] < 0).sum()) if not df.empty else 0,
+        "gross_weight_l1": float(df["weight"].abs().sum()) if not df.empty else 0.0,
+        "net_weight_l1": float(df["weight"].sum()) if not df.empty else 0.0,
+        "gross_dollar": float(df["dollar"].abs().sum()) if not df.empty else 0.0,
+        "net_dollar": float(df["dollar"].sum()) if not df.empty else 0.0,
+        "gross_shares_est": int(df["shares_est"].abs().sum()) if not df.empty else 0,
+        "alpha_signals_n": research_equity_signal_snapshot.get("alpha_signals_n"),
+        "universe_size": research_equity_signal_snapshot.get("universe_size"),
+        "max_lookback_bars": research_equity_signal_snapshot.get("max_lookback_bars"),
+        "parquet_path": str(parquet_path),
+        "source": "dagster:equity_signal_shadow_record",
+    }
+    tmp_json = json_path.with_suffix(json_path.suffix + ".tmp")
+    tmp_json.write_text(json.dumps(summary, indent=2, default=str), encoding="utf-8")
+    os.replace(tmp_json, json_path)
+
+    context.add_output_metadata({
+        "signal_date": signal_date,
+        "n_positions": summary["n_positions"],
+        "n_long": summary["n_long"],
+        "n_short": summary["n_short"],
+        "gross_dollar": summary["gross_dollar"],
+        "parquet_path": str(parquet_path),
+    })
+    return summary
+
+
+@dg.asset(group_name="execution")
+def ib_equity_post_close_recon(
+    context,
+    paths: PlatformPathsResource,
+    ib_paper_moc_execution_result: dict[str, Any],
+) -> dict[str, Any]:
+    """Reconcile today's IB MOC submission against realized fills.
+
+    Runs ~30 min after the auction (16:30 ET schedule). Connects to IB with a
+    dedicated client_id (30), pulls today's executions, joins on permId to
+    today's `prod/logs/trades/trade_<DATE>.json`, writes
+    `prod/logs/reconciliation/equity_<DATE>.json` with per-symbol filled qty,
+    avg price, commission, and aggregate fill rates. The dashboard reads
+    these files to render the live curve as solid (reconciled) vs. dashed
+    (provisional, no recon yet).
+
+    Skips with a clear status if the upstream execution didn't actually
+    submit (status != "completed") so we don't try to recon a no-op.
+    """
+    platform_paths = paths.platform_paths()
+    today = dt.date.today().isoformat()
+    out_dir = platform_paths.root / "prod/logs/reconciliation"
+    trade_path = platform_paths.root / "prod/logs/trades" / f"trade_{today}.json"
+
+    upstream_status = str(ib_paper_moc_execution_result.get("status") or "")
+    if upstream_status != "completed":
+        payload = {
+            "date": today,
+            "status": "skipped",
+            "reason": f"upstream execution status={upstream_status!r}, no live submission to reconcile",
+            "trade_path": str(trade_path) if trade_path.exists() else None,
+        }
+        context.log.info(payload["reason"])
+        context.add_output_metadata({"status": "skipped", "reason": payload["reason"]})
+        return payload
+
+    if not trade_path.exists():
+        payload = {"date": today, "status": "missing_intent", "trade_path": str(trade_path)}
+        context.log.warning(f"recon: no intent log at {trade_path}")
+        context.add_output_metadata(payload)
+        return payload
+
+    try:
+        trade_log = json.loads(trade_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        payload = {"date": today, "status": "intent_unreadable", "error": str(exc),
+                   "trade_path": str(trade_path)}
+        context.log.error(payload)
+        context.add_output_metadata(payload)
+        return payload
+
+    if str(trade_log.get("mode") or "").lower() != "live":
+        payload = {"date": today, "status": "skipped",
+                   "reason": f"intent mode={trade_log.get('mode')!r}, not live"}
+        context.log.info(payload["reason"])
+        context.add_output_metadata(payload)
+        return payload
+
+    cfg = load_json(platform_paths.root / "prod/config/strategy.json")
+    ibkr_cfg = cfg.get("ibkr") or {}
+    host = os.environ.get("IB_HOST", ibkr_cfg.get("host", "host.docker.internal"))
+    port = int(os.environ.get("IB_PORT_PAPER", ibkr_cfg.get("port_paper", 4002)))
+    recon_client_id = int(os.environ.get("IB_CLIENT_ID_RECON", "30"))
+
+    from src.execution.ib_recon import reconcile_from_ib, write_recon
+
+    try:
+        result, stale_unavailable = reconcile_from_ib(
+            host=host, port=port, client_id=recon_client_id,
+            trade_log=trade_log, date=today,
+        )
+    except Exception as exc:
+        # IB reachability is the most common failure mode here. Don't crash
+        # the asset graph — write a status artifact so the dashboard can
+        # still flag the day as provisional and an alert is raised.
+        payload = {
+            "date": today, "status": "ib_query_failed",
+            "error": f"{type(exc).__name__}: {exc}",
+            "host": host, "port": port, "client_id": recon_client_id,
+        }
+        context.log.error(payload)
+        _raise_ib_execution_alert(
+            db_path=platform_paths.state_db,
+            message=f"ib_equity_post_close_recon: {payload['error']}",
+            metadata={"host": host, "port": port, "client_id": recon_client_id},
+        )
+        context.add_output_metadata(payload)
+        return payload
+
+    recon_path = write_recon(result, recon_dir=out_dir,
+                             stale_unavailable=stale_unavailable)
+    payload = result.to_dict()
+    payload["status"] = "stale_unavailable" if stale_unavailable else "reconciled"
+    payload["recon_path"] = str(recon_path)
+    payload["trade_path"] = str(trade_path)
+
+    context.add_output_metadata({
+        "n_orders_intent": payload["n_orders_intent"],
+        "n_orders_with_fills": payload["n_orders_with_fills"],
+        "fill_rate_qty": payload["fill_rate_qty"],
+        "fill_rate_orders": payload["fill_rate_orders"],
+        "gross_filled_dollar": payload["gross_filled_dollar"],
+        "total_commission": payload["total_commission"],
+        "recon_path": str(recon_path),
+    })
+    return payload
+
+
+@dg.asset(group_name="monitoring")
 def ops_dashboard_state(paths: PlatformPathsResource, integrity_alert_sync: dict[str, Any]) -> dict[str, Any]:
     platform_paths = paths.platform_paths()
     dashboard_payload = _write_ops_dashboard_files(platform_paths.root, platform_paths.state_db)
@@ -1186,6 +1393,46 @@ def ib_paper_execution_not_failed(ib_paper_moc_execution_result: dict[str, Any])
     )
 
 
+@dg.asset_check(asset=ib_equity_post_close_recon)
+def ib_equity_recon_fill_rate_acceptable(ib_equity_post_close_recon: dict[str, Any]) -> dg.AssetCheckResult:
+    """Reconciliation fill-rate check.
+
+    Pass conditions: status="reconciled" AND fill_rate_qty >= 0.95
+    (paper-account MOC fills are normally 100% — anything below 0.95
+    suggests hard-to-borrow shorts, exchange rejections, or partial fills
+    on illiquid names that warrants a look). status="skipped" passes
+    (nothing to reconcile when the upstream execution didn't submit).
+    Other statuses fail.
+    """
+    status = ib_equity_post_close_recon.get("status") or ""
+    if status in {"skipped", "stale_unavailable"}:
+        return dg.AssetCheckResult(passed=True, metadata={"status": status})
+    if status != "reconciled":
+        return dg.AssetCheckResult(
+            passed=False, severity=dg.AssetCheckSeverity.WARN,
+            metadata={
+                "status": status,
+                "error": ib_equity_post_close_recon.get("error", ""),
+                "reason": ib_equity_post_close_recon.get("reason", ""),
+            },
+            description="Recon did not produce a reconciliation file.",
+        )
+    fr = float(ib_equity_post_close_recon.get("fill_rate_qty") or 0.0)
+    return dg.AssetCheckResult(
+        passed=fr >= 0.95,
+        severity=dg.AssetCheckSeverity.WARN,
+        metadata={
+            "fill_rate_qty": fr,
+            "fill_rate_orders": ib_equity_post_close_recon.get("fill_rate_orders"),
+            "n_orders_intent": ib_equity_post_close_recon.get("n_orders_intent"),
+            "n_orders_with_fills": ib_equity_post_close_recon.get("n_orders_with_fills"),
+            "n_unfilled": ib_equity_post_close_recon.get("n_unfilled"),
+            "recon_path": ib_equity_post_close_recon.get("recon_path", ""),
+        },
+        description="Recon fill-rate must be >= 95% of intent qty.",
+    )
+
+
 @dg.asset_check(asset=kucoin_paper_execution_record)
 def kucoin_paper_execution_not_failed(kucoin_paper_execution_record: dict[str, Any]) -> dg.AssetCheckResult:
     status = kucoin_paper_execution_record.get("status")
@@ -1268,6 +1515,7 @@ research_signal_job = dg.define_asset_job(
         equity_eod_data_refresh_result,
         research_equity_signal_snapshot,
         equity_strategy_state_write,
+        equity_signal_shadow_record,
     ),
 )
 
@@ -1286,6 +1534,11 @@ ib_paper_moc_execution_job = dg.define_asset_job(
         equity_integrity_results,
         ib_paper_moc_execution_result,
     ),
+)
+
+ib_equity_post_close_recon_job = dg.define_asset_job(
+    "ib_equity_post_close_recon_job",
+    selection=dg.AssetSelection.assets(ib_equity_post_close_recon),
 )
 
 equity_eod_data_refresh_job = dg.define_asset_job(
@@ -1370,6 +1623,17 @@ schedules = [
         default_status=dg.DefaultScheduleStatus.RUNNING,
     ),
     dg.ScheduleDefinition(
+        # 16:30 ET = 30 min after the 16:00 ET MOC auction. Pulls realized
+        # fills + commissions and writes prod/logs/reconciliation/equity_<date>.json
+        # so the dashboard can render the live curve as solid (real fills)
+        # rather than dashed (intent-based proxy).
+        name="ib_equity_post_close_recon_1630_et",
+        job=ib_equity_post_close_recon_job,
+        cron_schedule="30 16 * * 1-5",
+        execution_timezone="America/New_York",
+        default_status=dg.DefaultScheduleStatus.RUNNING,
+    ),
+    dg.ScheduleDefinition(
         name="post_eod_integrity_hourly_after_close_et",
         job=all_integrity_job,
         cron_schedule="50 16-23 * * 1-5",
@@ -1420,8 +1684,10 @@ defs = dg.Definitions(
         research_equity_signal_snapshot,
         research_crypto_signal_snapshot,
         equity_strategy_state_write,
+        equity_signal_shadow_record,
         ops_dashboard_state,
         ib_paper_moc_execution_result,
+        ib_equity_post_close_recon,
         kucoin_paper_execution_record,
         binance_paper_execution_record,
     ],
@@ -1437,6 +1703,7 @@ defs = dg.Definitions(
         live_quote_snapshot_coverage,
         research_equity_signal_nonempty,
         ib_paper_execution_not_failed,
+        ib_equity_recon_fill_rate_acceptable,
         kucoin_paper_execution_not_failed,
         binance_paper_execution_not_failed,
     ],
@@ -1449,6 +1716,7 @@ defs = dg.Definitions(
         research_signal_job,
         crypto_research_signal_job,
         ib_paper_moc_execution_job,
+        ib_equity_post_close_recon_job,
         crypto_paper_execution_job,
         kucoin_paper_execution_job,
         binance_paper_execution_job,
