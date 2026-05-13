@@ -14,8 +14,15 @@ RUN pip install --no-cache-dir -e ".[orchestration,connectors,optimization,monit
 RUN python -c \
     "import eval_alpha_ib; import seed_alphas_ib; import live_bar; import moc_trader; print('IB runtime import smoke OK')"
 
+# Placed after pip install so editing this script doesn't invalidate the pip-install cache layer.
+COPY deploy/dagster/healthcheck_user_code.py /opt/dagster/healthcheck_user_code.py
+
 EXPOSE 4000
-HEALTHCHECK --timeout=10s --start-period=20s --interval=10s --retries=12 \
-    CMD ["dagster", "api", "grpc-health-check", "-h", "127.0.0.1", "-p", "4000"]
+# Deep liveness probe: list_repositories forwards through the parent gRPC server
+# to the child code-server. Detects the failure mode where the parent stays up
+# but the child's internal unix socket disappears (which the old shallow
+# grpc-health-check missed — caused 2026-05-13 missed-trade incident).
+HEALTHCHECK --timeout=15s --start-period=45s --interval=20s --retries=3 \
+    CMD python /opt/dagster/healthcheck_user_code.py
 
 CMD ["dagster", "code-server", "start", "-h", "0.0.0.0", "-p", "4000", "-f", "definitions.py"]
