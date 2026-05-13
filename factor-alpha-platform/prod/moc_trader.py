@@ -601,6 +601,7 @@ class IBConnection:
 
         if submitted:
             self.ib.sleep(1)
+            # First-pass status read.
             for record, trade in submitted:
                 status = trade.orderStatus.status or record["status"]
                 last_msg = trade.log[-1].message if trade.log else ""
@@ -613,6 +614,41 @@ class IBConnection:
                 perm_id = trade.orderStatus.permId or trade.order.permId
                 if perm_id:
                     record["perm_id"] = int(perm_id)
+
+            # PermId capture: IB assigns permIds asynchronously. The first
+            # orders in a large batch can still be missing their permId after
+            # 1 sec. Without a permId the post-close recon job can't join the
+            # intent record to the IB-side fill, which is what produced
+            # 1 false-positive "unfilled" per day in early backfills. Retry
+            # up to 8 sec total in 1 sec ticks, then accept whatever we have.
+            missing = [r for r, _ in [(rec, tr) for rec, tr in submitted]
+                       if not r.get("perm_id")]
+            if missing:
+                for _ in range(8):
+                    self.ib.sleep(1)
+                    still_missing = []
+                    for record, trade in submitted:
+                        if record.get("perm_id"):
+                            continue
+                        perm_id = trade.orderStatus.permId or trade.order.permId
+                        if perm_id:
+                            record["perm_id"] = int(perm_id)
+                            # Refresh status while we're here so the intent log
+                            # records the latest pre-auction state.
+                            cur_status = trade.orderStatus.status
+                            if cur_status and cur_status not in {"Cancelled", "Inactive"}:
+                                record["status"] = cur_status
+                        else:
+                            still_missing.append(record["symbol"])
+                    if not still_missing:
+                        break
+                else:
+                    # Loop fell through: some permIds never arrived.
+                    if still_missing:
+                        log.warning(
+                            f"  permId never assigned for {len(still_missing)} order(s) "
+                            f"after 8s wait: {still_missing[:6]}{'...' if len(still_missing) > 6 else ''}"
+                        )
 
         return records
 

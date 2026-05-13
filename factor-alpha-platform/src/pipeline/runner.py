@@ -81,6 +81,16 @@ def _load_universe_and_matrices(cfg: dict, *, root: Path):
         valid = sorted(cov[cov > float(uf["threshold"])].index.tolist())
     else:
         raise ValueError(f"unknown universe_filter method {uf['method']!r}")
+
+    # Optional exclusion list — drop tickers known to be ineligible for the
+    # downstream execution path (e.g. PREFERRED stocks that can't be MOC'd
+    # because they don't participate in the closing auction). Applied AFTER
+    # coverage so the membership rule itself isn't perturbed; the excluded
+    # names are simply removed from the tradeable column set.
+    exclude = data.get("exclude_tickers") or []
+    if exclude:
+        exclude_set = {str(t).upper() for t in exclude}
+        valid = [t for t in valid if str(t).upper() not in exclude_set]
     uni = uni[valid]
 
     # Optional bounded-history mode for incremental signal compute. The slice

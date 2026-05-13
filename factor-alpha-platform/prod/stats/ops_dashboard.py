@@ -362,6 +362,40 @@ def _infer_bars_per_year(clean_df: pd.DataFrame) -> float:
 
 SHADOW_SIGNAL_DIR = LOGS_ROOT / "shadow_signals"
 RECON_DIR = LOGS_ROOT / "reconciliation"
+PRETRADE_DIR = LOGS_ROOT / "trades"
+PREFERRED_CLS_PATH = PROJECT_ROOT / "data/fmp_cache/classifications/preferred.parquet"
+
+
+def _preferred_tickers() -> set[str]:
+    if not PREFERRED_CLS_PATH.exists():
+        return set()
+    try:
+        df = pd.read_parquet(PREFERRED_CLS_PATH)
+        return {str(t) for t in df.loc[df["is_preferred"] == True, "ticker"].tolist()}  # noqa: E712
+    except Exception:
+        return set()
+
+
+def _pretrade_last_prices(date_str: str) -> dict[str, float]:
+    path = PRETRADE_DIR / f"pretrade_{date_str}.json"
+    if not path.exists():
+        return {}
+    data = _read_json(path) or {}
+    out: dict[str, float] = {}
+    for sym, snap in (data.get("tickers") or {}).items():
+        last = snap.get("last") or snap.get("close") or snap.get("midpoint")
+        if last is None:
+            bid = snap.get("bid")
+            ask = snap.get("ask")
+            if bid is not None and ask is not None:
+                last = (float(bid) + float(ask)) / 2
+        if last is None:
+            continue
+        try:
+            out[str(sym)] = float(last)
+        except (TypeError, ValueError):
+            continue
+    return out
 
 
 def _close_matrix() -> pd.DataFrame | None:
@@ -375,8 +409,12 @@ def _close_matrix() -> pd.DataFrame | None:
 
 
 def _ib_shadow_curve(close_df: pd.DataFrame | None,
-                     book_default: float = 500_000.0) -> list[dict[str, Any]]:
+                     book_default: float = 500_000.0,
+                     variant: str = "full") -> list[dict[str, Any]]:
     """Cumulative dollar PnL of the deterministic shadow signal.
+
+    variant="full"     -> reads equity_<D>.parquet (with preferreds in universe)
+    variant="ex_pref"  -> reads equity_<D>_ex_pref.parquet (preferreds excluded)
 
     For each shadow_signals/equity_<D>.parquet, the next-bar PnL is
         pnl(D->D+1) = sum_i weights[i] * (close[D+1]/close[D] - 1) * book
@@ -386,15 +424,21 @@ def _ib_shadow_curve(close_df: pd.DataFrame | None,
     """
     if not SHADOW_SIGNAL_DIR.exists() or close_df is None or close_df.empty:
         return []
+    suffix = "_ex_pref" if variant == "ex_pref" else ""
     rows: list[tuple[pd.Timestamp, dict[str, float], float]] = []
-    for parquet_path in sorted(SHADOW_SIGNAL_DIR.glob("equity_*.parquet")):
+    pattern = f"equity_*{suffix}.parquet"
+    for parquet_path in sorted(SHADOW_SIGNAL_DIR.glob(pattern)):
+        # When variant="full", glob "equity_*.parquet" matches BOTH full and
+        # ex_pref. Filter the ex_pref ones out explicitly.
+        if variant == "full" and parquet_path.stem.endswith("_ex_pref"):
+            continue
         try:
             df = pd.read_parquet(parquet_path)
         except Exception:
             continue
         if df.empty:
             continue
-        date_str = parquet_path.stem.replace("equity_", "")
+        date_str = parquet_path.stem.replace("equity_", "").replace("_ex_pref", "")
         try:
             d = pd.Timestamp(date_str)
         except Exception:
@@ -444,11 +488,17 @@ def _ib_live_days(only_live_mode: bool = True) -> list[dict[str, Any]]:
       - recon_shares: signed shares per symbol from realized fills (only when
         recon_status == "reconciled"; empty otherwise)
       - recon_commission: total $ commission (0.0 when not reconciled)
+      - pref_proxy_shares: signed shares for preferreds that the intent
+        wanted but the auction cancelled, priced at submission-time `last`
+        from pretrade_<DATE>.json. Empty when no preferreds got cancelled.
+      - pref_proxy_prices: dict[symbol, submission_time_price] for the
+        cancelled preferreds (for entry-price PnL accounting)
     """
     out: list[dict[str, Any]] = []
     trade_dir = TRADE_LOG_DIRS["ib"]
     if not trade_dir.exists():
         return out
+    preferred_set = _preferred_tickers()
     for path in sorted(trade_dir.glob("trade_*.json")):
         if path.name.endswith("_dry_run.json"):
             continue
@@ -482,20 +532,51 @@ def _ib_live_days(only_live_mode: bool = True) -> list[dict[str, Any]]:
                     if sym and qty:
                         recon_shares[sym] = recon_shares.get(sym, 0) + qty
                 recon_commission = float(recon.get("total_commission") or 0.0)
+
+        # Preferred-proxy: any intent share for a preferred that didn't fill
+        # (per recon) gets a synthetic fill at the submission-time `last` price
+        # captured by `capture_pretrade_snapshot()` and persisted to
+        # prod/logs/trades/pretrade_<DATE>.json.
+        pref_proxy_shares: dict[str, int] = {}
+        pref_proxy_prices: dict[str, float] = {}
+        if recon_status == "reconciled" and preferred_set:
+            pretrade = _pretrade_last_prices(date_str)
+            for sym, qty in intent_shares.items():
+                if sym not in preferred_set:
+                    continue
+                # If the recon recorded a fill for this preferred (rare —
+                # happens only when the venue actually held an auction), don't
+                # double-count.
+                if sym in recon_shares:
+                    continue
+                price = pretrade.get(sym)
+                if price is None or price <= 0:
+                    continue
+                pref_proxy_shares[sym] = int(qty)
+                pref_proxy_prices[sym] = float(price)
+
         out.append({
             "date": d,
             "intent_shares": intent_shares,
             "recon_status": recon_status,
             "recon_shares": recon_shares,
             "recon_commission": recon_commission,
+            "pref_proxy_shares": pref_proxy_shares,
+            "pref_proxy_prices": pref_proxy_prices,
         })
     out.sort(key=lambda r: r["date"])
     return out
 
 
 def _ib_live_curves_split(close_df: pd.DataFrame | None
-                          ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Return (reconciled_curve, provisional_curve) from the live trade log.
+                          ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """Return (reconciled_curve, provisional_curve, recon_plus_pref_proxy_curve)
+    from the live trade log.
+
+    The third curve attributes cancelled-preferred intent at the
+    submission-time `last` price from pretrade_<DATE>.json. PnL leg D->D+1 for
+    those proxy positions = signed_shares × (close[D+1] - submission_price).
+    Subsequent legs treat them like any other held position with Δclose.
 
     Reconciled curve: bars where the held portfolio was set by a `recon_status
     == "reconciled"` day use REAL filled qty × Δclose, minus that day's
@@ -511,47 +592,59 @@ def _ib_live_curves_split(close_df: pd.DataFrame | None
     share a baseline.
     """
     if close_df is None or close_df.empty:
-        return [], []
+        return [], [], []
     live_days = _ib_live_days()
     if not live_days:
-        return [], []
+        return [], [], []
 
     start = live_days[0]["date"]
     if start not in close_df.index:
         idx_after = close_df.index[close_df.index >= start]
         if not len(idx_after):
-            return [], []
+            return [], [], []
         start = idx_after[0]
     bars = close_df.loc[start:]
     if len(bars) < 1:
-        return [], []
+        return [], [], []
 
     recon_curve: list[dict[str, Any]] = [{"timestamp": str(bars.index[0].date()), "pnl": 0.0}]
     prov_curve: list[dict[str, Any]] = [{"timestamp": str(bars.index[0].date()), "pnl": 0.0}]
+    proxy_curve: list[dict[str, Any]] = [{"timestamp": str(bars.index[0].date()), "pnl": 0.0}]
 
     if len(bars) < 2:
-        return recon_curve, prov_curve
+        return recon_curve, prov_curve, proxy_curve
 
     cum_recon = 0.0
     cum_prov = 0.0
+    cum_proxy = 0.0
     held_idx = 0
     held_recon_shares: dict[str, int] = {}
     held_prov_shares: dict[str, int] = {}
+    # For the proxy curve we track recon_shares + cancelled-preferred shares
+    # with their submission-time entry prices. On the rebal day, the proxy
+    # leg uses (close - entry_price). On subsequent legs, the held preferred
+    # shares use Δclose like everything else.
+    held_proxy_shares: dict[str, int] = {}
+    pending_proxy_entries: dict[str, float] = {}  # symbol -> entry_price for the first leg only
 
     for j in range(len(bars.index) - 1):
         d_t = bars.index[j]
-        # Advance held_*_shares each time a new live trade landed at or before d_t.
-        # On a `reconciled` day the realized fills are the truth; on stale/missing
-        # days both curves take the intent shares.
         while held_idx < len(live_days) and live_days[held_idx]["date"] <= d_t:
             ld = live_days[held_idx]
             held_prov_shares = ld["intent_shares"]
             if ld["recon_status"] == "reconciled" and ld["recon_shares"]:
                 held_recon_shares = ld["recon_shares"]
-                # Charge commission as a one-time hit on the rebal day.
                 cum_recon -= float(ld.get("recon_commission") or 0.0)
+                cum_proxy -= float(ld.get("recon_commission") or 0.0)
             else:
                 held_recon_shares = ld["intent_shares"]
+            # Proxy: same as recon, plus any cancelled preferreds at their
+            # submission-time prices.
+            new_proxy = dict(held_recon_shares)
+            for sym, qty in (ld.get("pref_proxy_shares") or {}).items():
+                new_proxy[sym] = new_proxy.get(sym, 0) + int(qty)
+            held_proxy_shares = new_proxy
+            pending_proxy_entries = dict(ld.get("pref_proxy_prices") or {})
             held_idx += 1
 
         d_next = bars.index[j + 1]
@@ -571,16 +664,36 @@ def _ib_live_curves_split(close_df: pd.DataFrame | None
                 if not pd.isna(delta.get(sym, 0.0))
             )
             cum_prov += pnl_prov
+        if held_proxy_shares:
+            pnl_proxy = 0.0
+            for sym, sh in held_proxy_shares.items():
+                if sym in pending_proxy_entries:
+                    # First leg after rebal: PnL = sh × (close[D+1] - entry)
+                    end = float(bars.loc[d_next].get(sym, float("nan")))
+                    entry = float(pending_proxy_entries[sym])
+                    if pd.isna(end):
+                        continue
+                    pnl_proxy += float(sh) * (end - entry)
+                else:
+                    dpx = delta.get(sym, 0.0)
+                    if dpx is None or pd.isna(dpx):
+                        continue
+                    pnl_proxy += float(sh) * float(dpx)
+            cum_proxy += pnl_proxy
+            # After the first mark-to-market, the proxy entries become normal
+            # Δclose positions.
+            pending_proxy_entries = {}
 
         recon_curve.append({"timestamp": str(d_next.date()), "pnl": cum_recon})
         prov_curve.append({"timestamp": str(d_next.date()), "pnl": cum_prov})
+        proxy_curve.append({"timestamp": str(d_next.date()), "pnl": cum_proxy})
 
-    return recon_curve, prov_curve
+    return recon_curve, prov_curve, proxy_curve
 
 
 def _ib_live_curve(close_df: pd.DataFrame | None) -> list[dict[str, Any]]:
     """Backwards-compatible single-curve view: provisional (intent-based)."""
-    _, prov = _ib_live_curves_split(close_df)
+    _, prov, _ = _ib_live_curves_split(close_df)
     return prov
 
 
@@ -637,10 +750,13 @@ def _ib_execution_summary() -> dict[str, Any]:
     status = "ok" if last_live_ts else "warn"
     last_run = submissions[0]
     close_df = _close_matrix()
-    shadow_curve = _ib_shadow_curve(close_df)
-    recon_curve, provisional_curve = _ib_live_curves_split(close_df)
-    n_recon_days = sum(1 for ld in _ib_live_days() if ld["recon_status"] == "reconciled")
-    n_stale_days = sum(1 for ld in _ib_live_days() if ld["recon_status"] == "stale_unavailable")
+    shadow_curve = _ib_shadow_curve(close_df, variant="full")
+    shadow_ex_pref_curve = _ib_shadow_curve(close_df, variant="ex_pref")
+    recon_curve, provisional_curve, proxy_curve = _ib_live_curves_split(close_df)
+    live_days = _ib_live_days()
+    n_recon_days = sum(1 for ld in live_days if ld["recon_status"] == "reconciled")
+    n_stale_days = sum(1 for ld in live_days if ld["recon_status"] == "stale_unavailable")
+    n_pref_proxied = sum(1 for ld in live_days if ld.get("pref_proxy_shares"))
     return {
         "exchange": "ib",
         "status": status,
@@ -657,13 +773,18 @@ def _ib_execution_summary() -> dict[str, Any]:
         ),
         "curve": [],
         "shadow_curve": shadow_curve,
+        "shadow_ex_pref_curve": shadow_ex_pref_curve,
         "live_recon_curve": recon_curve,
         "live_provisional_curve": provisional_curve,
+        "live_proxy_curve": proxy_curve,
         "shadow_total_pnl": float(shadow_curve[-1]["pnl"]) if shadow_curve else 0.0,
+        "shadow_ex_pref_total_pnl": float(shadow_ex_pref_curve[-1]["pnl"]) if shadow_ex_pref_curve else 0.0,
         "live_recon_total_pnl": float(recon_curve[-1]["pnl"]) if recon_curve else 0.0,
         "live_provisional_total_pnl": float(provisional_curve[-1]["pnl"]) if provisional_curve else 0.0,
+        "live_proxy_total_pnl": float(proxy_curve[-1]["pnl"]) if proxy_curve else 0.0,
         "n_recon_days": n_recon_days,
         "n_stale_days": n_stale_days,
+        "n_pref_proxied_days": n_pref_proxied,
         # Backwards-compat keys for any unit tests reading the old shape.
         "live_curve": provisional_curve,
         "live_total_pnl": float(provisional_curve[-1]["pnl"]) if provisional_curve else 0.0,
@@ -1205,16 +1326,22 @@ def _svg_curve(curve: list[dict[str, Any]]) -> str:
 
 def _svg_dual_curve(shadow: list[dict[str, Any]],
                     live: list[dict[str, Any]],
-                    live_provisional: list[dict[str, Any]] | None = None) -> str:
-    """Three-series PnL chart sharing x/y axes.
+                    live_provisional: list[dict[str, Any]] | None = None,
+                    shadow_ex_pref: list[dict[str, Any]] | None = None,
+                    live_proxy: list[dict[str, Any]] | None = None) -> str:
+    """Up to five-series PnL chart sharing x/y axes.
 
-    - Shadow (gold dashed) = deterministic counterfactual.
+    - Shadow (gold dashed) = deterministic counterfactual, full universe.
+    - Shadow ex-pref (orange dashed) = same but with PREFERRED stocks removed.
     - Live reconciled (blue solid) = realized fills × Δclose - commission.
+    - Live + pref-proxy (cyan dashed) = recon + cancelled-preferred intent at
+      submission-time `last` price (the "if the close auction had accepted
+      our preferred MOC orders" upper bound on the live curve).
     - Live provisional (blue dashed) = intent × Δclose for days without recon
-      yet, OR an "if-we-trusted-the-intent" reference past the reconciled days
-      (useful for spotting recon vs intent slippage). Pass None to omit.
+      yet. Pass None to omit.
     """
-    if not shadow and not live and not live_provisional:
+    series_present = any(s for s in (shadow, live, live_provisional, shadow_ex_pref, live_proxy))
+    if not series_present:
         return '<div class="empty-chart">No shadow or live PnL recorded yet.</div>'
 
     width = 520
@@ -1226,7 +1353,8 @@ def _svg_dual_curve(shadow: list[dict[str, Any]],
 
     all_ts: list[str] = []
     seen: set[str] = set()
-    for series in (shadow or [], live or [], live_provisional or []):
+    for series in (shadow or [], live or [], live_provisional or [],
+                   shadow_ex_pref or [], live_proxy or []):
         for p in series:
             ts = str(p["timestamp"])
             if ts not in seen:
@@ -1241,7 +1369,9 @@ def _svg_dual_curve(shadow: list[dict[str, Any]],
 
     all_vals = [float(p["pnl"]) for p in (shadow or [])] + \
                [float(p["pnl"]) for p in (live or [])] + \
-               [float(p["pnl"]) for p in (live_provisional or [])]
+               [float(p["pnl"]) for p in (live_provisional or [])] + \
+               [float(p["pnl"]) for p in (shadow_ex_pref or [])] + \
+               [float(p["pnl"]) for p in (live_proxy or [])]
     if not all_vals:
         return '<div class="empty-chart">No PnL points to plot.</div>'
     y_min = min(all_vals)
@@ -1262,7 +1392,9 @@ def _svg_dual_curve(shadow: list[dict[str, Any]],
         return " ".join(pts)
 
     shadow_points = _series_points(shadow or [])
+    shadow_ex_pref_points = _series_points(shadow_ex_pref or [])
     live_points = _series_points(live or [])
+    proxy_points = _series_points(live_proxy or [])
     prov_points = _series_points(live_provisional or [])
 
     # Build per-x data points with forward-filled values for all three series,
@@ -1270,17 +1402,25 @@ def _svg_dual_curve(shadow: list[dict[str, Any]],
     # any cursor position. A series value is None for any x earlier than its
     # first data point.
     shadow_by_ts = {str(p["timestamp"]): float(p["pnl"]) for p in (shadow or [])}
+    shadow_ex_pref_by_ts = {str(p["timestamp"]): float(p["pnl"]) for p in (shadow_ex_pref or [])}
     live_by_ts = {str(p["timestamp"]): float(p["pnl"]) for p in (live or [])}
+    proxy_by_ts = {str(p["timestamp"]): float(p["pnl"]) for p in (live_proxy or [])}
     prov_by_ts = {str(p["timestamp"]): float(p["pnl"]) for p in (live_provisional or [])}
     data_points: list[dict[str, Any]] = []
     last_shadow_val: float | None = None
+    last_shadow_ex_pref_val: float | None = None
     last_live_val: float | None = None
+    last_proxy_val: float | None = None
     last_prov_val: float | None = None
     for ts in all_ts:
         if ts in shadow_by_ts:
             last_shadow_val = shadow_by_ts[ts]
+        if ts in shadow_ex_pref_by_ts:
+            last_shadow_ex_pref_val = shadow_ex_pref_by_ts[ts]
         if ts in live_by_ts:
             last_live_val = live_by_ts[ts]
+        if ts in proxy_by_ts:
+            last_proxy_val = proxy_by_ts[ts]
         if ts in prov_by_ts:
             last_prov_val = prov_by_ts[ts]
         x = ts_to_x[ts]
@@ -1292,8 +1432,12 @@ def _svg_dual_curve(shadow: list[dict[str, Any]],
             "ts": ts,
             "sp": (None if last_shadow_val is None else float(last_shadow_val)),
             "sy": _y(last_shadow_val),
+            "ep": (None if last_shadow_ex_pref_val is None else float(last_shadow_ex_pref_val)),
+            "ey": _y(last_shadow_ex_pref_val),
             "lp": (None if last_live_val is None else float(last_live_val)),
             "ly": _y(last_live_val),
+            "xp": (None if last_proxy_val is None else float(last_proxy_val)),
+            "xy": _y(last_proxy_val),
             "pp": (None if last_prov_val is None else float(last_prov_val)),
             "py": _y(last_prov_val),
         })
@@ -1306,28 +1450,39 @@ def _svg_dual_curve(shadow: list[dict[str, Any]],
                      f'x2="{width - pad_x}" y2="{y_zero:.1f}" />')
 
     last_shadow = shadow[-1]["pnl"] if shadow else 0.0
+    last_shadow_ex_pref = shadow_ex_pref[-1]["pnl"] if shadow_ex_pref else 0.0
     last_live = live[-1]["pnl"] if live else 0.0
+    last_proxy = live_proxy[-1]["pnl"] if live_proxy else 0.0
     last_prov = live_provisional[-1]["pnl"] if live_provisional else 0.0
     start_label = html.escape(all_ts[0])
     end_label = html.escape(all_ts[-1])
     top = _money(y_max)
     bottom = _money(y_min)
 
+    # Legend: two rows of compact entries to fit five series.
     legend = (
-        f'<g class="legend" transform="translate({pad_x + 4},{pad_y - 8})">'
+        f'<g class="legend" transform="translate({pad_x + 4},{pad_y - 14})">'
         f'<rect class="legend-swatch shadow-swatch" width="10" height="10" />'
         f'<text x="14" y="9">Shadow {_money(last_shadow)}</text>'
-        f'<rect class="legend-swatch live-swatch" x="120" width="10" height="10" />'
-        f'<text x="134" y="9">Live (recon) {_money(last_live)}</text>'
-        f'<rect class="legend-swatch prov-swatch" x="260" width="10" height="10" />'
-        f'<text x="274" y="9">Live (prov.) {_money(last_prov)}</text>'
+        f'<rect class="legend-swatch shadow-ex-pref-swatch" x="115" width="10" height="10" />'
+        f'<text x="129" y="9">Shadow ex-pref {_money(last_shadow_ex_pref)}</text>'
+        f'<rect class="legend-swatch live-swatch" x="260" width="10" height="10" />'
+        f'<text x="274" y="9">Live recon {_money(last_live)}</text>'
+        f'<rect class="legend-swatch proxy-swatch" x="0" y="14" width="10" height="10" />'
+        f'<text x="14" y="23">Live + pref-proxy {_money(last_proxy)}</text>'
+        f'<rect class="legend-swatch prov-swatch" x="155" y="14" width="10" height="10" />'
+        f'<text x="169" y="23">Live (prov.) {_money(last_prov)}</text>'
         f'</g>'
     )
 
     shadow_polyline = (f'<polyline class="curve-line shadow-line" fill="none" '
                        f'points="{shadow_points}" />') if shadow_points else ""
+    shadow_ex_pref_polyline = (f'<polyline class="curve-line shadow-ex-pref-line" fill="none" '
+                               f'points="{shadow_ex_pref_points}" />') if shadow_ex_pref_points else ""
     live_polyline = (f'<polyline class="curve-line live-line" fill="none" '
                      f'points="{live_points}" />') if live_points else ""
+    proxy_polyline = (f'<polyline class="curve-line proxy-line" fill="none" '
+                      f'points="{proxy_points}" />') if proxy_points else ""
     prov_polyline = (f'<polyline class="curve-line prov-line" fill="none" '
                      f'points="{prov_points}" />') if prov_points else ""
 
@@ -1340,7 +1495,9 @@ def _svg_dual_curve(shadow: list[dict[str, Any]],
         <line class="axis" x1="{pad_x}" y1="{pad_y}" x2="{pad_x}" y2="{height - pad_y}" />
         {zero_line}
         {shadow_polyline}
+        {shadow_ex_pref_polyline}
         {prov_polyline}
+        {proxy_polyline}
         {live_polyline}
         <text x="{pad_x}" y="14">{top}</text>
         <text x="{pad_x}" y="{height - pad_y - 5}">{bottom}</text>
@@ -1449,36 +1606,23 @@ def _ib_submissions_panel(performance: dict[str, Any]) -> str:
         for s in (performance.get("submissions") or [])
     ) or "<tr><td colspan='5'>No submissions yet.</td></tr>"
     shadow_curve = performance.get("shadow_curve") or []
+    shadow_ex_pref_curve = performance.get("shadow_ex_pref_curve") or []
     live_recon_curve = performance.get("live_recon_curve") or []
+    live_proxy_curve = performance.get("live_proxy_curve") or []
     live_prov_curve = performance.get("live_provisional_curve") or []
     shadow_pnl = performance.get("shadow_total_pnl") or 0.0
+    shadow_ex_pref_pnl = performance.get("shadow_ex_pref_total_pnl") or 0.0
     live_recon_pnl = performance.get("live_recon_total_pnl") or 0.0
+    live_proxy_pnl = performance.get("live_proxy_total_pnl") or 0.0
     live_prov_pnl = performance.get("live_provisional_total_pnl") or 0.0
     n_recon_days = performance.get("n_recon_days") or 0
     n_stale_days = performance.get("n_stale_days") or 0
-
-    # Pick the "live truth" curve for the apples-to-apples gap: prefer recon,
-    # fall back to provisional when no day has been reconciled yet.
-    truth_curve = live_recon_curve or live_prov_curve
-    truth_pnl = live_recon_pnl if live_recon_curve else live_prov_pnl
-    if shadow_curve and truth_curve:
-        live_start = truth_curve[0]["timestamp"]
-        shadow_in_window = [p for p in shadow_curve if p["timestamp"] >= live_start]
-        if len(shadow_in_window) >= 2:
-            shadow_window_pnl = float(shadow_in_window[-1]["pnl"]) - float(shadow_in_window[0]["pnl"])
-        elif shadow_in_window:
-            shadow_window_pnl = float(shadow_in_window[-1]["pnl"])
-        else:
-            shadow_window_pnl = 0.0
-    else:
-        shadow_window_pnl = shadow_pnl
-    gap_in_window = shadow_window_pnl - truth_pnl
+    n_pref_proxied = performance.get("n_pref_proxied_days") or 0
     chart_meta = (
-        f"Full shadow {_money(shadow_pnl)} ({len(shadow_curve)} days) | "
-        f"Live recon {_money(live_recon_pnl)} ({n_recon_days} day{'s' if n_recon_days != 1 else ''} reconciled, "
-        f"{n_stale_days} stale) | "
-        f"Live provisional {_money(live_prov_pnl)} (intent-based, dashed) | "
-        f"In shared window: shadow {_money(shadow_window_pnl)} - live {_money(truth_pnl)} = gap {_money(gap_in_window)}."
+        f"Shadow full {_money(shadow_pnl)} ({len(shadow_curve)} days) | "
+        f"Shadow ex-pref {_money(shadow_ex_pref_pnl)} ({len(shadow_ex_pref_curve)} days) | "
+        f"Live recon {_money(live_recon_pnl)} ({n_recon_days} reconciled / {n_stale_days} stale) | "
+        f"Live + pref-proxy {_money(live_proxy_pnl)} ({n_pref_proxied} day{'s' if n_pref_proxied != 1 else ''} w/ cancelled preferreds priced at submission-time `last`)."
     )
     return f"""
       <article class="chart-panel">
@@ -1489,7 +1633,7 @@ def _ib_submissions_panel(performance: dict[str, Any]) -> str:
           </div>
           {_badge(performance['status'])}
         </div>
-        {_svg_dual_curve(shadow_curve, live_recon_curve, live_prov_curve)}
+        {_svg_dual_curve(shadow_curve, live_recon_curve, live_prov_curve, shadow_ex_pref_curve, live_proxy_curve)}
         <div class="chart-meta">{html.escape(chart_meta)}</div>
         <table class="submissions-table">
           <thead><tr><th>Date</th><th>Mode</th><th>Orders</th><th>L/S</th><th>Gross&nbsp;Shares</th></tr></thead>
@@ -1557,6 +1701,10 @@ def render_html(payload: dict[str, Any]) -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="60">
+  <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="pragma" content="no-cache">
+  <meta http-equiv="expires" content="0">
   <title>Factor Alpha Ops Dashboard</title>
   <style>
     :root {{ color-scheme: dark; font-family: Inter, Segoe UI, Arial, sans-serif; }}
@@ -1581,12 +1729,16 @@ def render_html(payload: dict[str, Any]) -> str:
     .zero-line {{ stroke: #52606a; stroke-dasharray: 3 4; stroke-width: 1; }}
     .curve-line {{ stroke: #6bbcff; stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; }}
     .shadow-line {{ stroke: #ffd36e; stroke-width: 2.2; stroke-dasharray: 5 3; }}
+    .shadow-ex-pref-line {{ stroke: #ff9b54; stroke-width: 2.0; stroke-dasharray: 5 3; opacity: 0.85; }}
     .live-line {{ stroke: #6bbcff; stroke-width: 2.4; }}
-    .prov-line {{ stroke: #6bbcff; stroke-width: 1.8; stroke-dasharray: 3 3; opacity: 0.6; }}
-    .legend text {{ fill: #cbd5dc; font-size: 11px; font-weight: 600; }}
+    .proxy-line {{ stroke: #4dd0c8; stroke-width: 2.0; stroke-dasharray: 4 2; opacity: 0.9; }}
+    .prov-line {{ stroke: #6bbcff; stroke-width: 1.6; stroke-dasharray: 2 2; opacity: 0.45; }}
+    .legend text {{ fill: #cbd5dc; font-size: 10px; font-weight: 600; }}
     .legend .shadow-swatch {{ fill: #ffd36e; }}
+    .legend .shadow-ex-pref-swatch {{ fill: #ff9b54; }}
     .legend .live-swatch {{ fill: #6bbcff; }}
-    .legend .prov-swatch {{ fill: #6bbcff; opacity: 0.55; }}
+    .legend .proxy-swatch {{ fill: #4dd0c8; }}
+    .legend .prov-swatch {{ fill: #6bbcff; opacity: 0.45; }}
     .empty-chart {{ display: grid; place-items: center; min-height: 180px; color: #9aa7af; background: #11161a; border: 1px solid #263036; border-radius: 4px; font-size: 13px; padding: 0 16px; text-align: center; }}
     .neutral-chart {{ color: #cbd5dc; background: #15181c; border-color: #2b3338; }}
     .warn-chart {{ color: #ffd36e; background: #21180a; border-color: #574316; }}

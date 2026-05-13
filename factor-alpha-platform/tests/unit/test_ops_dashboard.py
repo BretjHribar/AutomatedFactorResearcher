@@ -217,7 +217,7 @@ def test_ib_live_curves_split_reconciled_diverges_from_provisional(tmp_path, mon
     monkeypatch.setattr(dash, "TRADE_LOG_DIRS", {"ib": trade_dir})
     monkeypatch.setattr(dash, "RECON_DIR", recon_dir)
 
-    recon_curve, prov_curve = _ib_live_curves_split(close)
+    recon_curve, prov_curve, _proxy_curve = _ib_live_curves_split(close)
 
     # Both curves anchor at 0 on D1 and have a point at each subsequent bar.
     assert len(recon_curve) == len(prov_curve) == 3
@@ -264,7 +264,7 @@ def test_ib_live_curves_split_stale_uses_intent_for_both(tmp_path, monkeypatch):
     monkeypatch.setattr(dash, "TRADE_LOG_DIRS", {"ib": trade_dir})
     monkeypatch.setattr(dash, "RECON_DIR", recon_dir)
 
-    recon, prov = _ib_live_curves_split(close)
+    recon, prov, _proxy = _ib_live_curves_split(close)
     # Δclose = 10. 10 shares × 10 = $100 on both.
     assert prov[1]["pnl"] == 100.0
     assert recon[1]["pnl"] == 100.0

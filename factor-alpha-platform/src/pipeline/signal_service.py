@@ -108,6 +108,7 @@ def latest_signal_snapshot(
     verbose: bool = False,
     min_abs_weight: float = 0.0,
     max_lookback_bars: int | None = None,
+    exclude_tickers: list[str] | None = None,
 ) -> LatestSignalSnapshot:
     """Return the latest target-weight row from the canonical pipeline.
 
@@ -121,6 +122,8 @@ def latest_signal_snapshot(
     cfg = _load_config(config)
     if max_lookback_bars is not None:
         cfg = merge_overrides(cfg, {"data": {"max_lookback_bars": int(max_lookback_bars)}})
+    if exclude_tickers:
+        cfg = merge_overrides(cfg, {"data": {"exclude_tickers": list(exclude_tickers)}})
     result = run(cfg, root=root, verbose=verbose)
     weights = result.weights.iloc[-1].replace([float("inf"), float("-inf")], pd.NA).dropna()
     if min_abs_weight > 0:

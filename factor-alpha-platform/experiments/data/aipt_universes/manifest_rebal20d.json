@@ -1,0 +1,71 @@
+{
+  "source_membership": "data/fmp_cache/universes_pit/membership.parquet",
+  "source_matrices": "data/fmp_cache/matrices_pit_v2",
+  "rebalance_bars": 20,
+  "min_history_bars": 252,
+  "adv_field": "adv60",
+  "midcap_range": [
+    500000000.0,
+    5000000000.0
+  ],
+  "outputs": {
+    "TOP1000_REBAL20D.parquet": {
+      "path": "experiments/data/aipt_universes/TOP1000_REBAL20D.parquet",
+      "shape": [
+        4102,
+        6706
+      ],
+      "first_date": "2010-01-04 00:00:00",
+      "last_date": "2026-04-24 00:00:00",
+      "active_per_bar_min": 0,
+      "active_per_bar_median": 1000,
+      "active_per_bar_max": 1000,
+      "unique_members": 2504,
+      "rebalance_change_bars": 205,
+      "avg_swaps_per_rebal": 60.078048780487805
+    },
+    "TOP3000_REBAL20D.parquet": {
+      "path": "experiments/data/aipt_universes/TOP3000_REBAL20D.parquet",
+      "shape": [
+        4102,
+        6706
+      ],
+      "first_date": "2010-01-04 00:00:00",
+      "last_date": "2026-04-24 00:00:00",
+      "active_per_bar_min": 0,
+      "active_per_bar_median": 3000,
+      "active_per_bar_max": 3000,
+      "unique_members": 5142,
+      "rebalance_change_bars": 92,
+      "avg_swaps_per_rebal": 143.19565217391303
+    },
+    "SMALLCAP_100M_500M_REBAL20D.parquet": {
+      "path": "experiments/data/aipt_universes/SMALLCAP_100M_500M_REBAL20D.parquet",
+      "shape": [
+        4102,
+        6706
+      ],
+      "first_date": "2010-01-04 00:00:00",
+      "last_date": "2026-04-24 00:00:00",
+      "active_per_bar_min": 298,
+      "active_per_bar_median": 549,
+      "active_per_bar_max": 1237,
+      "unique_members": 3437,
+      "rebalance_change_bars": 205
+    },
+    "MIDCAP_500M_5B_REBAL20D.parquet": {
+      "path": "experiments/data/aipt_universes/MIDCAP_500M_5B_REBAL20D.parquet",
+      "shape": [
+        4102,
+        6706
+      ],
+      "first_date": "2010-01-04 00:00:00",
+      "last_date": "2026-04-24 00:00:00",
+      "active_per_bar_min": 819,
+      "active_per_bar_median": 1250,
+      "active_per_bar_max": 1737,
+      "unique_members": 3646,
+      "rebalance_change_bars": 205
+    }
+  }
+}

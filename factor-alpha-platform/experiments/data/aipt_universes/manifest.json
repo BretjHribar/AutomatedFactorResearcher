@@ -1,0 +1,48 @@
+{
+  "source_membership": "data\\fmp_cache\\universes_pit\\membership.parquet",
+  "source_matrices": "data\\fmp_cache\\matrices_pit_v2",
+  "construction": {
+    "tradable": "PIT membership at t and close[t] > 0",
+    "smallcap": "100MM <= market_cap[t] < 500MM",
+    "top1000": "top 1000 by adv60[t] among tradable names",
+    "top3000": "top 3000 by adv60[t] among tradable names"
+  },
+  "outputs": {
+    "MCAP_100M_500M_PITV2.parquet": {
+      "path": "experiments\\data\\aipt_universes\\MCAP_100M_500M_PITV2.parquet",
+      "shape": [
+        4102,
+        6706
+      ],
+      "first_date": "2010-01-04 00:00:00",
+      "last_date": "2026-04-24 00:00:00",
+      "last_members": 302,
+      "max_members": 1394,
+      "unique_members": 3798
+    },
+    "TOP1000_ADV60_PITV2.parquet": {
+      "path": "experiments\\data\\aipt_universes\\TOP1000_ADV60_PITV2.parquet",
+      "shape": [
+        4102,
+        6706
+      ],
+      "first_date": "2010-01-04 00:00:00",
+      "last_date": "2026-04-24 00:00:00",
+      "last_members": 1000,
+      "max_members": 1000,
+      "unique_members": 2665
+    },
+    "TOP3000_ADV60_PITV2.parquet": {
+      "path": "experiments\\data\\aipt_universes\\TOP3000_ADV60_PITV2.parquet",
+      "shape": [
+        4102,
+        6706
+      ],
+      "first_date": "2010-01-04 00:00:00",
+      "last_date": "2026-04-24 00:00:00",
+      "last_members": 2534,
+      "max_members": 3000,
+      "unique_members": 6032
+    }
+  }
+}

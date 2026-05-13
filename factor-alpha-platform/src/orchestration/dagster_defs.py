@@ -841,11 +841,139 @@ def equity_signal_shadow_record(
     return summary
 
 
+@dg.asset(group_name="research")
+def research_equity_signal_snapshot_ex_pref(
+    context,
+    paths: PlatformPathsResource,
+    signal_service: SignalServiceResource,
+    equity_eod_data_refresh_result: dict[str, Any],
+) -> dict[str, Any]:
+    """Variant B research signal: same pipeline, but with PREFERRED stocks
+    excluded from the universe upfront. Compare to the with-preferreds
+    `research_equity_signal_snapshot` to see how the QP reallocates the
+    weight that would otherwise have gone to MOC-ineligible preferreds.
+    """
+    platform_paths = paths.platform_paths()
+    cls_path = platform_paths.root / "data/fmp_cache/classifications/preferred.parquet"
+    excluded: list[str] = []
+    if cls_path.exists():
+        try:
+            df = pd.read_parquet(cls_path)
+            excluded = sorted(
+                df.loc[df["is_preferred"] == True, "ticker"].astype(str).tolist()  # noqa: E712
+            )
+        except Exception as exc:
+            context.log.warning(f"could not read preferred classification cache ({exc})")
+    snapshot = latest_signal_snapshot(
+        platform_paths.research_equity_config,
+        root=platform_paths.root,
+        max_lookback_bars=signal_service.equity_lookback(),
+        exclude_tickers=excluded,
+    )
+    payload = asdict(snapshot)
+    payload["variant"] = "ex_pref"
+    payload["excluded_tickers"] = excluded
+    payload["n_excluded"] = len(excluded)
+    context.add_output_metadata({
+        "strategy": payload["strategy"],
+        "signal_date": payload["signal_date"],
+        "n_positions": payload["n_positions"],
+        "gross_exposure": payload["gross_exposure"],
+        "n_excluded": len(excluded),
+        "first_excluded": ",".join(excluded[:8]),
+    })
+    return payload
+
+
+@dg.asset(group_name="monitoring")
+def equity_signal_shadow_record_ex_pref(
+    context,
+    paths: PlatformPathsResource,
+    research_equity_signal_snapshot_ex_pref: dict[str, Any],
+    production_strategy_config: dict[str, Any],
+) -> dict[str, Any]:
+    """Variant B shadow record on disk.
+
+    Mirrors `equity_signal_shadow_record` schema but writes to
+    `prod/logs/shadow_signals/equity_<YYYY-MM-DD>_ex_pref.{parquet,json}`.
+    """
+    platform_paths = paths.platform_paths()
+    snap = research_equity_signal_snapshot_ex_pref
+    signal_date = str(snap["signal_date"])
+    weights_dict = dict(snap.get("weights") or {})
+    book = float(snap.get("book") or 1.0)
+
+    out_dir = platform_paths.root / "prod/logs/shadow_signals"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    date_label = signal_date.split(" ")[0]
+    parquet_path = out_dir / f"equity_{date_label}_ex_pref.parquet"
+    json_path = out_dir / f"equity_{date_label}_ex_pref.json"
+
+    close_path = platform_paths.root / "data/fmp_cache/matrices/close.parquet"
+    last_close = pd.Series(dtype="float64")
+    if close_path.exists():
+        try:
+            last_close = pd.read_parquet(close_path).iloc[-1]
+        except Exception:
+            pass
+
+    rows = []
+    for sym, w in weights_dict.items():
+        w_val = float(w)
+        if abs(w_val) < 1e-12:
+            continue
+        dollar = book * w_val
+        price = float(last_close.get(sym, float("nan")))
+        shares_est = int(round(dollar / price)) if (price and price > 0 and not pd.isna(price)) else 0
+        rows.append({"ticker": sym, "weight": w_val, "dollar": dollar,
+                     "last_close": price if not pd.isna(price) else None,
+                     "shares_est": shares_est,
+                     "side": "long" if w_val > 0 else "short"})
+    df = pd.DataFrame(rows).sort_values("dollar", key=lambda s: s.abs(), ascending=False)
+    tmp_parquet = parquet_path.with_suffix(parquet_path.suffix + ".tmp")
+    df.to_parquet(tmp_parquet, index=False)
+    os.replace(tmp_parquet, parquet_path)
+
+    summary = {
+        "signal_date": signal_date,
+        "strategy": snap.get("strategy"),
+        "variant": "ex_pref",
+        "excluded_tickers": snap.get("excluded_tickers") or [],
+        "n_excluded": snap.get("n_excluded") or 0,
+        "config_hash": production_strategy_config.get("_config_hash"),
+        "book": book,
+        "n_positions": int(len(df)),
+        "n_long": int((df["weight"] > 0).sum()) if not df.empty else 0,
+        "n_short": int((df["weight"] < 0).sum()) if not df.empty else 0,
+        "gross_weight_l1": float(df["weight"].abs().sum()) if not df.empty else 0.0,
+        "net_weight_l1": float(df["weight"].sum()) if not df.empty else 0.0,
+        "gross_dollar": float(df["dollar"].abs().sum()) if not df.empty else 0.0,
+        "net_dollar": float(df["dollar"].sum()) if not df.empty else 0.0,
+        "gross_shares_est": int(df["shares_est"].abs().sum()) if not df.empty else 0,
+        "alpha_signals_n": snap.get("alpha_signals_n"),
+        "universe_size": snap.get("universe_size"),
+        "max_lookback_bars": snap.get("max_lookback_bars"),
+        "parquet_path": str(parquet_path),
+        "source": "dagster:equity_signal_shadow_record_ex_pref",
+    }
+    tmp_json = json_path.with_suffix(json_path.suffix + ".tmp")
+    tmp_json.write_text(json.dumps(summary, indent=2, default=str), encoding="utf-8")
+    os.replace(tmp_json, json_path)
+
+    context.add_output_metadata({
+        "signal_date": signal_date,
+        "n_positions": summary["n_positions"],
+        "n_excluded": summary["n_excluded"],
+        "gross_dollar": summary["gross_dollar"],
+        "parquet_path": str(parquet_path),
+    })
+    return summary
+
+
 @dg.asset(group_name="execution")
 def ib_equity_post_close_recon(
     context,
     paths: PlatformPathsResource,
-    ib_paper_moc_execution_result: dict[str, Any],
 ) -> dict[str, Any]:
     """Reconcile today's IB MOC submission against realized fills.
 
@@ -857,30 +985,25 @@ def ib_equity_post_close_recon(
     these files to render the live curve as solid (reconciled) vs. dashed
     (provisional, no recon yet).
 
-    Skips with a clear status if the upstream execution didn't actually
-    submit (status != "completed") so we don't try to recon a no-op.
+    Gates purely on on-disk artifacts. The IB MOC asset's trade JSON IS the
+    "did it submit" signal — declaring it as a Dagster input would couple this
+    asset to whichever IO manager the execution job uses (the default
+    fs_io_manager looks for a cached pickle that the execution job doesn't
+    persist, which produced FileNotFoundError on the first scheduled run).
+    Reading the trade JSON directly keeps the recon job decoupled.
     """
     platform_paths = paths.platform_paths()
     today = dt.date.today().isoformat()
     out_dir = platform_paths.root / "prod/logs/reconciliation"
     trade_path = platform_paths.root / "prod/logs/trades" / f"trade_{today}.json"
 
-    upstream_status = str(ib_paper_moc_execution_result.get("status") or "")
-    if upstream_status != "completed":
-        payload = {
-            "date": today,
-            "status": "skipped",
-            "reason": f"upstream execution status={upstream_status!r}, no live submission to reconcile",
-            "trade_path": str(trade_path) if trade_path.exists() else None,
-        }
+    if not trade_path.exists():
+        payload = {"date": today, "status": "skipped",
+                   "reason": "no trade_<DATE>.json on disk; either today is a non-trading day "
+                             "or the IB MOC execution did not submit",
+                   "trade_path": str(trade_path)}
         context.log.info(payload["reason"])
         context.add_output_metadata({"status": "skipped", "reason": payload["reason"]})
-        return payload
-
-    if not trade_path.exists():
-        payload = {"date": today, "status": "missing_intent", "trade_path": str(trade_path)}
-        context.log.warning(f"recon: no intent log at {trade_path}")
-        context.add_output_metadata(payload)
         return payload
 
     try:
@@ -1516,6 +1639,8 @@ research_signal_job = dg.define_asset_job(
         research_equity_signal_snapshot,
         equity_strategy_state_write,
         equity_signal_shadow_record,
+        research_equity_signal_snapshot_ex_pref,
+        equity_signal_shadow_record_ex_pref,
     ),
 )
 
@@ -1685,6 +1810,8 @@ defs = dg.Definitions(
         research_crypto_signal_snapshot,
         equity_strategy_state_write,
         equity_signal_shadow_record,
+        research_equity_signal_snapshot_ex_pref,
+        equity_signal_shadow_record_ex_pref,
         ops_dashboard_state,
         ib_paper_moc_execution_result,
         ib_equity_post_close_recon,
