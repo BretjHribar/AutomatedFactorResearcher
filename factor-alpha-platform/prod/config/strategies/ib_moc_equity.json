@@ -1,0 +1,30 @@
+{
+  "strategy_id": "ib_moc_equity",
+  "name": "IB Closing Auction L/S Equity",
+  "enabled": true,
+  "route": {
+    "asset_type": "equity",
+    "venue": "ib",
+    "account": "paper",
+    "bucket": "equity:ib:paper:stock:MOC:close"
+  },
+  "portfolio": {
+    "book": 500000
+  },
+  "execution": {
+    "order_type": "MOC",
+    "min_order_value": 200,
+    "submit_enabled": false
+  },
+  "signal": {
+    "adapter": "pipeline_latest_signal",
+    "config_path": "prod/config/research_equity.json",
+    "price_matrix": "data/fmp_cache/matrices/close.parquet",
+    "max_lookback_bars": 400,
+    "min_abs_weight": 0.0
+  },
+  "metadata": {
+    "family": "prod_equity",
+    "description": "Current production IB MOC equity strategy, exposed through the multi-strategy netting layer."
+  }
+}

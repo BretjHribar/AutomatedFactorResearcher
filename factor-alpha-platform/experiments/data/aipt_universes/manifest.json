@@ -11,38 +11,38 @@
     "MCAP_100M_500M_PITV2.parquet": {
       "path": "experiments\\data\\aipt_universes\\MCAP_100M_500M_PITV2.parquet",
       "shape": [
-        4102,
-        6706
+        4116,
+        6728
       ],
       "first_date": "2010-01-04 00:00:00",
-      "last_date": "2026-04-24 00:00:00",
-      "last_members": 302,
+      "last_date": "2026-05-14 00:00:00",
+      "last_members": 485,
       "max_members": 1394,
-      "unique_members": 3798
+      "unique_members": 3816
     },
     "TOP1000_ADV60_PITV2.parquet": {
       "path": "experiments\\data\\aipt_universes\\TOP1000_ADV60_PITV2.parquet",
       "shape": [
-        4102,
-        6706
+        4116,
+        6728
       ],
       "first_date": "2010-01-04 00:00:00",
-      "last_date": "2026-04-24 00:00:00",
+      "last_date": "2026-05-14 00:00:00",
       "last_members": 1000,
       "max_members": 1000,
-      "unique_members": 2665
+      "unique_members": 2687
     },
     "TOP3000_ADV60_PITV2.parquet": {
       "path": "experiments\\data\\aipt_universes\\TOP3000_ADV60_PITV2.parquet",
       "shape": [
-        4102,
-        6706
+        4116,
+        6728
       ],
       "first_date": "2010-01-04 00:00:00",
-      "last_date": "2026-04-24 00:00:00",
-      "last_members": 2534,
+      "last_date": "2026-05-14 00:00:00",
+      "last_members": 3000,
       "max_members": 3000,
-      "unique_members": 6032
+      "unique_members": 6089
     }
   }
 }

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import sqlite3
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pandas as pd
@@ -92,6 +94,85 @@ def test_build_payload_writes_only_when_refresh_integrity_true(tmp_path):
         build_payload(state_db, refresh_integrity=True)
 
     assert calls == {"refresh": 1, "sync": 1}
+
+
+def test_build_payload_survives_malformed_state_db(tmp_path):
+    state_db = tmp_path / "prod_state.db"
+
+    with patch("prod.stats.ops_dashboard.latest_checks",
+               side_effect=sqlite3.DatabaseError("database disk image is malformed")), \
+         patch("prod.stats.ops_dashboard._sync_strategy_states_from_files",
+               side_effect=sqlite3.DatabaseError("database disk image is malformed")), \
+         patch("prod.stats.ops_dashboard.strategy_states",
+               side_effect=sqlite3.DatabaseError("database disk image is malformed")), \
+         patch("prod.stats.ops_dashboard.open_alerts",
+               side_effect=sqlite3.DatabaseError("database disk image is malformed")), \
+         patch("prod.stats.ops_dashboard._performance_summary", return_value={}):
+        payload = build_payload(state_db)
+
+    assert payload["strategy_states"] == []
+    assert payload["alerts"] == []
+    warning_names = {row["check_name"] for row in payload["integrity_checks"]}
+    assert "state_db_latest_checks" in warning_names
+    assert "state_db_strategy_states" in warning_names
+
+
+def _write_aipt_dashboard_fixture(tmp_path, *, signal_time: str, data_dates: list[str]):
+    price_rel = "data/fmp_cache/matrices_pit_v2/close.parquet"
+    weights_rel = "prod/config/strategies/artifacts/aipt_weights.json"
+    price_path = tmp_path / price_rel
+    weights_path = tmp_path / weights_rel
+    price_path.parent.mkdir(parents=True, exist_ok=True)
+    weights_path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(
+        {"AAA": [10.0 + i for i, _ in enumerate(data_dates)]},
+        index=pd.to_datetime(data_dates),
+    ).to_parquet(price_path)
+    weights_path.write_text(
+        json.dumps({"signal_time": signal_time, "weights": {"AAA": 1.0}}),
+        encoding="utf-8",
+    )
+    return SimpleNamespace(
+        enabled=True,
+        signal={
+            "adapter": "aipt_weights_tail_artifact",
+            "weights_path": weights_rel,
+            "price_matrix": price_rel,
+        },
+    )
+
+
+def test_aipt_dashboard_truth_labels_current_artifact_as_shadow_current(tmp_path, monkeypatch):
+    monkeypatch.setattr(dash, "PROJECT_ROOT", tmp_path)
+    cfg = _write_aipt_dashboard_fixture(
+        tmp_path,
+        signal_time="2026-05-14 00:00:00",
+        data_dates=["2026-05-13", "2026-05-14"],
+    )
+
+    truth = dash._aipt_artifact_freshness(cfg)
+
+    assert truth["truth_status"] == "ok"
+    assert truth["scope"] == "shadow_current_artifact"
+    assert truth["position_source"] == "current artifact weights; shadow netting only"
+    assert "stale" not in truth["position_source"].lower()
+    assert "included in shadow netting" in truth["description_suffix"]
+
+
+def test_aipt_dashboard_truth_labels_stale_artifact_as_stale_shadow(tmp_path, monkeypatch):
+    monkeypatch.setattr(dash, "PROJECT_ROOT", tmp_path)
+    cfg = _write_aipt_dashboard_fixture(
+        tmp_path,
+        signal_time="2026-05-13 00:00:00",
+        data_dates=["2026-05-13", "2026-05-14"],
+    )
+
+    truth = dash._aipt_artifact_freshness(cfg)
+
+    assert truth["truth_status"] == "warn"
+    assert truth["scope"] == "stale_shadow"
+    assert truth["position_source"] == "stale artifact weights, not routed"
+    assert "Static AIPT artifact is stale" in truth["description_suffix"]
 
 
 def test_disabled_exchange_checks_cover_all_crypto_guardrails():

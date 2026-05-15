@@ -9,6 +9,7 @@ from src.orchestration.dagster_defs import (
     defs,
     _ib_runtime_dependency_check_payload,
     _ib_runtime_dependency_payload,
+    _kucoin_integrity_payloads,
     production_strategy_config,
 )
 
@@ -86,6 +87,82 @@ def test_production_strategy_config_asset_materializes_from_config(tmp_path):
     output = result.output_for_node("production_strategy_config")
     assert output["strategy"]["universe"] == "MCAP_100M_500M"
     assert len(output["_config_hash"]) == 64
+
+
+def test_kucoin_integrity_refreshes_once_when_freshness_is_stale(tmp_path, monkeypatch):
+    from src.orchestration import dagster_defs
+
+    cfg = {
+        "strategy": {"universe": "TOP100"},
+        "paths": {"matrices": "data/kucoin_cache/matrices/4h/prod"},
+    }
+    calls = {"checks": 0, "refresh": 0}
+
+    def fake_run_crypto_integrity(*_args, **_kwargs):
+        calls["checks"] += 1
+        if calls["checks"] == 1:
+            return [{
+                "name": "crypto_latest_bar_freshness",
+                "status": "fail",
+                "severity": "critical",
+                "message": "stale",
+                "value": "2026-05-14 16:00:00",
+                "threshold": "2026-05-14 20:00:00",
+                "metadata": {},
+            }]
+        return [{
+            "name": "crypto_latest_bar_freshness",
+            "status": "pass",
+            "severity": "info",
+            "message": "fresh",
+            "value": "2026-05-14 20:00:00",
+            "threshold": "2026-05-14 20:00:00",
+            "metadata": {},
+        }]
+
+    def fake_refresh():
+        calls["refresh"] += 1
+        return "2026-05-14 20:00:00"
+
+    monkeypatch.setattr(dagster_defs, "run_crypto_integrity", fake_run_crypto_integrity)
+
+    payloads, latest = _kucoin_integrity_payloads(tmp_path, cfg, refresh_fn=fake_refresh)
+
+    assert calls == {"checks": 2, "refresh": 1}
+    assert latest == "2026-05-14 20:00:00"
+    assert payloads[0]["status"] == "pass"
+    assert payloads[0]["metadata"]["refreshed_before_integrity"] is True
+    assert payloads[0]["metadata"]["refresh_latest_bar"] == "2026-05-14 20:00:00"
+
+
+def test_kucoin_integrity_does_not_refresh_when_freshness_passes(tmp_path, monkeypatch):
+    from src.orchestration import dagster_defs
+
+    cfg = {
+        "strategy": {"universe": "TOP100"},
+        "paths": {"matrices": "data/kucoin_cache/matrices/4h/prod"},
+    }
+
+    def fake_run_crypto_integrity(*_args, **_kwargs):
+        return [{
+            "name": "crypto_latest_bar_freshness",
+            "status": "pass",
+            "severity": "info",
+            "message": "fresh",
+            "value": "2026-05-14 20:00:00",
+            "threshold": "2026-05-14 20:00:00",
+            "metadata": {},
+        }]
+
+    def fail_refresh():
+        raise AssertionError("refresh should not be called")
+
+    monkeypatch.setattr(dagster_defs, "run_crypto_integrity", fake_run_crypto_integrity)
+
+    payloads, latest = _kucoin_integrity_payloads(tmp_path, cfg, refresh_fn=fail_refresh)
+
+    assert latest is None
+    assert payloads[0]["status"] == "pass"
 
 
 def test_ib_runtime_dependency_payload_reports_missing_modules(tmp_path):

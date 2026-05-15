@@ -155,6 +155,72 @@ def _disabled_crypto_check_payloads(exchange: str, reason: str | None) -> list[d
     ]
 
 
+def _has_crypto_freshness_failure(payloads: list[dict[str, Any]]) -> bool:
+    return any(
+        row.get("name") == "crypto_latest_bar_freshness" and row.get("status") == "fail"
+        for row in payloads
+    )
+
+
+def _kucoin_integrity_payloads(
+    root: Path,
+    cfg: dict[str, Any],
+    *,
+    context: Any | None = None,
+    refresh_fn: Any | None = None,
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Run KuCoin integrity checks, refreshing once if a delayed schedule races freshness.
+
+    The KuCoin paper trader normally refreshes data before producing a signal.
+    If the Dagster scheduler falls behind, a catch-up integrity run can fire at
+    the same time as the delayed trader run and check the old matrix before the
+    trader has rebuilt it. In that specific stale-freshness case, use the same
+    locked production refresh path and then re-check.
+    """
+    universe_rel = _crypto_universe_rel("kucoin", cfg)
+
+    def _run() -> list[dict[str, Any]]:
+        return _check_payloads(run_crypto_integrity(
+            root,
+            matrices_rel=cfg["paths"]["matrices"],
+            universe_rel=universe_rel,
+        ))
+
+    payloads = _run()
+    if not _has_crypto_freshness_failure(payloads):
+        return payloads, None
+
+    if context is not None:
+        context.log.warning(
+            "KuCoin integrity freshness failed before check; refreshing data once and rechecking."
+        )
+    if refresh_fn is None:
+        from prod.data_refresh import refresh_kucoin
+
+        refresh_fn = refresh_kucoin
+    try:
+        latest = str(refresh_fn())
+    except Exception as exc:  # noqa: BLE001 - surface refresh failure as an integrity row
+        payloads.append({
+            "name": "crypto_data_refresh_before_integrity",
+            "status": "fail",
+            "severity": "critical",
+            "message": f"KuCoin refresh before integrity failed: {type(exc).__name__}: {exc}",
+            "value": type(exc).__name__,
+            "threshold": "refresh succeeds",
+            "metadata": {"exchange": "kucoin"},
+        })
+        return payloads, None
+
+    payloads = _run()
+    for row in payloads:
+        metadata = dict(row.get("metadata") or {})
+        metadata["refreshed_before_integrity"] = True
+        metadata["refresh_latest_bar"] = latest
+        row["metadata"] = metadata
+    return payloads, latest
+
+
 def _latest_execution_summaries(root: Path, limit: int = 20) -> list[dict[str, Any]]:
     log_dir = root / "prod/logs/execution"
     if not log_dir.exists():
@@ -459,16 +525,14 @@ def equity_integrity_results(
 def kucoin_integrity_results(context, paths: PlatformPathsResource) -> list[dict[str, Any]]:
     platform_paths = paths.platform_paths()
     cfg = load_json(platform_paths.root / "prod/config/kucoin.json")
-    payloads = _check_payloads(run_crypto_integrity(
-        platform_paths.root,
-        matrices_rel=cfg["paths"]["matrices"],
-        universe_rel=_crypto_universe_rel("kucoin", cfg),
-    ))
+    payloads, refresh_latest = _kucoin_integrity_payloads(platform_paths.root, cfg, context=context)
     context.add_output_metadata({
         "exchange": "kucoin",
         "checks": len(payloads),
         "failures": _failure_count(payloads),
         "warnings": _warning_count(payloads),
+        "refreshed_before_check": bool(refresh_latest),
+        "refresh_latest_bar": refresh_latest or "",
     })
     return payloads
 

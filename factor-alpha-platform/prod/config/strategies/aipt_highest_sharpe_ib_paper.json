@@ -1,0 +1,47 @@
+{
+  "strategy_id": "aipt_smallcap_d0_prox_l1_tau5",
+  "name": "AIPT Smallcap D0 Prox-L1 Tau5",
+  "enabled": true,
+  "route": {
+    "asset_type": "equity",
+    "venue": "ib",
+    "account": "paper",
+    "bucket": "equity:ib:paper:stock:MOC:close"
+  },
+  "portfolio": {
+    "book": 500000
+  },
+  "execution": {
+    "order_type": "MOC",
+    "min_order_value": 200,
+    "submit_enabled": false
+  },
+  "signal": {
+    "adapter": "aipt_weights_tail_artifact",
+    "weights_path": "prod/config/strategies/artifacts/aipt_smallcap_d0_prox_l1_tau5_weights.json",
+    "price_matrix": "data/fmp_cache/matrices_pit_v2/close.parquet",
+    "min_abs_weight": 0.0,
+    "max_signal_lag_days": 1,
+    "stale_action": "skip_strategy"
+  },
+  "metadata": {
+    "family": "aipt",
+    "description": "Highest deployable net-Sharpe AIPT audit cell, routed to IB paper MOC.",
+    "research": {
+      "scenario": "equity_smallcap_d0",
+      "source_set": "all",
+      "layer": "prox_l1_gross1_cap_fee",
+      "P": 256,
+      "z": 0.001,
+      "seed": 1,
+      "max_weight": 0.02,
+      "tau": 5.0,
+      "reported_val_test_net_sharpe": 4.630583461607214,
+      "reported_turnover_per_bar": 0.7397953451031135,
+      "reported_cost_ann": 0.0748555635333165,
+      "source_report": "experiments/AIPT_AUDIT_REPORT.md",
+      "refreshed_source_summary": "experiments/results/aipt_live_refresh_20260514/aipt_stepwise_summary.csv",
+      "refreshed_data_as_of": "2026-05-14"
+    }
+  }
+}

@@ -39,12 +39,16 @@ from src.monitoring.state_store import (
     upsert_strategy_state,
 )
 from src.data.integrity import run_crypto_integrity, run_equity_integrity
+from src.execution.ledger import ExecutionLedger
 from src.execution.ib_gateway_health import check_ib_gateway
+from src.strategies.registry import load_strategy_configs
 
 
 LOGS_ROOT = PROJECT_ROOT / "prod" / "logs"
 OUT_DIR = PROJECT_ROOT / "prod" / "stats" / "output"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
+MULTI_STRATEGY_CONFIG_DIR = PROJECT_ROOT / "prod" / "config" / "strategies"
+EXECUTION_LEDGER_DB = PROJECT_ROOT / "data" / "execution_ledger.db"
 
 EXCHANGES = {
     "ib": LOGS_ROOT / "performance",
@@ -1048,6 +1052,380 @@ def _apply_state_health_overrides(states: list[dict[str, Any]]) -> list[dict[str
     return [dict(row) for row in states]
 
 
+def _multi_strategy_payload(*, performance: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """Read the new strategy-first execution ledger for dashboard grouping."""
+    configs = load_strategy_configs(MULTI_STRATEGY_CONFIG_DIR)
+    summaries: dict[str, dict[str, Any]] = {}
+    curves: dict[str, list[dict[str, Any]]] = {}
+    netting: dict[str, Any] = {}
+    overlays = _current_strategy_overlays(performance or [])
+    if not EXECUTION_LEDGER_DB.exists():
+        return _multi_strategy_payload_from_rows(configs, summaries, curves, netting, overlays=overlays)
+    try:
+        ledger = ExecutionLedger(EXECUTION_LEDGER_DB)
+        summaries = {row["strategy_id"]: row for row in ledger.strategy_summaries()}
+        curves = ledger.strategy_curves()
+        netting = ledger.latest_netting_stats()
+    except Exception as exc:
+        return {
+            "status": "error",
+            "message": f"{type(exc).__name__}: {exc}",
+            "groups": {},
+            "netting": {},
+            "ledger_db": str(EXECUTION_LEDGER_DB),
+        }
+
+    return _multi_strategy_payload_from_rows(configs, summaries, curves, netting, overlays=overlays)
+
+
+def _current_strategy_overlays(performance: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Build source-of-truth overlays for strategies with real broker data.
+
+    The execution ledger is allowed to contain shadow/paper-sim rows. Rows in
+    this overlay represent live broker/account evidence and replace virtual
+    ledger marks in the Strategy Monitor.
+    """
+    overlay: dict[str, dict[str, Any]] = {}
+    ib = _ib_strategy_truth_overlay(performance)
+    if ib:
+        overlay["ib_moc_equity"] = ib
+    return overlay
+
+
+def _ib_strategy_truth_overlay(performance: list[dict[str, Any]]) -> dict[str, Any]:
+    trade_path, trade = _latest_live_ib_trade()
+    if not trade:
+        return {}
+    trade_date = str(trade.get("date") or trade.get("signal_date") or "")
+    recon_path = RECON_DIR / f"equity_{trade_date}.json" if trade_date else None
+    recon = _read_json(recon_path)
+    recon_status = str(recon.get("status") or ("missing" if trade_date else "unknown"))
+    close_df = _close_matrix()
+    positions, position_source = _ib_post_recon_positions(trade, recon)
+    gross, net, n_positions, priced_as_of, missing_prices = _priced_position_stats_from_close(positions, close_df)
+
+    ib_perf = next((p for p in performance if p.get("exchange") == "ib"), None) or _ib_execution_summary()
+    curve = [dict(p) for p in (ib_perf.get("live_recon_curve") or [])]
+    cumulative_pnl = ib_perf.get("live_recon_total_pnl")
+    pnl_as_of = curve[-1]["timestamp"] if curve else None
+    pending_commission = _pending_recon_commission_adjustment(recon, pnl_as_of)
+    if cumulative_pnl is not None:
+        cumulative_pnl = float(cumulative_pnl) - pending_commission
+    if pending_commission and cumulative_pnl is not None:
+        curve.append({
+            "timestamp": str(recon.get("timestamp") or f"{trade_date} post-recon"),
+            "pnl": cumulative_pnl,
+        })
+        pnl_as_of = curve[-1]["timestamp"]
+
+    fill_rate = recon.get("fill_rate_qty")
+    fill_note = ""
+    if fill_rate is not None:
+        fill_note = f"; fill-rate {float(fill_rate) * 100.0:.1f}%"
+    truth_status = "ok" if recon_status == "reconciled" else "warn"
+    return {
+        "truth_status": truth_status,
+        "include_in_totals": recon_status == "reconciled",
+        "scope": "actual_post_recon" if recon_status == "reconciled" else "provisional",
+        "gross_exposure": gross,
+        "net_exposure": net,
+        "n_positions": n_positions,
+        "cumulative_pnl": cumulative_pnl,
+        "curve": curve,
+        "last_curve_timestamp": pnl_as_of,
+        "pnl_source": (
+            "IB live recon through latest close"
+            + (" plus latest post-close commission" if pending_commission else "")
+        ),
+        "position_source": position_source,
+        "data_as_of": priced_as_of,
+        "signal_as_of": trade.get("signal_date"),
+        "execution_as_of": trade.get("timestamp"),
+        "recon_as_of": recon.get("timestamp"),
+        "recon_status": recon_status,
+        "latest_trade_log": str(trade_path) if trade_path else None,
+        "latest_recon_path": str(recon_path) if recon_path and recon_path.exists() else None,
+        "description_suffix": f"Actual IB paper account state from current_positions plus matched recon fills{fill_note}.",
+        "missing_price_count": len(missing_prices),
+        "pending_commission_adjustment": pending_commission,
+        "actual_order_count": recon.get("n_orders_intent"),
+        "actual_filled_order_count": recon.get("n_orders_with_fills"),
+    }
+
+
+def _latest_live_ib_trade() -> tuple[Path | None, dict[str, Any]]:
+    trade_dir = TRADE_LOG_DIRS["ib"]
+    if not trade_dir.exists():
+        return None, {}
+    files = sorted(trade_dir.glob("trade_*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+    for path in files:
+        if path.name.endswith("_dry_run.json"):
+            continue
+        data = _read_json(path)
+        if str(data.get("mode") or "").lower() == "live":
+            return path, data
+    return None, {}
+
+
+def _ib_post_recon_positions(trade: dict[str, Any], recon: dict[str, Any]) -> tuple[dict[str, float], str]:
+    current = {
+        str(sym): float(qty)
+        for sym, qty in (trade.get("current_positions") or {}).items()
+        if _safe_float(qty) is not None and abs(float(qty)) > 1e-9
+    }
+    if str(recon.get("status") or "") != "reconciled":
+        return current, "IB current positions before latest MOC; post-close recon is not available"
+    for fill in recon.get("fills") or []:
+        sym = str(fill.get("symbol") or "")
+        qty = _safe_float(fill.get("filled_qty"))
+        if not sym or qty is None:
+            continue
+        current[sym] = current.get(sym, 0.0) + float(qty)
+    current = {sym: qty for sym, qty in current.items() if abs(qty) > 1e-9}
+    return current, "IB current positions plus matched post-close recon fills"
+
+
+def _priced_position_stats_from_close(
+    positions: dict[str, float],
+    close_df: pd.DataFrame | None,
+) -> tuple[float | None, float | None, int | None, str | None, list[str]]:
+    if close_df is None or close_df.empty or not positions:
+        return None, None, None if not positions else len(positions), None, sorted(positions)
+    row = close_df.iloc[-1]
+    gross = 0.0
+    net = 0.0
+    priced = 0
+    missing: list[str] = []
+    for sym, qty in positions.items():
+        price = row.get(sym)
+        if price is None or pd.isna(price) or float(price) <= 0:
+            missing.append(sym)
+            continue
+        notional = float(qty) * float(price)
+        gross += abs(notional)
+        net += notional
+        priced += 1
+    return gross, net, priced, str(close_df.index[-1]), missing
+
+
+def _pending_recon_commission_adjustment(recon: dict[str, Any], pnl_as_of: Any) -> float:
+    if str(recon.get("status") or "") != "reconciled":
+        return 0.0
+    commission = _safe_float(recon.get("total_commission")) or 0.0
+    if commission <= 0:
+        return 0.0
+    recon_date = _ts_date(recon.get("date"))
+    curve_date = _ts_date(pnl_as_of)
+    if recon_date is None:
+        return 0.0
+    # A MOC recon on D only enters the close-to-close curve once D+1 exists.
+    # Until then, subtract the known commission so post-recon PnL is current.
+    if curve_date is None or curve_date.date() <= recon_date.date():
+        return float(commission)
+    return 0.0
+
+
+def _strategy_signal_truth(cfg: Any, curve: list[dict[str, Any]]) -> dict[str, Any]:
+    adapter = str((cfg.signal or {}).get("adapter") or "")
+    latest_curve_timestamp = curve[-1]["timestamp"] if curve else None
+    base = {
+        "truth_status": "ok" if cfg.enabled else "disabled",
+        "include_in_totals": False,
+        "scope": "paper_sim_ledger" if curve else "configured",
+        "pnl_source": "paper-sim ledger" if curve else "not marked",
+        "position_source": "strategy virtual ledger" if curve else "not available",
+        "signal_as_of": None,
+        "data_as_of": None,
+        "execution_as_of": None,
+        "recon_as_of": None,
+        "last_curve_timestamp": latest_curve_timestamp,
+        "description_suffix": "",
+    }
+    if adapter == "aipt_weights_tail_artifact":
+        info = _aipt_artifact_freshness(cfg)
+        base.update(info)
+    return base
+
+
+def _aipt_artifact_freshness(cfg: Any) -> dict[str, Any]:
+    signal = cfg.signal or {}
+    weights_rel = signal.get("weights_path")
+    price_rel = signal.get("price_matrix")
+    weights_path = PROJECT_ROOT / str(weights_rel or "")
+    price_path = PROJECT_ROOT / str(price_rel or "")
+    info: dict[str, Any] = {
+        "scope": "stale_shadow",
+        "truth_status": "warn",
+        "include_in_totals": False,
+        "pnl_source": "AIPT research artifact; not broker truth",
+        "position_source": "artifact weights, not routed",
+        "artifact_path": str(weights_path) if weights_rel else None,
+        "data_as_of": _last_parquet_index(price_path) if price_rel else None,
+    }
+    if not weights_rel or not weights_path.exists():
+        info.update({
+            "truth_status": "fail",
+            "description_suffix": "AIPT weights artifact is missing; strategy is not routeable.",
+        })
+        return info
+    try:
+        signal_as_of = _aipt_artifact_signal_time(weights_path)
+    except Exception as exc:
+        info.update({
+            "truth_status": "fail",
+            "description_suffix": f"AIPT weights artifact is unreadable: {type(exc).__name__}.",
+        })
+        return info
+    info["signal_as_of"] = signal_as_of
+    data_ts = _ts_date(info.get("data_as_of"))
+    signal_ts = _ts_date(signal_as_of)
+    stale = data_ts is not None and signal_ts is not None and signal_ts.date() < data_ts.date()
+    if stale:
+        info.update({
+            "pnl_source": "stale AIPT research artifact; not broker truth",
+            "position_source": "stale artifact weights, not routed",
+            "description_suffix": (
+                f"Static AIPT artifact is stale: signal {signal_ts.date()} vs data {data_ts.date()}. "
+                "Excluded from current GMV/PnL and broker netting until a live AIPT signal is produced."
+            ),
+        })
+    else:
+        info.update({
+            "truth_status": "ok",
+            "scope": "shadow_current_artifact",
+            "pnl_source": "current AIPT research artifact; not broker truth",
+            "position_source": "current artifact weights; shadow netting only",
+            "description_suffix": (
+                "AIPT artifact matches the latest configured data bar; included in shadow netting, "
+                "not broker-routed."
+            ),
+        })
+    return info
+
+
+def _aipt_artifact_signal_time(path: Path) -> str:
+    if path.suffix.lower() == ".json":
+        payload = _read_json(path)
+        signal_time = str(payload.get("signal_time") or "")
+        weights = payload.get("weights") or {}
+        if not signal_time or not weights:
+            raise ValueError("missing signal_time or weights")
+        return signal_time
+    weights = pd.read_parquet(path)
+    if weights.empty:
+        raise ValueError("empty weights")
+    return str(weights.index[-1])
+
+
+def _safe_float(value: Any) -> float | None:
+    try:
+        if value is None:
+            return None
+        out = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not np.isfinite(out):
+        return None
+    return out
+
+
+def _multi_strategy_payload_from_rows(
+    configs: list[Any],
+    summaries: dict[str, dict[str, Any]],
+    curves: dict[str, list[dict[str, Any]]],
+    netting: dict[str, Any],
+    *,
+    overlays: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    overlays = overlays or {}
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for cfg in configs:
+        summary = summaries.get(cfg.strategy_id, {})
+        curve = curves.get(cfg.strategy_id, [])
+        research = (cfg.metadata or {}).get("research") or {}
+        last_curve_timestamp = curve[-1]["timestamp"] if curve else None
+        shadow_summary = dict(summary) if summary else {}
+        truth = _strategy_signal_truth(cfg, curve)
+        row = {
+            "strategy_id": cfg.strategy_id,
+            "name": cfg.name,
+            "enabled": cfg.enabled,
+            "asset_type": cfg.asset_type,
+            "venue": cfg.venue,
+            "account": cfg.account,
+            "bucket": cfg.broker_bucket,
+            "book": cfg.book,
+            "gross_exposure": summary.get("gross_exposure"),
+            "net_exposure": summary.get("net_exposure"),
+            "n_positions": summary.get("n_positions"),
+            "cumulative_pnl": summary.get("cumulative_pnl", 0.0),
+            "curve": curve,
+            "shadow_summary": shadow_summary,
+            "family": (cfg.metadata or {}).get("family"),
+            "reported_val_test_net_sharpe": research.get("reported_val_test_net_sharpe"),
+            "description": (cfg.metadata or {}).get("description"),
+            "last_curve_timestamp": last_curve_timestamp,
+        }
+        row.update(truth)
+        if cfg.strategy_id in overlays:
+            row.update(overlays[cfg.strategy_id])
+        if row.get("scope") in {"stale_shadow", "configured"} and cfg.strategy_id not in overlays:
+            row["gross_exposure"] = None
+            row["net_exposure"] = None
+            row["n_positions"] = None
+            row["cumulative_pnl"] = None
+        groups.setdefault(cfg.asset_type, []).append(row)
+
+    asset_summaries: dict[str, dict[str, Any]] = {}
+    for rows in groups.values():
+        rows.sort(key=lambda r: (str(r.get("family") or ""), str(r["strategy_id"])))
+    for asset_type, rows in groups.items():
+        current_rows = [row for row in rows if row.get("include_in_totals")]
+        asset_summaries[asset_type] = {
+            "n_configured": len(rows),
+            "n_enabled": sum(1 for row in rows if row.get("enabled")),
+            "n_current": len(current_rows),
+            "gross_exposure": _sum_optional(row.get("gross_exposure") for row in current_rows),
+            "net_exposure": _sum_optional(row.get("net_exposure") for row in current_rows),
+            "cumulative_pnl": _sum_optional(row.get("cumulative_pnl") for row in current_rows),
+            "n_positions": sum(int(row.get("n_positions") or 0) for row in current_rows),
+            "book": _sum_optional(row.get("book") for row in rows),
+        }
+    all_current_rows = [row for rows in groups.values() for row in rows if row.get("include_in_totals")]
+    totals = {
+        "n_configured": len(configs),
+        "n_enabled": sum(1 for cfg in configs if cfg.enabled),
+        "n_current": len(all_current_rows),
+        "gross_exposure": _sum_optional(row.get("gross_exposure") for row in all_current_rows),
+        "net_exposure": _sum_optional(row.get("net_exposure") for row in all_current_rows),
+        "cumulative_pnl": _sum_optional(row.get("cumulative_pnl") for row in all_current_rows),
+        "n_positions": sum(int(row.get("n_positions") or 0) for row in all_current_rows),
+    }
+    return {
+        "status": "ok",
+        "groups": groups,
+        "asset_summaries": asset_summaries,
+        "totals": totals,
+        "netting": netting,
+        "ledger_db": str(EXECUTION_LEDGER_DB),
+        "n_configured": len(configs),
+    }
+
+
+def _sum_optional(values: Any) -> float | None:
+    total = 0.0
+    seen = False
+    for value in values:
+        if value is None:
+            continue
+        try:
+            total += float(value)
+            seen = True
+        except (TypeError, ValueError):
+            continue
+    return total if seen else None
+
+
 def _prefixed_checks(exchange: str, results: list[Any]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for result in results:
@@ -1168,21 +1546,60 @@ def build_payload(state_db: Path, *, refresh_integrity: bool = False) -> dict[st
     just raised. Only enable refresh_integrity for ad-hoc local diagnosis on
     a non-production state DB.
     """
+    db_warnings: list[dict[str, Any]] = []
     if refresh_integrity:
-        _refresh_integrity_state(state_db)
-        sync_alerts_from_latest_checks(state_db)
-    checks = latest_checks(db_path=state_db)
-    _sync_strategy_states_from_files(state_db, checks)
+        try:
+            _refresh_integrity_state(state_db)
+            sync_alerts_from_latest_checks(state_db)
+        except Exception as exc:  # noqa: BLE001 - dashboard must still render broker truth
+            db_warnings.append(_state_db_warning_row(state_db, "state_db_refresh", exc))
+    try:
+        checks = latest_checks(db_path=state_db)
+    except Exception as exc:  # noqa: BLE001
+        checks = []
+        db_warnings.append(_state_db_warning_row(state_db, "state_db_latest_checks", exc))
+    try:
+        _sync_strategy_states_from_files(state_db, checks)
+    except Exception as exc:  # noqa: BLE001
+        db_warnings.append(_state_db_warning_row(state_db, "state_db_strategy_sync", exc))
     visible_checks = _visible_integrity_checks(checks)
+    visible_checks.extend(db_warnings)
+    performance = [
+        _performance_summary(exchange, _latest_csv(directory))
+        for exchange, directory in EXCHANGES.items()
+    ]
+    try:
+        states = strategy_states(state_db)
+    except Exception as exc:  # noqa: BLE001
+        states = []
+        visible_checks.append(_state_db_warning_row(state_db, "state_db_strategy_states", exc))
+    try:
+        alerts = open_alerts(state_db)
+    except Exception as exc:  # noqa: BLE001
+        alerts = []
+        visible_checks.append(_state_db_warning_row(state_db, "state_db_alerts", exc))
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "strategy_states": _apply_state_health_overrides(strategy_states(state_db)),
+        "strategy_states": _apply_state_health_overrides(states),
         "integrity_checks": visible_checks,
-        "alerts": open_alerts(state_db),
-        "performance": [
-            _performance_summary(exchange, _latest_csv(directory))
-            for exchange, directory in EXCHANGES.items()
-        ],
+        "alerts": alerts,
+        "performance": performance,
+        "multi_strategy": _multi_strategy_payload(performance=performance),
+    }
+
+
+def _state_db_warning_row(state_db: Path, check_name: str, exc: Exception) -> dict[str, Any]:
+    return {
+        "market": "system",
+        "check_name": check_name,
+        "name": check_name,
+        "status": "warn",
+        "severity": "warning",
+        "message": f"State DB read/write failed; dashboard rendered from available file/ledger sources. {type(exc).__name__}: {exc}",
+        "value": str(state_db),
+        "threshold": "state DB readable",
+        "metadata_json": json.dumps({"state_db": str(state_db), "error_type": type(exc).__name__}),
+        "checked_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -1200,7 +1617,8 @@ _LEGACY_TO_CANONICAL = {
     "pending_trade": "WARN", "missing": "WARN", "empty": "WARN",
     "fail": "FAIL", "critical": "FAIL", "error": "FAIL", "unreachable": "FAIL",
     "execution_failed": "FAIL",
-    "blocked": "BLOCKED", "skipped": "BLOCKED",
+    "blocked": "BLOCKED",
+    "skipped": "WARN",
     "disabled": "DISABLED",
     "unknown": "UNKNOWN",
 }
@@ -1255,7 +1673,7 @@ def _money(value: Any) -> str:
 
 def _svg_curve(curve: list[dict[str, Any]]) -> str:
     if not curve:
-        return '<div class="empty-chart">No performance equity CSV found.</div>'
+        return '<div class="empty-chart">No equity curve points yet.</div>'
 
     width = 520
     height = 180
@@ -1644,12 +2062,243 @@ def _ib_submissions_panel(performance: dict[str, Any]) -> str:
     """
 
 
+def _metric_tile(label: str, value: str, sub: str = "") -> str:
+    sub_html = f'<div class="metric-sub">{html.escape(sub)}</div>' if sub else ""
+    return f"""
+      <div class="metric-tile">
+        <div class="metric-label">{html.escape(label)}</div>
+        <div class="metric-value">{value}</div>
+        {sub_html}
+      </div>
+    """
+
+
+def _dashboard_overview(
+    *,
+    payload: dict[str, Any],
+    status: str,
+    fail_count: int,
+    warn_count: int,
+    open_alert_count: int,
+) -> str:
+    multi = payload.get("multi_strategy") or {}
+    totals = multi.get("totals") or {}
+    netting = multi.get("netting") or {}
+    states = payload.get("strategy_states") or []
+    configured = int(totals.get("n_configured") or multi.get("n_configured") or 0)
+    enabled = int(totals.get("n_enabled") or 0)
+    current = int(totals.get("n_current") or 0)
+    has_virtual_exposure = totals.get("gross_exposure") is not None
+    gmv = totals.get("gross_exposure")
+    exposure_label = "Current Strategy GMV"
+    exposure_sub = f"{_fmt(totals.get('n_positions'))} post-recon positions"
+    if not has_virtual_exposure:
+        asset_summaries = multi.get("asset_summaries") or {}
+        gmv = _sum_optional(summary.get("book") for summary in asset_summaries.values())
+        exposure_label = "Strategy Book"
+        exposure_sub = "configured book; no current broker marks"
+    positions = totals.get("n_positions")
+    if positions is None and has_virtual_exposure:
+        positions = sum(int(row.get("n_positions") or 0) for row in states)
+        exposure_sub = f"{_fmt(positions)} tracked positions"
+    compression = netting.get("compression_ratio")
+    compression_text = "" if compression is None else f"{float(compression) * 100:,.1f}%"
+    batch_sub = str(netting.get("mode") or "no batch").replace("_", " ")
+    return f"""
+      <section class="overview-grid" id="overview">
+        {_metric_tile("System", _badge(status), f"{fail_count} fail / {warn_count} warn / {open_alert_count} alerts")}
+        {_metric_tile("Strategies", f"{enabled}/{configured}", f"{current} current broker-truth rows")}
+        {_metric_tile(exposure_label, _money(gmv), exposure_sub)}
+        {_metric_tile("Netting", compression_text or "No batch", batch_sub)}
+      </section>
+    """
+
+
+def _netting_panel(netting: dict[str, Any]) -> str:
+    if not netting:
+        return """
+          <section class="netting-panel">
+            <div class="section-head">
+              <h3>Internal Matching</h3>
+              <div class="chart-meta">No netting batch recorded yet.</div>
+            </div>
+            <div class="flow-grid">
+              <div>Strategy Targets</div><div>Internal Crosses</div><div>Residual Broker Orders</div><div>Strategy Fill Allocation</div>
+            </div>
+          </section>
+        """
+    compression = float(netting.get("compression_ratio") or 0.0) * 100.0
+    batch_line = "Latest batch " + " | ".join(x for x in [
+        str(netting.get("batch_id") or ""),
+        str(netting.get("mode") or ""),
+        str(netting.get("status") or ""),
+        str(netting.get("created_at_utc") or "")[:19],
+    ] if x)
+    mode = str(netting.get("mode") or "").lower()
+    truth_note = ""
+    if mode in {"shadow", "paper-sim", "paper_sim"}:
+        truth_note = (
+            '<div class="chart-meta">This batch is shadow/paper-sim only; '
+            'it was not the broker-submitted IB MOC allocation.</div>'
+        )
+    return f"""
+      <section class="netting-panel">
+        <div class="section-head">
+          <h3>Internal Matching</h3>
+          <div class="chart-meta">{html.escape(batch_line)}</div>
+        </div>
+        {truth_note}
+        <div class="flow-grid">
+          <div><span>Strategy child orders</span><strong>{_fmt(netting.get('n_child_orders'))}</strong></div>
+          <div><span>Internal crosses</span><strong>{_fmt(netting.get('n_internal_crosses'))}</strong></div>
+          <div><span>Broker net orders</span><strong>{_fmt(netting.get('n_net_orders'))}</strong></div>
+          <div><span>Compression</span><strong>{compression:,.1f}%</strong></div>
+        </div>
+        <div class="netting-metrics">
+          {_metric_tile("Child Notional", _money(netting.get("child_notional")))}
+          {_metric_tile("Crossed Notional", _money(netting.get("crossed_notional")))}
+          {_metric_tile("Broker Notional", _money(netting.get("net_notional")))}
+        </div>
+      </section>
+    """
+
+
+def _multi_strategy_section(multi: dict[str, Any]) -> str:
+    groups = multi.get("groups") or {}
+    if not groups:
+        msg = html.escape(multi.get("message") or "No multi-strategy configs or ledger rows found yet.")
+        return f"""
+        <section id="strategy-monitor" class="dashboard-section">
+          <div class="section-head">
+            <h2>Strategy Monitor</h2>
+            <div class="chart-meta">Strategies By Asset</div>
+          </div>
+          <div class="empty-chart">{msg}</div>
+        </section>
+        """
+
+    asset_summaries = multi.get("asset_summaries") or {}
+    group_html = []
+    for asset_type, rows in sorted(groups.items()):
+        summary = asset_summaries.get(asset_type, {})
+        cards = "\n".join(_strategy_card(row) for row in rows)
+        table = _strategy_asset_table(rows)
+        group_html.append(f"""
+          <section class="asset-group">
+            <div class="asset-group-head">
+              <div>
+                <h3>{html.escape(str(asset_type).title())}</h3>
+                <div class="chart-meta">{_fmt(summary.get('n_enabled'))}/{_fmt(summary.get('n_configured'))} enabled | {_fmt(summary.get('n_current'))} current | book {_money(summary.get('book'))}</div>
+              </div>
+              <div class="asset-totals">
+                <span>GMV <strong>{_money(summary.get('gross_exposure'))}</strong></span>
+                <span>Net <strong>{_money(summary.get('net_exposure'))}</strong></span>
+                <span>PnL <strong>{_money(summary.get('cumulative_pnl'))}</strong></span>
+                <span>Pos <strong>{_fmt(summary.get('n_positions'))}</strong></span>
+              </div>
+            </div>
+            <div class="strategy-grid">{cards}</div>
+            {table}
+          </section>
+        """)
+    return f"""
+      <section id="strategy-monitor" class="dashboard-section">
+        <div class="section-head">
+          <div>
+            <h2>Strategy Monitor</h2>
+            <div class="chart-meta">Strategies By Asset</div>
+          </div>
+          <div class="chart-meta">Ledger {html.escape(str(multi.get('ledger_db') or ''))}</div>
+        </div>
+        {_netting_panel(multi.get("netting") or {})}
+        {''.join(group_html)}
+      </section>
+    """
+
+
+def _strategy_card(row: dict[str, Any]) -> str:
+    sr = row.get("reported_val_test_net_sharpe")
+    sr_label = f"Reported V+T net SR {_fmt(sr)}" if sr is not None else ""
+    subtitle = " | ".join(x for x in [
+        f"{row.get('venue')} {row.get('account')}",
+        f"book {_money(row.get('book'))}",
+        sr_label,
+    ] if x)
+    curve = row.get("curve") or []
+    desc = " ".join(x for x in [row.get("description") or "", row.get("description_suffix") or ""] if x)
+    status = row.get("truth_status") or ("ok" if row.get("enabled") else "disabled")
+    source_bits = [row.get("scope"), row.get("pnl_source")]
+    source_line = " | ".join(str(x) for x in source_bits if x)
+    asof_bits = [
+        f"signal {str(row.get('signal_as_of'))[:10]}" if row.get("signal_as_of") else "",
+        f"data {str(row.get('data_as_of'))[:10]}" if row.get("data_as_of") else "",
+        f"recon {str(row.get('recon_as_of'))[:19]}" if row.get("recon_as_of") else "",
+    ]
+    asof_line = " | ".join(x for x in asof_bits if x)
+    shadow = row.get("shadow_summary") or {}
+    shadow_line = ""
+    if shadow and not row.get("include_in_totals"):
+        shadow_line = (
+            f"Last shadow: GMV {_money(shadow.get('gross_exposure'))}, "
+            f"PnL {_money(shadow.get('cumulative_pnl'))}"
+        )
+    return f"""
+      <article class="strategy-card">
+        <div class="chart-head">
+          <div>
+            <div class="chart-title">{html.escape(str(row.get('name') or row.get('strategy_id')))}</div>
+            <div class="chart-path">{html.escape(str(subtitle))}</div>
+          </div>
+          {_badge(status)}
+        </div>
+        {_svg_curve(curve)}
+        <div class="strategy-stats">
+          <div><span>PNL</span><strong>{_money(row.get('cumulative_pnl'))}</strong></div>
+          <div><span>GMV</span><strong>{_money(row.get('gross_exposure'))}</strong></div>
+          <div><span>Net</span><strong>{_money(row.get('net_exposure'))}</strong></div>
+          <div><span>Pos</span><strong>{_fmt(row.get('n_positions'))}</strong></div>
+        </div>
+        <div class="chart-meta">{html.escape(source_line)}</div>
+        <div class="chart-meta">{html.escape(asof_line)}</div>
+        <div class="chart-meta">{html.escape(shadow_line)}</div>
+        <div class="card-foot">
+          <span>{html.escape(str(desc))}</span>
+          <span>{html.escape(str(row.get('last_curve_timestamp') or ''))[:19]}</span>
+        </div>
+      </article>
+    """
+
+
+def _strategy_asset_table(rows: list[dict[str, Any]]) -> str:
+    body = "\n".join(
+        f"<tr><td>{html.escape(str(row.get('name') or row.get('strategy_id')))}</td>"
+        f"<td>{_badge(row.get('truth_status') or ('ok' if row.get('enabled') else 'disabled'))}</td>"
+        f"<td>{html.escape(str(row.get('venue') or ''))}/{html.escape(str(row.get('account') or ''))}</td>"
+        f"<td>{html.escape(str(row.get('bucket') or ''))}</td>"
+        f"<td>{_money(row.get('book'))}</td>"
+        f"<td>{_money(row.get('gross_exposure'))}</td>"
+        f"<td>{_money(row.get('net_exposure'))}</td>"
+        f"<td>{_money(row.get('cumulative_pnl'))}</td>"
+        f"<td>{_fmt(row.get('n_positions'))}</td>"
+        f"<td>{html.escape(str(row.get('scope') or ''))}</td>"
+        f"<td>{_fmt(row.get('reported_val_test_net_sharpe'))}</td></tr>"
+        for row in rows
+    )
+    return f"""
+      <table class="compact-table strategy-asset-table">
+        <thead><tr><th>Strategy</th><th>Status</th><th>Route</th><th>Bucket</th><th>Book</th><th>GMV</th><th>Net</th><th>PnL</th><th>Pos</th><th>Scope</th><th>Research SR</th></tr></thead>
+        <tbody>{body}</tbody>
+      </table>
+    """
+
+
 def render_html(payload: dict[str, Any]) -> str:
     checks = payload["integrity_checks"]
     alerts = payload["alerts"]
     states = payload["strategy_states"]
     performance = payload["performance"]
     curve_panels = "\n".join(_curve_panel(p) for p in performance)
+    multi_strategy_section = _multi_strategy_section(payload.get("multi_strategy") or {})
 
     alert_rows = "\n".join(
         f"<tr><td>{_badge(a['severity'])}</td><td>{html.escape(str(a.get('market') or ''))}</td>"
@@ -1695,6 +2344,13 @@ def render_html(payload: dict[str, Any]) -> str:
     warn_count = sum(1 for c in checks if c["status"] == "warn")
     open_alert_count = len(alerts)
     status = "fail" if fail_count else "warn" if warn_count or open_alert_count else "ok"
+    overview_section = _dashboard_overview(
+        payload=payload,
+        status=status,
+        fail_count=fail_count,
+        warn_count=warn_count,
+        open_alert_count=open_alert_count,
+    )
 
     return f"""<!doctype html>
 <html lang="en">
@@ -1710,14 +2366,43 @@ def render_html(payload: dict[str, Any]) -> str:
     :root {{ color-scheme: dark; font-family: Inter, Segoe UI, Arial, sans-serif; }}
     body {{ margin: 0; background: #101214; color: #e7ecef; }}
     main {{ max-width: 1440px; margin: 0 auto; padding: 24px; }}
-    header {{ display: flex; justify-content: space-between; gap: 16px; align-items: baseline; }}
+    header {{ display: flex; justify-content: space-between; gap: 16px; align-items: center; }}
     h1 {{ margin: 0; font-size: 28px; font-weight: 700; }}
-    h2 {{ margin: 28px 0 10px; font-size: 17px; }}
+    h2 {{ margin: 0; font-size: 18px; }}
+    h3 {{ margin: 0; font-size: 15px; }}
+    .page-nav {{ display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; }}
+    .page-nav a {{ color: #cbd5dc; text-decoration: none; border: 1px solid #2d3439; border-radius: 4px; padding: 5px 8px; font-size: 12px; background: #15191d; }}
+    .page-nav a:hover {{ border-color: #4b5a63; color: #ffffff; }}
+    .dashboard-section {{ margin-top: 22px; }}
+    .section-head {{ display: flex; justify-content: space-between; align-items: baseline; gap: 14px; margin: 0 0 10px; }}
+    .overview-grid {{ display: grid; grid-template-columns: repeat(4, minmax(170px, 1fr)); gap: 12px; margin-top: 18px; }}
+    .metric-tile {{ border: 1px solid #2d3439; border-radius: 6px; padding: 12px; background: #171b1f; min-width: 0; }}
+    .metric-label {{ color: #9aa7af; font-size: 11px; text-transform: uppercase; letter-spacing: 0; }}
+    .metric-value {{ margin-top: 5px; font-size: 22px; line-height: 1.15; font-weight: 700; }}
+    .metric-sub {{ margin-top: 5px; color: #9aa7af; font-size: 12px; overflow-wrap: anywhere; }}
     .summary {{ display: grid; grid-template-columns: repeat(4, minmax(160px, 1fr)); gap: 12px; margin-top: 18px; }}
     .tile {{ border: 1px solid #2d3439; border-radius: 6px; padding: 14px; background: #171b1f; }}
     .label {{ color: #9aa7af; font-size: 12px; }}
     .value {{ margin-top: 6px; font-size: 24px; font-weight: 700; }}
     .charts {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }}
+    .asset-group {{ margin-top: 12px; }}
+    .asset-group-head {{ display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }}
+    .asset-totals {{ display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px 14px; color: #9aa7af; font-size: 12px; }}
+    .asset-totals strong {{ color: #e7ecef; margin-left: 4px; }}
+    .strategy-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 12px; }}
+    .strategy-card {{ border: 1px solid #2d3439; border-radius: 6px; padding: 12px; background: #15191d; min-width: 0; }}
+    .strategy-stats {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }}
+    .strategy-stats div {{ border: 1px solid #263036; border-radius: 4px; padding: 7px; background: #11161a; }}
+    .strategy-stats span {{ display: block; color: #9aa7af; font-size: 10px; }}
+    .strategy-stats strong {{ display: block; margin-top: 3px; font-size: 13px; }}
+    .card-foot {{ display: flex; justify-content: space-between; gap: 12px; color: #9aa7af; font-size: 12px; margin-top: 8px; overflow-wrap: anywhere; }}
+    .netting-panel {{ border: 1px solid #2d3439; border-radius: 6px; padding: 12px; background: #15191d; margin-bottom: 12px; }}
+    .flow-grid {{ display: grid; grid-template-columns: repeat(4, minmax(140px, 1fr)); gap: 8px; margin-top: 8px; }}
+    .flow-grid div {{ border: 1px solid #263036; border-radius: 4px; padding: 8px; background: #11161a; min-width: 0; }}
+    .flow-grid span {{ display: block; color: #9aa7af; font-size: 11px; }}
+    .flow-grid strong {{ display: block; margin-top: 4px; font-size: 18px; }}
+    .netting-metrics {{ display: grid; grid-template-columns: repeat(3, minmax(140px, 1fr)); gap: 8px; margin-top: 8px; }}
+    .netting-strip {{ border: 1px solid #2d3439; border-radius: 6px; padding: 10px 12px; background: #171b1f; color: #cbd5dc; font-size: 13px; }}
     .chart-panel {{ border: 1px solid #2d3439; border-radius: 6px; padding: 12px; background: #15191d; min-width: 0; }}
     .chart-head {{ display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 8px; }}
     .chart-title {{ font-weight: 700; letter-spacing: 0; }}
@@ -1759,12 +2444,22 @@ def render_html(payload: dict[str, Any]) -> str:
     table {{ width: 100%; border-collapse: collapse; background: #15191d; border: 1px solid #2b3338; }}
     th, td {{ padding: 9px 10px; border-bottom: 1px solid #263036; text-align: left; font-size: 13px; vertical-align: top; }}
     th {{ color: #aeb8bf; font-weight: 600; background: #1b2025; }}
+    .compact-table {{ margin-top: 10px; }}
+    .compact-table th, .compact-table td {{ padding: 6px 8px; font-size: 12px; }}
+    .table-scroll {{ overflow-x: auto; }}
     .badge {{ display: inline-block; min-width: 54px; padding: 3px 7px; border-radius: 4px; font-size: 11px; text-align: center; font-weight: 700; }}
     .ok {{ background: #164a34; color: #8df0bd; }}
     .warn {{ background: #574316; color: #ffd36e; }}
     .fail {{ background: #5a1d25; color: #ff99a8; }}
     .neutral {{ background: #303940; color: #cbd5dc; }}
     .generated {{ color: #9aa7af; font-size: 12px; }}
+    @media (max-width: 860px) {{
+      main {{ padding: 16px; }}
+      header, .section-head, .asset-group-head {{ align-items: flex-start; flex-direction: column; }}
+      .overview-grid, .flow-grid, .netting-metrics, .summary {{ grid-template-columns: 1fr; }}
+      .strategy-grid, .charts {{ grid-template-columns: 1fr; }}
+      .asset-totals {{ justify-content: flex-start; }}
+    }}
   </style>
 </head>
 <body>
@@ -1774,22 +2469,36 @@ def render_html(payload: dict[str, Any]) -> str:
     <div>{_badge(status)}</div>
   </header>
   <div class="generated">Generated {html.escape(payload['generated_at'])}</div>
-  <section class="summary">
-    <div class="tile"><div class="label">Open Alerts</div><div class="value">{open_alert_count}</div></div>
-    <div class="tile"><div class="label">Failed Checks</div><div class="value">{fail_count}</div></div>
-    <div class="tile"><div class="label">Warning Checks</div><div class="value">{warn_count}</div></div>
-    <div class="tile"><div class="label">Strategies</div><div class="value">{len(states)}</div></div>
+  <nav class="page-nav">
+    <a href="#strategy-monitor">Strategies</a>
+    <a href="#execution-curves">Curves</a>
+    <a href="#broker-state">Broker State</a>
+    <a href="#alerts">Alerts</a>
+    <a href="#data-health">Data Health</a>
+    <a href="#performance-logs">Logs</a>
+  </nav>
+  {overview_section}
+  {multi_strategy_section}
+  <section id="execution-curves" class="dashboard-section">
+    <div class="section-head"><h2>Execution Curves</h2><div class="chart-meta">Legacy live/shadow performance panels</div></div>
+    <section class="charts">{curve_panels}</section>
   </section>
-  <h2>Equity Curves</h2>
-  <section class="charts">{curve_panels}</section>
-  <h2>Strategy State</h2>
-  <table><thead><tr><th>Strategy</th><th>Market</th><th>Mode</th><th>Status</th><th>Phase</th><th>Last Data</th><th>Last Signal</th><th>Gross&nbsp;($)</th><th>Net&nbsp;($)</th><th>Positions</th></tr></thead><tbody>{state_rows}</tbody></table>
-  <h2>Open Alerts</h2>
-  <table><thead><tr><th>Severity</th><th>Market</th><th>Message</th><th>Created</th></tr></thead><tbody>{alert_rows}</tbody></table>
-  <h2>Data Integrity</h2>
-  <table><thead><tr><th>Market</th><th>Check</th><th>Status</th><th>Message</th><th>Value</th><th>Threshold</th><th>Checked</th></tr></thead><tbody>{check_rows}</tbody></table>
-  <h2>Performance Logs</h2>
-  <table><thead><tr><th>Exchange</th><th>Status</th><th>Last Run</th><th>Last Bar</th><th>Raw Rows</th><th>Unique Bars</th><th>Dup Rows</th><th>Missing&nbsp;4h</th><th>Recent Missing</th><th>Trader PnL&nbsp;($)</th><th>Dedup PnL&nbsp;($)</th><th>Sharpe&nbsp;(ann)</th><th>Max DD&nbsp;($)</th><th>Avg GMV&nbsp;($)</th><th>Avg Positions</th></tr></thead><tbody>{perf_rows}</tbody></table>
+  <section id="broker-state" class="dashboard-section">
+    <div class="section-head"><h2>Broker & Strategy State</h2><div class="chart-meta">{len(states)} state rows</div></div>
+    <div class="table-scroll"><table><thead><tr><th>Strategy</th><th>Market</th><th>Mode</th><th>Status</th><th>Phase</th><th>Last Data</th><th>Last Signal</th><th>Gross&nbsp;($)</th><th>Net&nbsp;($)</th><th>Positions</th></tr></thead><tbody>{state_rows}</tbody></table></div>
+  </section>
+  <section id="alerts" class="dashboard-section">
+    <div class="section-head"><h2>Open Alerts</h2><div class="chart-meta">{open_alert_count} open</div></div>
+    <div class="table-scroll"><table><thead><tr><th>Severity</th><th>Market</th><th>Message</th><th>Created</th></tr></thead><tbody>{alert_rows}</tbody></table></div>
+  </section>
+  <section id="data-health" class="dashboard-section">
+    <div class="section-head"><h2>Data Integrity</h2><div class="chart-meta">{len(checks)} checks</div></div>
+    <div class="table-scroll"><table><thead><tr><th>Market</th><th>Check</th><th>Status</th><th>Message</th><th>Value</th><th>Threshold</th><th>Checked</th></tr></thead><tbody>{check_rows}</tbody></table></div>
+  </section>
+  <section id="performance-logs" class="dashboard-section">
+    <div class="section-head"><h2>Performance Logs</h2><div class="chart-meta">{len(performance)} venues</div></div>
+    <div class="table-scroll"><table><thead><tr><th>Exchange</th><th>Status</th><th>Last Run</th><th>Last Bar</th><th>Raw Rows</th><th>Unique Bars</th><th>Dup Rows</th><th>Missing&nbsp;4h</th><th>Recent Missing</th><th>Trader PnL&nbsp;($)</th><th>Dedup PnL&nbsp;($)</th><th>Sharpe&nbsp;(ann)</th><th>Max DD&nbsp;($)</th><th>Avg GMV&nbsp;($)</th><th>Avg Positions</th></tr></thead><tbody>{perf_rows}</tbody></table></div>
+  </section>
 </main>
 <script>
 (function () {{
