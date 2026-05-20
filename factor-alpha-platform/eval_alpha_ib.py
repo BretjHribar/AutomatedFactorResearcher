@@ -186,15 +186,34 @@ def check_diversity(conn, expression, new_alpha_raw):
         classifications=classifications, max_wt=MAX_WEIGHT
     )
 
-    for alpha_id, alpha_expr in rows:
+    cache_key = (
+        str(Path(MATRICES_DIR).resolve()),
+        str(Path(UNIVERSES_DIR).resolve()),
+        UNIVERSE,
+        TRAIN_START,
+        TRAIN_END,
+        NEUTRALIZE,
+        float(MAX_WEIGHT),
+    )
+    existing_cache = _DIVERSITY_CACHE.setdefault(cache_key, {})
+
+    for idx, (alpha_id, alpha_expr) in enumerate(rows, 1):
         try:
-            existing_raw = evaluate_expression(alpha_expr, matrices)
-            if existing_raw is None:
-                continue
-            existing_df = process_signal(
-                existing_raw, universe_df=universe,
-                classifications=classifications, max_wt=MAX_WEIGHT
-            )
+            if alpha_id in existing_cache:
+                existing_df = existing_cache[alpha_id]
+                if existing_df is None:
+                    continue
+            else:
+                print(f"  Diversity corr check {idx}/{len(rows)}: alpha #{alpha_id}", flush=True)
+                existing_raw = evaluate_expression(alpha_expr, matrices)
+                if existing_raw is None:
+                    existing_cache[alpha_id] = None
+                    continue
+                existing_df = process_signal(
+                    existing_raw, universe_df=universe,
+                    classifications=classifications, max_wt=MAX_WEIGHT
+                )
+                existing_cache[alpha_id] = existing_df
             common_idx  = new_processed.index.intersection(existing_df.index)
             common_cols = new_processed.columns.intersection(existing_df.columns)
             if len(common_idx) < 50 or len(common_cols) < 10:
@@ -265,6 +284,7 @@ def save_alpha(conn, expression, reasoning, metrics, category=""):
 # ============================================================================
 
 _DATA_CACHE = {}
+_DIVERSITY_CACHE = {}
 
 
 def _is_us_ticker(sym: str) -> bool:
@@ -429,39 +449,34 @@ def process_signal(alpha_df, universe_df=None, classifications=None, max_wt=MAX_
     """
     Standard Signal Processing Pipeline for IB alphas.
     1. Apply universe mask
-    2. Sector demean (sector-level for small-caps)
+    2. Apply configured neutralization
     3. Scale (Sum(abs(weights)) = 1)
     4. Clip (Position weight limit)
     """
-    signal = alpha_df.copy().astype(float)
+    from src.portfolio.preprocessing import apply_preprocess
 
-    # Apply universe mask
-    if universe_df is not None:
-        uni_mask = universe_df.reindex(index=signal.index, columns=signal.columns).fillna(False).astype(bool)
-        signal = signal.where(uni_mask, np.nan)
+    group_labels = None
+    demean_method = "cross_section"
+    if NEUTRALIZE == "none":
+        demean_method = "none"
+    elif NEUTRALIZE in ("sector", "industry", "subindustry"):
+        if isinstance(classifications, dict):
+            group_labels = classifications.get(NEUTRALIZE)
+        elif isinstance(classifications, pd.Series):
+            group_labels = classifications
+        if group_labels is not None:
+            group_labels = group_labels.reindex(alpha_df.columns)
+            demean_method = NEUTRALIZE
 
-    # Sector-relative demeaning
-    if classifications is not None and NEUTRALIZE in classifications:
-        groups = classifications[NEUTRALIZE]
-        group_labels = groups.reindex(signal.columns)
-        for grp in group_labels.dropna().unique():
-            col_mask = (group_labels == grp).values
-            if col_mask.any():
-                grp_data = signal.iloc[:, col_mask]
-                grp_mean = grp_data.mean(axis=1)
-                signal.iloc[:, col_mask] = grp_data.sub(grp_mean, axis=0)
-    else:
-        row_mean = signal.mean(axis=1)
-        signal = signal.sub(row_mean, axis=0)
-
-    # Scale
-    abs_sum = signal.abs().sum(axis=1).replace(0, np.nan)
-    signal = signal.div(abs_sum, axis=0)
-
-    # Clip
-    signal = signal.clip(lower=-max_wt, upper=max_wt)
-
-    return signal.fillna(0.0)
+    return apply_preprocess(
+        alpha_df,
+        universe_mask=universe_df is not None,
+        universe=universe_df,
+        demean_method=demean_method,
+        classifications=group_labels,
+        normalize="l1",
+        clip_max_w=max_wt,
+    )
 
 
 def compute_ic(alpha_df, returns_df):
@@ -519,15 +534,16 @@ def eval_single(expression, split="train", universe_name=None):
     if alpha_raw is None or (hasattr(alpha_raw, 'empty') and alpha_raw.empty):
         return {"success": False, "error": "Expression returned None/empty"}
 
-    alpha_df = process_signal(
-        alpha_raw, universe_df=universe,
-        classifications=classifications, max_wt=MAX_WEIGHT
-    )
-
     try:
-        result = simulate(alpha_df, returns_pct, close, universe, classifications)
+        # Pass the raw expression output into the simulator. The simulator owns
+        # universe masking, neutralization, normalization, delay/decay, and
+        # clipping, matching the single-preprocess convention used by the
+        # config-driven validation pipeline. Do not pre-normalize here.
+        result = simulate(alpha_raw, returns_pct, close, universe, classifications)
     except Exception as e:
         return {"success": False, "error": f"Simulation error: {e}"}
+
+    alpha_df = result.positions.reindex(index=alpha_raw.index, columns=alpha_raw.columns).fillna(0.0)
 
     return {
         "success": True,

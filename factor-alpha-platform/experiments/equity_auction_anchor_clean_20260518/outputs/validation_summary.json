@@ -1,0 +1,92 @@
+{
+  "label": "AUCT_ANCHOR_MCAP90_550_D0_CLEAN_S5_F5_20260518",
+  "train_start": "2016-01-01",
+  "train_end": "2023-01-01",
+  "val_start": "2023-01-01",
+  "val_end": "2024-07-01",
+  "book": 500000,
+  "fees": {
+    "model": "per_share_ib",
+    "params": {
+      "commission_per_share": 0.0045,
+      "per_order_min": 0.35,
+      "sec_fee_per_dollar": 2.78e-05,
+      "sell_fraction": 0.5,
+      "impact_bps": 0.0,
+      "borrow_bps_annual": 50
+    }
+  },
+  "qp": {
+    "enabled": true,
+    "lambda_risk": 5.0,
+    "kappa_tc": 30.0,
+    "max_w": 0.02,
+    "dollar_neutral": true,
+    "max_gross_leverage": 1.0,
+    "commission_per_share": 0.0045,
+    "impact_bps": 0.0,
+    "adv_cap": null
+  },
+  "risk_model": {
+    "name": "diagonal",
+    "params": {
+      "factor_window": 126,
+      "n_pca_factors": 5,
+      "vol_window": 60
+    }
+  },
+  "preprocessing": {
+    "universe_mask": true,
+    "demean_method": "subindustry",
+    "subindustry_field": "subindustry",
+    "normalize": "l1",
+    "clip_max_w": 0.02
+  },
+  "n_combiner_cells": 8,
+  "best_by_val_SR_net": {
+    "cell": "adaptive",
+    "combiner": "adaptive",
+    "risk_model": "diagonal",
+    "qp_enabled": true,
+    "alpha_signals_n": 6,
+    "universe_size": 860,
+    "val_n_bars": 375,
+    "val_SR_gross": 1.7289296877200622,
+    "val_SR_net": 1.2148869006368972,
+    "val_ret_ann_net": 0.0820099437711052,
+    "val_max_dd_net": -0.0734427586120946,
+    "turnover_per_bar": 0.2278476386400321,
+    "cost_ann": 0.03471545996489555,
+    "corr_net_vs_ib_moc_val": 0.35429536669015305,
+    "avg_weight_corr_vs_ib_moc_val": 0.4247625831272159,
+    "corr_net_vs_aipt_val": -0.024861484109517166,
+    "elapsed_sec": 233.4586660861969
+  },
+  "references": [
+    {
+      "reference": "ib_moc_equity",
+      "source": "prod/config/research_equity.json recomputed on train+val only",
+      "val_n_bars": 375,
+      "val_SR_gross": 3.506287487287479,
+      "val_SR_net": 3.126852881204901,
+      "val_ret_ann_net": 0.22396557036661113,
+      "val_max_dd_net": -0.03533005473797224,
+      "turnover_per_bar": 0.29952395652358127,
+      "cost_ann": 0.02668179746508032,
+      "calendar_val_SR_net": 3.126852881204901,
+      "corr_net_vs_aipt_calendar_val": -0.05941526673942456
+    },
+    {
+      "reference": "aipt_smallcap_d0_prox_l1_tau5",
+      "source": "experiments/results/aipt_live_refresh_20260514/aipt_stepwise_summary.csv",
+      "val_n_bars": 313,
+      "val_SR_gross": null,
+      "val_SR_net": 4.775603830311337,
+      "val_ret_ann_net": 0.2632207147429813,
+      "val_max_dd_net": -0.0182106544132493,
+      "turnover_per_bar": 0.674449747995631,
+      "cost_ann": 0.0729610636670384,
+      "calendar_val_SR_net": 4.569231079150104
+    }
+  ]
+}

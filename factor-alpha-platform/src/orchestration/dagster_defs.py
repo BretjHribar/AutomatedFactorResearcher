@@ -24,6 +24,7 @@ from src.data.equity_refresh import refresh_equity_eod_cache
 from src.data.integrity import run_crypto_integrity, run_equity_integrity
 from src.execution.ib_gateway_health import check_ib_gateway, ib_gateway_status_to_check_payload
 from src.execution.recorders import run_crypto_paper_recorder, run_ib_paper_moc
+from src.monitoring.notifier import notify_open_critical_alerts
 from src.monitoring.state_store import (
     StrategyState,
     latest_checks,
@@ -420,6 +421,35 @@ def production_strategy_config(context, paths: PlatformPathsResource) -> dict[st
     return cfg | {"_config_hash": cfg_hash}
 
 
+def _is_nyse_market_open_now() -> bool:
+    """Return True iff current UTC time is within 09:30-16:00 ET on a US trading day.
+
+    Used to guard `equity_eod_data_refresh_result` against pulling FMP data
+    during open session. FMP's daily endpoint serves intraday-as-of-close
+    quotes during market hours, which on 2026-05-13 contaminated 125 cached
+    parquets with a same-day row when `research_signal_job` was manually fired
+    at 15:42 ET. The full incident is in docs/RELIABILITY_PLAN.md (F9).
+    """
+    # America/New_York is DST-aware via pandas. Use a NYSE calendar to skip
+    # weekends and holidays without taking on a hard dependency.
+    now_et = pd.Timestamp.utcnow().tz_convert("America/New_York")
+    if now_et.weekday() >= 5:  # Sat=5, Sun=6
+        return False
+    try:
+        from pandas.tseries.offsets import CustomBusinessDay
+        from pandas.tseries.holiday import USFederalHolidayCalendar
+        nyse_bday = CustomBusinessDay(calendar=USFederalHolidayCalendar())
+        # If "today" rolled by USFederalHolidayCalendar lands on a different day,
+        # it's a holiday.
+        if pd.Timestamp(now_et.date()) + 0 * nyse_bday != pd.Timestamp(now_et.date()):
+            return False
+    except Exception:
+        pass  # Fall through; weekday check above is the floor.
+    open_t = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
+    close_t = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
+    return open_t <= now_et < close_t
+
+
 @dg.asset(group_name="data")
 def equity_eod_data_refresh_result(
     context,
@@ -432,10 +462,61 @@ def equity_eod_data_refresh_result(
     revisions. Intraday preflight/signal/execution jobs only repair if the
     historical cache is behind the required bar, keeping the MOC window lean
     when the hourly refresh has done its job.
+
+    MARKET-HOURS GUARD: if NYSE is open right now AND the cache already contains
+    the previous trading day's bar, refuse to call FMP entirely and return a
+    `skipped_market_open` status. FMP's daily endpoint serves intraday quotes
+    during open session that get stamped as today's "close"; persisting them
+    contaminates the cache and trips the integrity gate on subsequent runs.
+    See docs/RELIABILITY_PLAN.md F9 for the 2026-05-13 incident.
     """
     platform_paths = paths.platform_paths()
     job_name = getattr(context, "job_name", "") or ""
     recheck_recent = job_name == "equity_eod_data_refresh_job"
+
+    if _is_nyse_market_open_now():
+        try:
+            from src.data.equity_refresh import _matrix_latest_date, latest_closed_nyse_session
+            cache_dir = platform_paths.root / "data" / "fmp_cache"
+            matrix_end = _matrix_latest_date(cache_dir)
+            target = latest_closed_nyse_session()
+            cache_already_current = matrix_end is not None and matrix_end >= target
+        except Exception as exc:
+            cache_already_current = False
+            matrix_end = None
+            target = None
+            context.log.warning(f"market_hours_guard: cache freshness check failed: {exc}")
+        if cache_already_current:
+            payload = {
+                "status": "skipped_market_open",
+                "message": (
+                    f"NYSE is open; cache already at {matrix_end}, "
+                    f"target previous trading day is {target}. "
+                    "Skipped FMP fetch to avoid pulling intraday-as-of-close data."
+                ),
+                "expected_bar_date": target.isoformat() if target else None,
+                "matrix_end_before": matrix_end.isoformat() if matrix_end else None,
+                "matrix_end_after": matrix_end.isoformat() if matrix_end else None,
+                "latest_price_date_seen": matrix_end.isoformat() if matrix_end else None,
+                "symbols_checked": 0,
+                "symbols_updated": 0,
+                "symbols_failed": 0,
+                "rebuilt": False,
+                "active_coverage": {"coverage": None, "missing_count": 0},
+                "elapsed_sec": 0.0,
+                "skipped_reason": "nyse_market_open_and_cache_current",
+            }
+            context.add_output_metadata({
+                "status": payload["status"],
+                "message": payload["message"],
+                "matrix_end_after": payload["matrix_end_after"] or "",
+                "skipped_reason": payload["skipped_reason"],
+            })
+            return payload
+        # If cache is behind during market hours, still let the refresh
+        # function run -- it gates on `expected_date = latest_closed_nyse_session`
+        # which excludes today, so legitimate backfills are fine.
+
     result = refresh_equity_eod_cache(
         root=platform_paths.root,
         universe_name=production_strategy_config["strategy"]["universe"],
@@ -592,17 +673,94 @@ def crypto_integrity_results(
 
 
 @dg.asset(group_name="integrity")
+def equity_execution_env_sentinel(
+    context,
+    execution_controls: ExecutionControlsResource,
+) -> dict[str, Any]:
+    """Preflight check: ensure execution env vars are set so MOC isn't silently blocked.
+
+    Root cause of the 2026-05-15 missed equity trade: the user_code container
+    lost its ALLOW_IB_PAPER_ORDERS env var on a Docker bounce that didn't
+    re-apply --env-file. The recorder gate returned status='blocked' on both
+    MOC fires that day. No critical alert fired because 'blocked' is a normal
+    operating mode (off-by-default safety).
+
+    This sentinel turns the silent miss into a paging critical alert. It runs
+    inside equity_integrity_job which is on a 15:15 ET cron, ~23 min before
+    the 15:38 ET MOC schedule -- enough time to manually restore env or page.
+    """
+    raw_allow = os.environ.get("ALLOW_IB_PAPER_ORDERS", "")
+    raw_host = os.environ.get("IB_HOST", "")
+    raw_port = os.environ.get(
+        "IB_PORT_PAPER", os.environ.get("IB_PORT", "")
+    )
+    fmp_key = os.environ.get("FMP_API_KEY", "")
+
+    issues: list[str] = []
+    if raw_allow != "1":
+        issues.append(
+            f"ALLOW_IB_PAPER_ORDERS={raw_allow!r} (expected '1' for paper "
+            "trading). The recorder will refuse to submit any orders."
+        )
+    if not raw_host:
+        issues.append("IB_HOST env var is not set")
+    if not raw_port:
+        issues.append("IB_PORT/IB_PORT_PAPER env var is not set")
+    if not fmp_key:
+        issues.append("FMP_API_KEY env var is not set (EOD refresh will fail)")
+
+    # Mirror the execution_controls flag explicitly: this is the value the
+    # recorder will actually read. Catches the case where the resource
+    # initialization happened to see "1" but the running subprocess won't.
+    if not execution_controls.allow_ib_paper_orders and raw_allow == "1":
+        issues.append(
+            "ExecutionControlsResource.allow_ib_paper_orders=False even "
+            "though ALLOW_IB_PAPER_ORDERS=1 (resource init may be stale)"
+        )
+
+    status = "fail" if issues else "pass"
+    message = (
+        "Execution env sentinel: " + "; ".join(issues)
+        if issues
+        else "Execution env vars present: ALLOW_IB_PAPER_ORDERS=1, IB_HOST + IB_PORT + FMP_API_KEY set"
+    )
+    payload = {
+        "name": "equity_execution_env_sentinel",
+        "status": status,
+        "severity": "critical",
+        "message": message,
+        "value": raw_allow,
+        "threshold": "1",
+        "metadata": {
+            "allow_ib_paper_orders_env": raw_allow,
+            "ib_host": raw_host,
+            "ib_port": raw_port,
+            "fmp_api_key_present": bool(fmp_key),
+            "exec_controls_allow_ib_paper_orders": execution_controls.allow_ib_paper_orders,
+        },
+    }
+    context.add_output_metadata({
+        "status": status,
+        "message": message,
+        "allow_ib_paper_orders": raw_allow,
+    })
+    return payload
+
+
+@dg.asset(group_name="integrity")
 def equity_integrity_state_write(
     paths: PlatformPathsResource,
     equity_integrity_results: list[dict[str, Any]],
     ib_gateway_connectivity_status: dict[str, Any],
     ib_runtime_dependency_status: dict[str, Any],
+    equity_execution_env_sentinel: dict[str, Any],
 ) -> dict[str, Any]:
     platform_paths = paths.platform_paths()
     run_id = f"equity-integrity-{uuid.uuid4().hex[:12]}"
     payloads = equity_integrity_results + [
         ib_gateway_status_to_check_payload(ib_gateway_connectivity_status),
         _ib_runtime_dependency_check_payload(ib_runtime_dependency_status),
+        equity_execution_env_sentinel,
     ]
     record_check_results(
         payloads,
@@ -642,6 +800,31 @@ def integrity_alert_sync(
         "equity_run_id": equity_integrity_state_write["run_id"],
         "crypto_run_id": crypto_integrity_state_write["run_id"],
     }
+
+
+@dg.asset(group_name="monitoring")
+def critical_alert_pager(context, paths: PlatformPathsResource) -> dict[str, Any]:
+    """Post open critical alerts to the Discord webhook from
+    DISCORD_ALERT_WEBHOOK_URL. Idempotent within a 60-min re-notify window.
+
+    Scheduled to run every minute via `critical_alert_pager_every_minute`.
+    No webhook URL = no-op (returns counts only). See
+    src/monitoring/notifier.py for the implementation.
+    """
+    platform_paths = paths.platform_paths()
+    report = notify_open_critical_alerts(
+        db_path=platform_paths.state_db,
+        webhook_url=os.environ.get("DISCORD_ALERT_WEBHOOK_URL", ""),
+        severities=("critical",),
+        re_notify_after_min=int(os.environ.get("ALERT_RENOTIFY_MINUTES", "60")),
+    )
+    context.add_output_metadata({
+        "candidates": report["candidates"],
+        "notified": report["notified"],
+        "failed": report["failed"],
+        "skipped_no_webhook": report["skipped_no_webhook"],
+    })
+    return report
 
 
 @dg.asset(group_name="live")
@@ -1653,6 +1836,7 @@ equity_integrity_job = dg.define_asset_job(
         equity_eod_data_refresh_result,
         ib_runtime_dependency_status,
         ib_gateway_connectivity_status,
+        equity_execution_env_sentinel,
         equity_integrity_results,
         equity_integrity_state_write,
     ),
@@ -1765,6 +1949,11 @@ binance_paper_execution_job = dg.define_asset_job(
     ),
 )
 
+critical_alert_pager_job = dg.define_asset_job(
+    "critical_alert_pager_job",
+    selection=dg.AssetSelection.assets(critical_alert_pager),
+)
+
 
 schedules = [
     dg.ScheduleDefinition(
@@ -1852,6 +2041,16 @@ schedules = [
         execution_timezone="UTC",
         default_status=dg.DefaultScheduleStatus.RUNNING,
     ),
+    dg.ScheduleDefinition(
+        # Critical-alert pager fires every minute. No-op when no open critical
+        # alerts (or when DISCORD_ALERT_WEBHOOK_URL isn't set). Idempotent within
+        # ALERT_RENOTIFY_MINUTES (default 60). See src/monitoring/notifier.py.
+        name="critical_alert_pager_every_minute",
+        job=critical_alert_pager_job,
+        cron_schedule="* * * * *",
+        execution_timezone="UTC",
+        default_status=dg.DefaultScheduleStatus.RUNNING,
+    ),
 ]
 
 
@@ -1861,6 +2060,7 @@ defs = dg.Definitions(
         equity_eod_data_refresh_result,
         ib_gateway_connectivity_status,
         ib_runtime_dependency_status,
+        equity_execution_env_sentinel,
         equity_integrity_results,
         kucoin_integrity_results,
         binance_integrity_results,
@@ -1868,6 +2068,7 @@ defs = dg.Definitions(
         equity_integrity_state_write,
         crypto_integrity_state_write,
         integrity_alert_sync,
+        critical_alert_pager,
         live_equity_quote_snapshot,
         live_quote_tape_summary,
         research_equity_signal_snapshot,
@@ -1911,6 +2112,7 @@ defs = dg.Definitions(
         crypto_paper_execution_job,
         kucoin_paper_execution_job,
         binance_paper_execution_job,
+        critical_alert_pager_job,
     ],
     schedules=schedules,
     resources={

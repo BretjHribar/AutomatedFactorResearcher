@@ -1,23 +1,25 @@
 {
   "market": "equity",
   "interval": "1d",
-  "annualization": { "bars_per_year": 252 },
-
+  "annualization": {
+    "bars_per_year": 252
+  },
   "data": {
     "matrices_dir": "data/fmp_cache/matrices",
-    "universe_path": "data/fmp_cache/universes/MCAP_100M_500M.parquet",
-    "universe_filter": { "method": "coverage", "threshold": 0.5 },
+    "universe_path": "experiments/equity_auction_anchor_clean_20260518/universes/AUCT_ANCHOR_MCAP90M_550M_DAILY_TRAIN_VAL_201601_202407.parquet",
+    "universe_filter": {
+      "method": "coverage",
+      "threshold": 0.0
+    },
     "returns_source": "compute_from_close"
   },
-
   "alpha_source": {
-    "db_path": "data/alpha_results.db",
+    "db_path": "data/ib_alphas.db",
     "table": "alphas",
-    "filter_sql": "archived=0 AND asset_class='equities' AND (notes LIKE '%SMALLCAP_D0_v2%' OR notes LIKE '%SMALLCAP_D0_v3%')",
-    "train_sharpe_table": null,
-    "train_sharpe_column": null
+    "filter_sql": "archived=0 AND asset_class='equities_ib' AND category='AUCT_ANCHOR_MCAP90_550_D0_CLEAN_S5_F5_20260518'",
+    "train_sharpe_table": "evaluations",
+    "train_sharpe_column": "sharpe_is"
   },
-
   "preprocessing": {
     "universe_mask": true,
     "demean_method": "subindustry",
@@ -25,22 +27,24 @@
     "normalize": "l1",
     "clip_max_w": 0.02
   },
-
   "combiner": {
     "name": "equal",
-    "params": { "max_wt": 0.02 }
+    "params": {
+      "max_wt": 0.02
+    }
   },
-
   "post_combiner": {
     "renormalize_l1": true,
     "clip_max_w": 0.02
   },
-
   "risk_model": {
     "name": "diagonal",
-    "params": { "factor_window": 126, "n_pca_factors": 5, "vol_window": 60 }
+    "params": {
+      "factor_window": 126,
+      "n_pca_factors": 5,
+      "vol_window": 60
+    }
   },
-
   "qp": {
     "enabled": true,
     "lambda_risk": 5.0,
@@ -52,19 +56,20 @@
     "impact_bps": 0.0,
     "adv_cap": null
   },
-
   "fees": {
     "model": "per_share_ib",
     "params": {
       "commission_per_share": 0.0045,
       "per_order_min": 0.35,
-      "sec_fee_per_dollar": 27.80e-6,
-      "sell_fraction": 0.50,
+      "sec_fee_per_dollar": 2.78e-05,
+      "sell_fraction": 0.5,
       "impact_bps": 0.0,
       "borrow_bps_annual": 50
     }
   },
-
-  "splits": { "train_end": "2024-01-01", "val_end": "2025-04-01" },
+  "splits": {
+    "train_end": "2023-01-01",
+    "val_end": "2024-07-01"
+  },
   "book": 500000
 }

@@ -4,7 +4,7 @@ Realized cost models for the unified pipeline.
 Two interchangeable cost functions, both returning a per-bar cost Series in
 fraction-of-book units (multiply by book to get $ cost).
 
-  per_share_ib  — IB MOC + impact + SEC fee + borrow.  Used for equities.
+  per_share_ib  — IB MOC commission + SEC fee + borrow.  Used for equities.
   bps_taker     — flat (taker_bps + slippage_bps) × |Δw|.  Used for crypto perp
                   futures (highest-tier MM, no per-order min, no SEC fee, no
                   borrow / funding).
@@ -26,11 +26,17 @@ def cost_per_share_ib(
     per_order_min: float = 0.35,
     sec_fee_per_dollar: float = 27.80e-6,
     sell_fraction: float = 0.50,
-    impact_bps: float = 0.5,
+    impact_bps: float = 0.0,
     borrow_bps_annual: float = 50.0,
     bars_per_year: int = 252,
 ) -> pd.Series:
-    """Realistic per-share IB MOC fee model (equity)."""
+    """Realistic per-share IB MOC fee model (equity).
+
+    MOC fills print at the official closing auction price. When the backtest
+    realizes returns at the close, a generic continuous-market slippage/impact
+    charge is not appropriate; keep `impact_bps=0` unless an explicit auction
+    imbalance model is being tested.
+    """
     pos = w * book
     trd = pos.diff().abs()
     safe = close.where(close > 0)

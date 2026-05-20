@@ -284,7 +284,7 @@ def apply_qp_optimization(
     lambda_risk: float = 5.0,
     kappa_tc: float = 30.0,
     commission_per_share: float = 0.0045,
-    impact_bps: float = 0.5,
+    impact_bps: float = 0.0,
     vol_window: int = 60,
 ) -> pd.Series:
     """Single-day QP solve over the equal-weight composite signal.

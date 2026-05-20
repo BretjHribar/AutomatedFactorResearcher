@@ -1,0 +1,55 @@
+{
+  "universe_name": "AEXH_MCAP90M_550M_DAILY",
+  "strategy_role": "dynamic PIT universe for MOC auction-exhaustion reversal research",
+  "full_path": "experiments/equity_auction_exhaustion_mcap90_550_20260517/universes/AEXH_MCAP90M_550M_DAILY.parquet",
+  "train_val_path": "experiments/equity_auction_exhaustion_mcap90_550_20260517/universes/AEXH_MCAP90M_550M_DAILY_TRAIN_VAL_201601_202407.parquet",
+  "source_matrices": "data/fmp_cache/matrices",
+  "pit_membership": "data/fmp_cache/universes_pit/membership.parquet",
+  "rebalance_bars": 1,
+  "min_listing_days": 365,
+  "rules": {
+    "market_cap": [
+      90000000.0,
+      550000000.0
+    ],
+    "adv20": [
+      0.0,
+      1000000000000.0
+    ],
+    "close": [
+      1.5,
+      80.0
+    ],
+    "requires_pit_membership": true,
+    "requires_vwap_volume_subindustry": true
+  },
+  "summary": {
+    "TRAIN": {
+      "bars": 1762,
+      "active_min": 0,
+      "active_median": 281,
+      "active_max": 442,
+      "unique_members": 794
+    },
+    "VAL": {
+      "bars": 375,
+      "active_min": 344,
+      "active_median": 364,
+      "active_max": 395,
+      "unique_members": 560
+    },
+    "FULL": {
+      "bars": 2606,
+      "active_min": 0,
+      "active_median": 307,
+      "active_max": 442,
+      "unique_members": 965
+    },
+    "REBALANCE": {
+      "rebalance_bars": 2606,
+      "members_min": 0,
+      "members_median": 307,
+      "members_max": 442
+    }
+  }
+}

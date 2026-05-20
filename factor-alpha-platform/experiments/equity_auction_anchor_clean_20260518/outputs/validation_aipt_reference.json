@@ -1,0 +1,16 @@
+{
+  "source_summary": "experiments/results/aipt_live_refresh_20260514/aipt_stepwise_summary.csv",
+  "source_returns": "experiments/results/aipt_live_refresh_20260514/equity_smallcap_d0__prox_l1_gross1_cap_fee__P256__z0p001__seed1__maxw0p02__tau5__turncap0__blend1__qpscale1__qprisk0.returns.parquet",
+  "reported_val_n_bars": 313,
+  "reported_val_SR_net": 4.775603830311337,
+  "reported_val_ret_ann_net": 0.2632207147429813,
+  "reported_val_max_dd_net": -0.0182106544132493,
+  "reported_val_turnover": 0.674449747995631,
+  "reported_val_cost_ann": 0.0729610636670384,
+  "calendar_val_net_metrics": {
+    "n_bars": 375,
+    "SR": 4.569231079150104,
+    "ret_ann": 0.2523851331752264,
+    "max_dd": -0.02138694616638903
+  }
+}

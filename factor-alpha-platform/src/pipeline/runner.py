@@ -427,8 +427,9 @@ def run(config: str | Path | dict, *, root: Optional[Path] = None,
         rfn = _build_risk_model_fn(rm["name"], rm.get("params", {}), mats, dates, tickers)
         adv_cap = qp_cfg.get("adv_cap")
         adv_df = mats[adv_cap["adv_field"]] if adv_cap else None
+        alpha_scale = float(qp_cfg.get("alpha_scale", 1.0))
         weights = run_walkforward(
-            weights, close, ret, uni, rfn,
+            weights * alpha_scale, close, ret, uni, rfn,
             lambda_risk=float(qp_cfg.get("lambda_risk", 5.0)),
             kappa_tc=float(qp_cfg.get("kappa_tc", 30.0)),
             max_w=float(qp_cfg.get("max_w", 0.02)),

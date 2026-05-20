@@ -266,7 +266,42 @@ def Decay_lin(df: pd.DataFrame, window: int = 10) -> pd.DataFrame:
 
     Matches GPfunctions.Decay_lin exactly.
     """
-    return df.rolling(window, min_periods=1).apply(_rolling_decay_lin, raw=True)
+    df = pd.DataFrame(df)
+    window = int(window)
+    arr = df.to_numpy(dtype=float, copy=False)
+    n_rows, n_cols = arr.shape
+    if window <= 1:
+        return pd.DataFrame(
+            np.where(np.isfinite(arr), arr, np.nan),
+            index=df.index,
+            columns=df.columns,
+        )
+
+    out = np.full((n_rows, n_cols), np.nan, dtype=float)
+    weights_full = np.arange(1, window + 1, dtype=float)
+    denom_full = weights_full.sum()
+
+    # Preserve pandas rolling.apply semantics exactly, including treating
+    # NaN/Inf as invalid in the active window. Full windows use a stride view
+    # so the arithmetic order matches the old callback:
+    # np.sum(np.multiply(weights, na) / sum(weights)).
+    for col in range(n_cols):
+        x = arr[:, col]
+
+        head = min(window - 1, n_rows)
+        for t in range(head):
+            seg = x[: t + 1]
+            if np.isfinite(seg).all():
+                w = np.arange(1, t + 2, dtype=float)
+                out[t, col] = np.sum(np.multiply(w, seg) / w.sum())
+
+        if n_rows >= window:
+            windows = np.lib.stride_tricks.sliding_window_view(x, window_shape=window)
+            valid = np.isfinite(windows).all(axis=1)
+            values = np.sum(np.multiply(windows, weights_full) / denom_full, axis=1)
+            out[window - 1 :, col] = np.where(valid, values, np.nan)
+
+    return pd.DataFrame(out, index=df.index, columns=df.columns)
 
 
 def decay_linear(df: pd.DataFrame, window: int = 10) -> pd.DataFrame:

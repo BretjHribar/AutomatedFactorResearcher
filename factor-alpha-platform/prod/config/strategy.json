@@ -22,7 +22,7 @@
         "order_type": "MOC",
         "moc_deadline_et": "15:48:00",
         "signal_compute_time_et": "15:30:00",
-        "submit_deadline_et": "15:45:00",
+        "submit_deadline_et": "15:47:00",
         "min_order_value": 200,
         "_min_order_value_note": "Skip orders below this $ amount to reduce commission drag. Set to 0 to disable.",
         "exchange_cutoffs": {

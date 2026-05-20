@@ -22,7 +22,7 @@ from typing import Optional, Literal
 import numpy as np
 import pandas as pd
 
-DemeanMethod = Literal["none", "cross_section", "subindustry"]
+DemeanMethod = Literal["none", "cross_section", "sector", "industry", "subindustry", "group"]
 NormalizeMethod = Literal["none", "l1", "zscore"]
 
 
@@ -40,8 +40,9 @@ def apply_preprocess(
 
     Stages (run in this order, any can be skipped via opts):
       1. universe_mask     : set values outside `universe` mask to NaN per bar
-      2. demean            : "cross_section" (per-row) | "subindustry" (per-row,
-                              per-group) | "none"
+      2. demean            : "cross_section" (per-row) | a classification group
+                              ("sector", "industry", "subindustry", "group") |
+                              "none"
       3. normalize         : "l1" (rows sum |w|=1) | "zscore" (per-row z-score)
                               | "none"
       4. clip_max_w        : clip to ±max_w  (None = no clip)
@@ -55,7 +56,8 @@ def apply_preprocess(
         demean_method:
             "none"          - no demean
             "cross_section" - subtract row mean
-            "subindustry"   - subtract per-subindustry mean (requires
+            "sector" / "industry" / "subindustry" / "group"
+                            - subtract per-group mean (requires
                               `classifications`).
         classifications: Series mapping ticker -> subindustry group, used
                          only if demean_method == "subindustry".
@@ -80,14 +82,15 @@ def apply_preprocess(
     # 2. demean
     if demean_method == "cross_section":
         s = s.sub(s.mean(axis=1), axis=0)
-    elif demean_method == "subindustry":
+    elif demean_method in ("sector", "industry", "subindustry", "group"):
         if classifications is None:
-            raise ValueError("demean_method='subindustry' requires `classifications`")
-        for g in classifications.dropna().unique():
-            cols = (classifications == g).values
-            if cols.any():
-                sub = s.iloc[:, cols]
-                s.iloc[:, cols] = sub.sub(sub.mean(axis=1), axis=0)
+            raise ValueError(f"demean_method={demean_method!r} requires `classifications`")
+        groups = classifications.reindex(s.columns)
+        valid_cols = groups.notna()
+        if valid_cols.any():
+            sub = s.loc[:, valid_cols]
+            group_means = sub.T.groupby(groups[valid_cols]).transform("mean").T
+            s.loc[:, valid_cols] = sub - group_means
     elif demean_method == "none":
         pass
     else:

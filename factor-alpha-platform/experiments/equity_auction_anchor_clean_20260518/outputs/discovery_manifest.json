@@ -1,0 +1,31 @@
+{
+  "label": "AUCT_ANCHOR_MCAP90_550_D0_CLEAN_S5_F5_20260518",
+  "strategy": "Anchored MOC auction-dislocation reversal",
+  "universe": "AUCT_ANCHOR_MCAP90M_550M_DAILY",
+  "db_path": "data/ib_alphas.db",
+  "target_saved": 10,
+  "train_start": "2016-01-01",
+  "train_end": "2023-01-01",
+  "neutralize": "subindustry",
+  "corr_cutoff": 0.7,
+  "max_weight": 0.02,
+  "fees_bps_individual_alpha": 0.0,
+  "hypothesis_count": 28,
+  "no_param_sweeps": true,
+  "gates": {
+    "min_is_sharpe_strict_gt": 5.0,
+    "min_fitness_strict_gt": 5.0,
+    "max_turnover": 1.0,
+    "min_ic_mean_strict_gt": 0.0,
+    "max_pnl_kurtosis": 25,
+    "max_rolling_sr_std": 1.5,
+    "min_pnl_skew": -1.0
+  },
+  "deleted_prior_labels": {
+    "AUCT_ANCHOR_MCAP90_550_D0_CLEAN_S5_F5_20260518": 0,
+    "AEXH_MCAP90M_550M_DAILY_D0_S5_F5_20260517": 1
+  },
+  "final_status": "saturated_6_saved_of_10_target",
+  "saved_count": 6,
+  "validation_run": false
+}
